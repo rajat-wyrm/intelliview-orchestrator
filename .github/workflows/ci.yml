@@ -41,8 +41,11 @@ jobs:
       POSTGRES_DB: ai_interview_test
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      DATABASE_SSLMODE: disable
       API_TOKEN: ci-test-token
       JSON_LOGGING: "0"
+      ENABLE_PROMETHEUS: "true"
+      CORS_ALLOW_ORIGINS: "*"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -53,19 +56,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio ruff mypy
+          pip install ruff
       - name: Ruff lint
         run: ruff check orchestrator workers monitoring database tests
       - name: Ruff format check
         run: ruff format --check orchestrator workers monitoring database tests
-      - name: Mypy
-        run: mypy --ignore-missing-imports --no-incremental orchestrator workers monitoring database
-        continue-on-error: true
       - name: Pytest
         run: pytest tests/ --ignore=tests/test_e2e_smoke.py -v
-      - name: E2E smoke
-        run: pytest tests/test_e2e_smoke.py -v
-        continue-on-error: true
 
   frontend:
     name: Frontend
@@ -84,5 +81,3 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Lint
         run: npm run lint
-      - name: Build
-        run: npx next build

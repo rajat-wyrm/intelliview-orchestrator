@@ -16,7 +16,7 @@ __all__ = [
 ]
 
 try:
-    from monitoring.prometheus_metrics import get_metrics_text
+    from monitoring.prometheus_metrics import get_metrics_text  # noqa: F401
 
     __all__.append("get_metrics_text")
 except ImportError:

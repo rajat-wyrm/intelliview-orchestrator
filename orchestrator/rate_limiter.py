@@ -16,11 +16,11 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from orchestrator.redis_client import get_redis_client
+from orchestrator.cache_manager import CacheManager
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_LIMIT = 60          # requests per window
+_DEFAULT_LIMIT = 60  # requests per window
 _DEFAULT_WINDOW_SECONDS = 60  # 1 minute window
 
 
@@ -50,7 +50,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         client_key = self._client_key(request)
-        redis_client = get_redis_client()
+        redis_client = CacheManager()
 
         if redis_client is None:
             return await call_next(request)
@@ -92,6 +92,12 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
     def _client_key(request: Request) -> str:
         """Build a composite key: IP + optional API token."""
         forwarded = request.headers.get("x-forwarded-for")
-        ip = forwarded.split(",")[0].strip() if forwarded else request.client.host if request.client else "unknown"
+        ip = (
+            forwarded.split(",")[0].strip()
+            if forwarded
+            else request.client.host
+            if request.client
+            else "unknown"
+        )
         token = request.headers.get("x-api-token", "")
         return f"{ip}:{token}"

@@ -6,8 +6,9 @@ import { StatusBadge, Badge } from "@/components/Badge";
 import { Shimmer } from "@/components/Shimmer";
 import { useAppStore } from "@/lib/store";
 import { formatDate, riskColor, formatRelative } from "@/lib/utils";
-import { Activity, Calendar, Cpu, Hash, RefreshCw, User, Film, Mic, MessageSquare } from "lucide-react";
+import { Activity, Calendar, Cpu, Hash, RefreshCw, User, Film, Mic, MessageSquare, Clock } from "lucide-react";
 import useSWR from "swr";
+import { MomentTimeline } from "@/hooks/useMomentTracking";
 
 function SessionDetailImpl({ sessionId, onClose }) {
   const token = useAppStore((s) => s.token);
@@ -15,6 +16,11 @@ function SessionDetailImpl({ sessionId, onClose }) {
   const { data, error, isLoading, mutate } = useSWR(
     open && token ? `/session-status/${sessionId}` : null,
     { refreshInterval: 2000 },
+  );
+
+  const { data: momentsData } = useSWR(
+    open && token ? `/moments/${sessionId}` : null,
+    { refreshInterval: 5000 },
   );
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -165,6 +171,18 @@ function SessionDetailImpl({ sessionId, onClose }) {
                       <MessageSquare size={12} className="mt-0.5 shrink-0 text-accent" />
                       <p className="text-sm text-zinc-300">{data.ai_feedback}</p>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {momentsData?.moments?.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-medium uppercase tracking-wide text-muted flex items-center gap-1.5">
+                    <Clock size={10} />
+                    Moment Timeline
+                  </h3>
+                  <div className="mt-2 rounded-md border border-border bg-bg-card p-3">
+                    <MomentTimeline moments={momentsData.moments} />
                   </div>
                 </div>
               )}

@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 
 from workers._stubs import _seeded_unit  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Real detection helpers (Whisper / pyannote / OpenAI) with fallback to stubs
 # ---------------------------------------------------------------------------
@@ -41,9 +40,8 @@ def _real_transcribe(session_id: str) -> dict[str, Any] | None:
             "text": result["text"],
             "confidence": 0.9,
             "language": result.get("language", "en"),
-            "duration_seconds": sum(
-                s.get("end", 0) - s.get("start", 0) for s in result.get("segments", [])
-            ) or 120.0,
+            "duration_seconds": sum(s.get("end", 0) - s.get("start", 0) for s in result.get("segments", []))
+            or 120.0,
             "timestamp": time.time(),
         }
     except Exception as exc:
@@ -93,7 +91,7 @@ def _real_detect_suspicious(session_id: str) -> dict[str, Any] | None:
                         "transcribed interview response and detect suspicious patterns: "
                         "reading from script, robotic/unnatural responses, inconsistent "
                         "knowledge, or possible use of AI assistants. Return a JSON object "
-                        'with keys: suspicious (bool), pattern_type (str or null), '
+                        "with keys: suspicious (bool), pattern_type (str or null), "
                         "confidence (float 0-1), details (object)."
                     ),
                 },

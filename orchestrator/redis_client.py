@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # Circuit breaker
 # ---------------------------------------------------------------------------
 
+
 class _CircuitState(enum.Enum):
     CLOSED = "closed"
     OPEN = "open"
@@ -92,6 +93,7 @@ circuit_breaker = CircuitBreaker()
 # ---------------------------------------------------------------------------
 # Shared Redis client
 # ---------------------------------------------------------------------------
+
 
 class _RedisClientWrapper:
     """Thin wrapper that routes calls through the circuit breaker."""

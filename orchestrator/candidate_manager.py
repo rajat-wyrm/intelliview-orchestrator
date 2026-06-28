@@ -97,9 +97,11 @@ class CandidateManager:
         """List all candidates"""
         db = SessionLocal()
         try:
-            rows = db.execute(
-                select(Candidate).order_by(Candidate.created_at.desc()).limit(limit)
-            ).scalars().all()
+            rows = (
+                db.execute(select(Candidate).order_by(Candidate.created_at.desc()).limit(limit))
+                .scalars()
+                .all()
+            )
 
             return [
                 {
@@ -127,11 +129,13 @@ class CandidateManager:
                 return False
 
             history = list(c.interview_history or [])
-            history.append({
-                "session_id": session_id,
-                "score": score,
-                "completed_at": utcnow().isoformat(),
-            })
+            history.append(
+                {
+                    "session_id": session_id,
+                    "score": score,
+                    "completed_at": utcnow().isoformat(),
+                }
+            )
 
             total = c.total_interviews + 1
             if c.avg_score is None:
@@ -155,11 +159,15 @@ class CandidateManager:
         """Get interview history for a candidate"""
         db = SessionLocal()
         try:
-            rows = db.execute(
-                select(InterviewSession)
-                .where(InterviewSession.candidate_id == candidate_id)
-                .order_by(InterviewSession.created_at.desc())
-            ).scalars().all()
+            rows = (
+                db.execute(
+                    select(InterviewSession)
+                    .where(InterviewSession.candidate_id == candidate_id)
+                    .order_by(InterviewSession.created_at.desc())
+                )
+                .scalars()
+                .all()
+            )
 
             return [
                 {

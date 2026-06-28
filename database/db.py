@@ -8,12 +8,11 @@ as a context-manager (or close it manually) and prefer the type-hinted
 from __future__ import annotations
 
 import logging
-import os
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-from config import DATABASE_URL, DATABASE_SSLMODE
+from config import DATABASE_SSLMODE, DATABASE_URL
 
 logger = logging.getLogger(__name__)
 

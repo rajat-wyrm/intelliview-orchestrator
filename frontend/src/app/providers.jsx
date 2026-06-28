@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, lazy, useEffect, useState, useCallback, useMemo } from "react";
+import { Suspense, lazy, useEffect, useState, useCallback } from "react";
 import { SWRConfig } from "swr";
 import { swrFetcher } from "@/lib/fetcher";
 import { useHydrateToken } from "@/hooks/useHydrateToken";
@@ -10,7 +10,6 @@ import { useUIStore } from "@/lib/ui-store";
 import { endpoints, api } from "@/lib/api";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "@/lib/toast";
-import { useScreenLock } from "@/components/ScreenLock";
 
 const CommandPalette = lazy(() =>
   import("@/components/CommandPalette").then((m) => ({ default: m.CommandPalette })),
@@ -28,16 +27,42 @@ const SidebarMobile = lazy(() =>
   import("@/components/Sidebar").then((m) => ({ default: m.Sidebar })),
 );
 const ScreenLock = lazy(() =>
-  import("@/components/ScreenLock").then((m) => ({ default: m.ScreenLock, useScreenLock: m.useScreenLock })),
+  import("@/components/ScreenLock").then((m) => ({ default: m.default })),
 );
 
 function NullFallback() {
   return null;
 }
 
+function ScreenLockWrapper() {
+  const [isLocked, setIsLocked] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("intelliview_screen_lock");
+    if (stored === "locked") setIsLocked(true);
+
+    const interval = setInterval(() => {
+      if (localStorage.getItem("intelliview_screen_lock") === "locked") {
+        setIsLocked(true);
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleUnlock = useCallback((pin) => {
+    if (pin === "1234") {
+      setIsLocked(false);
+      localStorage.removeItem("intelliview_screen_lock");
+      return true;
+    }
+    return false;
+  }, []);
+
+  return <ScreenLock isLocked={isLocked} onUnlock={handleUnlock} />;
+}
+
 export function ClientProviders({ children }) {
   useHydrateToken();
-  const { isLocked, lock, unlock } = useScreenLock(300000);
   useEffect(() => {
     hydrateTheme();
   }, []);
@@ -77,7 +102,7 @@ export function ClientProviders({ children }) {
         return;
       }
       if (action === "refresh") {
-        toast.info("Refreshing all data…");
+        toast.info("Refreshing all data...");
         window.location.reload();
         return;
       }
@@ -85,7 +110,7 @@ export function ClientProviders({ children }) {
         try {
           const r = await endpoints.detectFailures();
           toast.success(
-            "Failure detection complete",
+            "Detection complete",
             `${r.failed_sessions_detected} failed · ${r.unhealthy_workers_detected} unhealthy · ${r.stuck_sessions_detected} stuck`,
           );
         } catch (e) {
@@ -116,14 +141,13 @@ export function ClientProviders({ children }) {
         dedupingInterval: 2000,
         errorRetryInterval: 8000,
         onError: (err) => {
-          // eslint-disable-next-line no-console
           console.warn("[SWR]", err.message);
         },
       }}
     >
       <ErrorBoundary>{children}</ErrorBoundary>
       <Suspense fallback={null}>
-        <ScreenLock isLocked={isLocked} onUnlock={unlock} />
+        <ScreenLockWrapper />
       </Suspense>
       <Suspense fallback={null}>
         <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} onAction={handleAction} />

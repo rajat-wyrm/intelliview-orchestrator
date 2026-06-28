@@ -113,65 +113,78 @@ export default function CandidatesPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-semibold text-zinc-50">Candidates</h1>
-        <p className="text-sm text-muted">Candidate profiles, interview history, and performance analytics.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-zinc-50">Candidates</h1>
+          <p className="text-sm text-muted">Candidate profiles, interview history, and performance analytics.</p>
+        </div>
+        <div className="text-xs text-muted">
+          {candidates.length} candidates
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat
-          label="Total candidates"
-          value={isLoading ? <Skeleton className="h-7 w-12" /> : candidates.length}
-          icon={<UserCircle size={16} />}
-        />
-        <Stat
-          label="Avg success rate"
-          value={
-            isLoading ? (
-              <Skeleton className="h-7 w-12" />
-            ) : (
-              formatPercent(
-                candidates.length > 0
-                  ? (candidates.reduce((a, c) => a + c.completed_sessions, 0) /
-                      Math.max(
-                        1,
-                        candidates.reduce((a, c) => a + c.total_sessions, 0)
-                      )) *
-                      100
-                  : 0
+        <div className="glass-card p-4 animate-slide-in-up" style={{ animationDelay: "0ms" }}>
+          <Stat
+            label="Total candidates"
+            value={isLoading ? <Skeleton className="h-7 w-12" /> : candidates.length}
+            icon={<UserCircle size={16} />}
+          />
+        </div>
+        <div className="glass-card p-4 animate-slide-in-up" style={{ animationDelay: "50ms" }}>
+          <Stat
+            label="Avg success rate"
+            value={
+              isLoading ? (
+                <Skeleton className="h-7 w-12" />
+              ) : (
+                formatPercent(
+                  candidates.length > 0
+                    ? (candidates.reduce((a, c) => a + c.completed_sessions, 0) /
+                        Math.max(
+                          1,
+                          candidates.reduce((a, c) => a + c.total_sessions, 0)
+                        )) *
+                        100
+                    : 0
+                )
               )
-            )
-          }
-          icon={<CheckCircle2 size={16} />}
-        />
-        <Stat
-          label="Avg risk score"
-          value={
-            isLoading ? (
-              <Skeleton className="h-7 w-16" />
-            ) : (
-              (() => {
-                const withRisk = candidates.filter((c) => c.avg_risk_score != null);
-                if (withRisk.length === 0) return "—";
-                return (
-                  withRisk.reduce((a, c) => a + c.avg_risk_score, 0) / withRisk.length
-                ).toFixed(3);
-              })()
-            )
-          }
-          icon={<AlertTriangle size={16} />}
-        />
-        <Stat
-          label="Total sessions"
-          value={
-            isLoading ? (
-              <Skeleton className="h-7 w-12" />
-            ) : (
-              candidates.reduce((a, c) => a + c.total_sessions, 0)
-            )
-          }
-          icon={<Activity size={16} />}
-        />
+            }
+            icon={<CheckCircle2 size={16} />}
+          />
+        </div>
+        <div className="glass-card p-4 animate-slide-in-up" style={{ animationDelay: "100ms" }}>
+          <Stat
+            label="Avg risk score"
+            value={
+              isLoading ? (
+                <Skeleton className="h-7 w-16" />
+              ) : (
+                (() => {
+                  const withRisk = candidates.filter((c) => c.avg_risk_score != null);
+                  if (withRisk.length === 0) return "—";
+                  return (
+                    withRisk.reduce((a, c) => a + c.avg_risk_score, 0) / withRisk.length
+                  ).toFixed(3);
+                })()
+              )
+            }
+            icon={<AlertTriangle size={16} />}
+          />
+        </div>
+        <div className="glass-card p-4 animate-slide-in-up" style={{ animationDelay: "150ms" }}>
+          <Stat
+            label="Total sessions"
+            value={
+              isLoading ? (
+                <Skeleton className="h-7 w-12" />
+              ) : (
+                candidates.reduce((a, c) => a + c.total_sessions, 0)
+              )
+            }
+            icon={<Activity size={16} />}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

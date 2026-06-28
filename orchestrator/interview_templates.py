@@ -38,7 +38,9 @@ class InterviewTemplateManager:
         interview_type = interview_type.strip().lower()
 
         if interview_type not in self.INTERVIEW_TYPES:
-            raise ValueError(f"Invalid interview type: {interview_type}. Must be one of: {self.INTERVIEW_TYPES}")
+            raise ValueError(
+                f"Invalid interview type: {interview_type}. Must be one of: {self.INTERVIEW_TYPES}"
+            )
 
         template_id = f"tmpl_{uuid.uuid4().hex[:12]}"
         now = utcnow()

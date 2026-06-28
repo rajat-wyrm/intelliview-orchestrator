@@ -115,9 +115,7 @@ class QuestionBank:
         """Get a single question by ID"""
         db = SessionLocal()
         try:
-            q = db.execute(
-                select(Question).where(Question.question_id == question_id)
-            ).scalar_one_or_none()
+            q = db.execute(select(Question).where(Question.question_id == question_id)).scalar_one_or_none()
             if not q:
                 return None
             return {
@@ -166,9 +164,7 @@ class QuestionBank:
         """Increment usage count and optionally update running average score"""
         db = SessionLocal()
         try:
-            q = db.execute(
-                select(Question).where(Question.question_id == question_id)
-            ).scalar_one_or_none()
+            q = db.execute(select(Question).where(Question.question_id == question_id)).scalar_one_or_none()
             if not q:
                 return False
 

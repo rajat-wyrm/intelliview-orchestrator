@@ -9,7 +9,7 @@ access and in PostgreSQL for persistence.
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 from orchestrator.redis_client import get_redis
@@ -52,9 +52,9 @@ class MomentTracker:
         self,
         session_id: str,
         moment_type: str,
-        metadata: Optional[Dict[str, Any]] = None,
-        timestamp: Optional[datetime] = None,
-    ) -> Dict[str, Any]:
+        metadata: dict[str, Any] | None = None,
+        timestamp: datetime | None = None,
+    ) -> dict[str, Any]:
         redis = self._get_redis()
         now = timestamp or datetime.now(timezone.utc)
 
@@ -78,19 +78,16 @@ class MomentTracker:
         except Exception as e:
             logger.warning(f"Failed to track moment in Redis: {e}")
 
-        logger.info(
-            f"Moment tracked: session={session_id} type={moment_type} "
-            f"metadata={metadata or {}}"
-        )
+        logger.info(f"Moment tracked: session={session_id} type={moment_type} metadata={metadata or {}}")
 
         return moment
 
     def get_session_moments(
         self,
         session_id: str,
-        moment_type: Optional[str] = None,
+        moment_type: str | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         redis = self._get_redis()
 
         try:
@@ -109,21 +106,15 @@ class MomentTracker:
     def get_timeline(
         self,
         session_id: str,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-    ) -> List[Dict[str, Any]]:
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> list[dict[str, Any]]:
         moments = self.get_session_moments(session_id, limit=1000)
 
         if start_time:
-            moments = [
-                m for m in moments
-                if datetime.fromisoformat(m["timestamp"]) >= start_time
-            ]
+            moments = [m for m in moments if datetime.fromisoformat(m["timestamp"]) >= start_time]
         if end_time:
-            moments = [
-                m for m in moments
-                if datetime.fromisoformat(m["timestamp"]) <= end_time
-            ]
+            moments = [m for m in moments if datetime.fromisoformat(m["timestamp"]) <= end_time]
 
         moments.sort(key=lambda m: m["timestamp"])
 
@@ -137,7 +128,7 @@ class MomentTracker:
 
         return moments
 
-    def get_session_summary(self, session_id: str) -> Dict[str, Any]:
+    def get_session_summary(self, session_id: str) -> dict[str, Any]:
         moments = self.get_session_moments(session_id, limit=1000)
 
         if not moments:
@@ -157,9 +148,7 @@ class MomentTracker:
         risk_moments = [m for m in moments if m.get("type") == MomentType.RISK_DETECTED]
         avg_risk = 0
         if risk_moments:
-            risk_scores = [
-                m.get("metadata", {}).get("risk_score", 0) for m in risk_moments
-            ]
+            risk_scores = [m.get("metadata", {}).get("risk_score", 0) for m in risk_moments]
             avg_risk = sum(risk_scores) / len(risk_scores) if risk_scores else 0
 
         return {
@@ -173,7 +162,7 @@ class MomentTracker:
             "risk_detections": len(risk_moments),
         }
 
-    def get_analytics(self, time_range_hours: int = 24) -> Dict[str, Any]:
+    def get_analytics(self, time_range_hours: int = 24) -> dict[str, Any]:
         redis = self._get_redis()
 
         try:

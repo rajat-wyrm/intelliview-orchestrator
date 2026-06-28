@@ -37,11 +37,13 @@ from monitoring.dashboard_api import create_dashboard_routes
 from monitoring.metrics_collector import MetricsCollector
 from monitoring.websocket_manager import ws_manager
 from orchestrator import http_cache
-
+from orchestrator.candidate_manager import CandidateManager
 from orchestrator.fault_manager import FaultManager
 from orchestrator.health_monitor import HealthMonitor
+from orchestrator.interview_templates import InterviewTemplateManager
 from orchestrator.load_balancer import BalancingStrategy, LoadBalancer
 from orchestrator.logging_config import configure_logging, log_event
+from orchestrator.question_bank import QuestionBank
 from orchestrator.rate_limiter import RateLimiterMiddleware
 from orchestrator.redis_client import circuit_breaker
 from orchestrator.request_validation import RequestValidationMiddleware
@@ -86,9 +88,9 @@ async def lifespan(app: FastAPI):
                 except Exception as exc:
                     logger.debug("shutdown close failed: %s", exc)
         # Close the shared Redis client
-        from orchestrator.redis_client import get_redis_client
+        from orchestrator.cache_manager import CacheManager
 
-        rc = get_redis_client()
+        rc = CacheManager()
         if rc is not None:
             try:
                 rc.raw.close()
@@ -203,6 +205,9 @@ fault_manager = FaultManager()
 retry_manager = RetryManager(max_retries=3, strategy=RetryStrategy.EXPONENTIAL_BACKOFF)
 health_monitor = HealthMonitor()
 metrics_collector = MetricsCollector()
+question_bank = QuestionBank()
+candidate_manager = CandidateManager()
+interview_template_manager = InterviewTemplateManager()
 
 # Register dashboard routes
 dashboard_routes = create_dashboard_routes(

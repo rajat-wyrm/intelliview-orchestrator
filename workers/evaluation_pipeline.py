@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 
 from workers._stubs import _seeded_unit  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Real LLM-based evaluation helpers with fallback to seeded stubs
 # ---------------------------------------------------------------------------
@@ -38,11 +37,14 @@ def _llm_evaluate_answer_quality(session_id: str, question: str, answer: str) ->
     user_msg = f"Question: {question}\n\nAnswer: {answer}"
 
     try:
-        from workers.ai_client import chat_completion, HAS_OPENAI
+        from workers.ai_client import HAS_OPENAI, chat_completion
+
         if HAS_OPENAI:
             response = chat_completion(
                 [{"role": "system", "content": prompt}, {"role": "user", "content": user_msg}],
-                model="gpt-4o", temperature=0.3, max_tokens=512,
+                model="gpt-4o",
+                temperature=0.3,
+                max_tokens=512,
             )
             if response:
                 parsed = json.loads(response)
@@ -58,7 +60,8 @@ def _llm_evaluate_answer_quality(session_id: str, question: str, answer: str) ->
         logger.debug("OpenAI quality evaluation failed: %s", exc)
 
     try:
-        from workers.ai_client import gemini_generate, HAS_GEMINI
+        from workers.ai_client import HAS_GEMINI, gemini_generate
+
         if HAS_GEMINI:
             response = gemini_generate(f"{prompt}\n\n{user_msg}", temperature=0.3, max_output_tokens=512)
             if response:
@@ -75,11 +78,13 @@ def _llm_evaluate_answer_quality(session_id: str, question: str, answer: str) ->
         logger.debug("Gemini quality evaluation failed: %s", exc)
 
     try:
-        from workers.ai_client import grok_completion, HAS_GROK
+        from workers.ai_client import HAS_GROK, grok_completion
+
         if HAS_GROK:
             response = grok_completion(
                 [{"role": "system", "content": prompt}, {"role": "user", "content": user_msg}],
-                temperature=0.3, max_tokens=512,
+                temperature=0.3,
+                max_tokens=512,
             )
             if response:
                 parsed = json.loads(response)
@@ -108,11 +113,14 @@ def _llm_evaluate_technical_accuracy(session_id: str, question: str, answer: str
     user_msg = f"Question: {question}\n\nAnswer: {answer}"
 
     try:
-        from workers.ai_client import chat_completion, HAS_OPENAI
+        from workers.ai_client import HAS_OPENAI, chat_completion
+
         if HAS_OPENAI:
             response = chat_completion(
                 [{"role": "system", "content": prompt}, {"role": "user", "content": user_msg}],
-                model="gpt-4o", temperature=0.3, max_tokens=512,
+                model="gpt-4o",
+                temperature=0.3,
+                max_tokens=512,
             )
             if response:
                 parsed = json.loads(response)
@@ -127,7 +135,8 @@ def _llm_evaluate_technical_accuracy(session_id: str, question: str, answer: str
         logger.debug("OpenAI accuracy evaluation failed: %s", exc)
 
     try:
-        from workers.ai_client import gemini_generate, HAS_GEMINI
+        from workers.ai_client import HAS_GEMINI, gemini_generate
+
         if HAS_GEMINI:
             response = gemini_generate(f"{prompt}\n\n{user_msg}", temperature=0.3, max_output_tokens=512)
             if response:
@@ -143,11 +152,13 @@ def _llm_evaluate_technical_accuracy(session_id: str, question: str, answer: str
         logger.debug("Gemini accuracy evaluation failed: %s", exc)
 
     try:
-        from workers.ai_client import grok_completion, HAS_GROK
+        from workers.ai_client import HAS_GROK, grok_completion
+
         if HAS_GROK:
             response = grok_completion(
                 [{"role": "system", "content": prompt}, {"role": "user", "content": user_msg}],
-                temperature=0.3, max_tokens=512,
+                temperature=0.3,
+                max_tokens=512,
             )
             if response:
                 parsed = json.loads(response)

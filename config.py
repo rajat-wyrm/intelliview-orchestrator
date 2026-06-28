@@ -120,3 +120,4 @@ API_TOKEN = settings.api_token
 CORS_ALLOW_ORIGINS = ",".join(settings.cors_allow_origins)
 MAX_REQUEST_BODY_BYTES = settings.max_request_body_bytes
 ENABLE_PROMETHEUS = settings.enable_prometheus
+DATABASE_SSLMODE = settings.database_sslmode

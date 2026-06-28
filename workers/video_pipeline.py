@@ -28,7 +28,6 @@ logger = logging.getLogger(__name__)
 
 from workers._stubs import _seeded_unit  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Real detection helpers (MediaPipe / OpenCV) with fallback to stubs
 # ---------------------------------------------------------------------------
@@ -46,9 +45,7 @@ def _real_detect_face(session_id: str) -> dict[str, Any] | None:
         return {
             "faces_found": faces_found,
             "face_count": result["face_count"],
-            "confidence": round(
-                max((f["confidence"] for f in result["faces"]), default=0.0), 3
-            ),
+            "confidence": round(max((f["confidence"] for f in result["faces"]), default=0.0), 3),
             "bounding_boxes": result["faces"],
             "timestamp": time.time(),
         }
@@ -66,7 +63,6 @@ def _real_detect_head_movement(session_id: str) -> dict[str, Any] | None:
     try:
         import cv2
         import mediapipe as mp  # type: ignore
-        import numpy as np
 
         from workers.ai_client import HAS_MEDIAPIPE
 
@@ -87,9 +83,7 @@ def _real_detect_head_movement(session_id: str) -> dict[str, Any] | None:
             return None
 
         rgb = cv2.cvtColor(frames[-1], cv2.COLOR_BGR2RGB)
-        with mp.solutions.face_mesh.FaceMesh(
-            static_image_mode=True, min_detection_confidence=0.5
-        ) as mesh:
+        with mp.solutions.face_mesh.FaceMesh(static_image_mode=True, min_detection_confidence=0.5) as mesh:
             results = mesh.process(rgb)
             if not results.multi_face_landmarks:
                 return {
@@ -148,9 +142,7 @@ def _real_detect_multiple_persons(session_id: str) -> dict[str, Any] | None:
         return {
             "multiple_persons_detected": count > 1,
             "person_count": count,
-            "detection_confidence": round(
-                max((f["confidence"] for f in result["faces"]), default=0.0), 3
-            ),
+            "detection_confidence": round(max((f["confidence"] for f in result["faces"]), default=0.0), 3),
             "timestamp": time.time(),
         }
     except Exception as exc:
