@@ -7,8 +7,10 @@ Responsibilities:
 - Track worker capacity and active tasks
 - Maintain worker health status
 - Provide worker availability queries
+- Maintain real-time multi-instance cache sync via Redis Pun/Sub
 """
-
+import asyncio
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from threading import Lock
@@ -30,6 +32,8 @@ class WorkerRegistry:
     WORKER_HEARTBEAT_KEY = "worker:heartbeat:"
     HEARTBEAT_TIMEOUT = 60  # seconds
 
+    SYNC_CHANNEL = "workers:cache:sync"
+
     def __init__(self):
         """Initialize worker registry"""
         try:
@@ -38,7 +42,18 @@ class WorkerRegistry:
             self.lock = Lock()
             self._hydrated = False
             self._hydrate_from_redis()
-            logger.info("Worker Registry initialized")
+
+            # Keep a strong reference to background tasks to prevent garbage collection (Fixes RUF006)
+            self.background_tasks: set[asyncio.Task[Any]] = set()
+
+            # Start background listener for real-time synchronization
+            if self.redis_client:
+                task = asyncio.create_task(self._start_pubsub_listener())
+                self.background_tasks.add(task)
+                task.add_done_callback(self.background_tasks.discard)
+                logger.info("Worker Registry initialized with Pub/Sub Sync")
+            else:
+                logger.warning("Worker Registry initialized WITHOUT Redis connection")
         except Exception as e:
             logger.error(f"Error initializing Worker Registry: {e!s}")
             self.redis_client = None
@@ -68,6 +83,80 @@ class WorkerRegistry:
             self._hydrated = True
         except Exception as exc:
             logger.warning("Could not hydrate worker registry from Redis: %s", exc)
+    def _get_native_redis_client(self) -> Any:
+        """Helper to safely extract the raw, native Redis client from the wrapper"""
+        if not self.redis_client:
+            return None
+        if hasattr(self.redis_client, "_client"):
+            return self.redis_client._client
+        elif hasattr(self.redis_client, "client"):
+            return self.redis_client.client
+        elif hasattr(self.redis_client, "_redis"):
+            return self.redis_client._redis
+        return self.redis_client
+
+    async def _start_pubsub_listener(self) -> None:
+        """Background asynchronous loop listening for cache updates from other instances"""
+        native = self._get_native_redis_client()
+        if not native:
+            return
+
+        try:
+            pubsub = native.pubsub()
+            pubsub.subscribe(self.SYNC_CHANNEL)
+            logger.info(f"Subscribed to Redis channel: {self.SYNC_CHANNEL}")
+        except AttributeError as e:
+            logger.critical(f"Could not find pubsub attribute on native client: {e!s}")
+            return
+
+        while True:
+            try:
+                message = pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                if message and message.get("type") == "message":
+                    data = json.loads(message["data"])
+                    worker_id = data.get("worker_id")
+                    action = data.get("action")
+
+                    if worker_id and action == "sync":
+                        raw = self.redis_client.hgetall(f"{self.WORKER_KEY_PREFIX}{worker_id}")
+                        if raw:
+                            with self.lock:
+                                self.local_workers[worker_id] = {
+                                    "worker_id": worker_id,
+                                    "status": raw.get("status", "healthy"),
+                                    "active_tasks": int(raw.get("active_tasks", 0)),
+                                    "capacity": int(raw.get("capacity", 4)),
+                                    "registered_at": raw.get("registered_at", ""),
+                                    "last_heartbeat": raw.get("last_heartbeat", ""),
+                                    "total_tasks_processed": int(raw.get("total_tasks_processed", 0)),
+                                    "failed_tasks": int(raw.get("failed_tasks", 0)),
+                                }
+                            logger.debug(f"Synchronized worker {worker_id} map state locally.")
+                    elif worker_id and action == "deregister":
+                        with self.lock:
+                            if worker_id in self.local_workers:
+                                del self.local_workers[worker_id]
+                        logger.debug(f"Removed worker {worker_id} from local cache via sync alert.")
+            except Exception as e:
+                logger.error(f"Error in Pub/Sub sync listener loop: {e!s}")
+            
+            await asyncio.sleep(0.1)
+
+    def _trigger_sync_broadcast(self, worker_id: str, action: str = "sync") -> None:
+        """
+        Private helper to alert other cluster nodes to sync memory updates
+        
+        Args:
+            worker_id: Unique worker identifier to update
+            action: Sync event behavior type ("sync" or "deregister")
+        """
+        native = self._get_native_redis_client()
+        if native:
+            try:
+                payload = json.dumps({"worker_id": worker_id, "action": action})
+                native.publish(self.SYNC_CHANNEL, payload)
+            except Exception as e:
+                logger.error(f"Failed to publish sync broadcast: {e!s}")
 
     def register_worker(self, worker_id: str, capacity: int = 4) -> bool:
         """
@@ -118,6 +207,9 @@ class WorkerRegistry:
                 self.redis_client.sadd(self.WORKER_SET_KEY, worker_id)
                 self.redis_client.expire(key, int(timedelta(hours=24).total_seconds()))
 
+                # Broadcast modification to other running cluster instances
+                self._trigger_sync_broadcast(worker_id)
+
             logger.info(f"Registered worker: {worker_id} with capacity {capacity}")
             return True
 
@@ -150,6 +242,9 @@ class WorkerRegistry:
                 key = f"{self.WORKER_KEY_PREFIX}{worker_id}"
                 self.redis_client.hset(key, "status", status)
                 self.redis_client.hset(key, "updated_at", datetime.now(timezone.utc).isoformat())
+
+                # Broadcast modification to other running cluster instances
+                self._trigger_sync_broadcast(worker_id)
 
             logger.info(f"Updated worker {worker_id} status to {status}")
             return True
@@ -190,6 +285,9 @@ class WorkerRegistry:
                 hb_key = f"{self.WORKER_HEARTBEAT_KEY}{worker_id}"
                 self.redis_client.set(hb_key, "ok", ex=self.HEARTBEAT_TIMEOUT)
 
+                # Broadcast modification to other running cluster instances
+                self._trigger_sync_broadcast(worker_id)
+
             logger.debug(f"Heartbeat from {worker_id}: {active_tasks} active tasks")
             return True
 
@@ -208,6 +306,9 @@ class WorkerRegistry:
             if self.redis_client:
                 key = f"{self.WORKER_KEY_PREFIX}{worker_id}"
                 self.redis_client.hincrby(key, "active_tasks", 1)
+
+                # Broadcast modification to other running cluster instances
+                self._trigger_sync_broadcast(worker_id)
 
             return True
         except Exception as e:
@@ -228,6 +329,9 @@ class WorkerRegistry:
                 key = f"{self.WORKER_KEY_PREFIX}{worker_id}"
                 self.redis_client.hincrby(key, "active_tasks", -1)
                 self.redis_client.hincrby(key, "total_tasks_processed", 1)
+
+                # Broadcast modification to other running cluster instances
+                self._trigger_sync_broadcast(worker_id)
 
             return True
         except Exception as e:
@@ -339,6 +443,9 @@ class WorkerRegistry:
                 if last_hb < timeout_threshold:
                     unhealthy.append(worker_id)
                     worker["status"] = "unhealthy"
+        # Broadcast if status changes to unhealthy
+        for wid in unhealthy:
+            self._trigger_sync_broadcast(wid)
 
         return unhealthy
 
@@ -353,6 +460,9 @@ class WorkerRegistry:
                 key = f"{self.WORKER_KEY_PREFIX}{worker_id}"
                 self.redis_client.delete(key)
                 self.redis_client.srem(self.WORKER_SET_KEY, worker_id)
+
+                # Broadcast deregistration action
+                self._trigger_sync_broadcast(worker_id, action="deregister")
 
             logger.info(f"Deregistered worker: {worker_id}")
             return True
