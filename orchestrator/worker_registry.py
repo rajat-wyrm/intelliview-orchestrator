@@ -43,7 +43,7 @@ class WorkerRegistry:
             self._hydrated = False
             self._hydrate_from_redis()
 
-            # Keep a strong reference to background tasks to prevent garbage collection (Fixes RUF006)
+            # Keep a strong reference to background tasks to prevent garbage collection 
             self.background_tasks: set[asyncio.Task[Any]] = set()
 
             # Start background listener for real-time synchronization
@@ -89,9 +89,9 @@ class WorkerRegistry:
             return None
         if hasattr(self.redis_client, "_client"):
             return self.redis_client._client
-        elif hasattr(self.redis_client, "client"):
+        if hasattr(self.redis_client, "client"):
             return self.redis_client.client
-        elif hasattr(self.redis_client, "_redis"):
+        if hasattr(self.redis_client, "_redis"):
             return self.redis_client._redis
         return self.redis_client
 
@@ -139,7 +139,6 @@ class WorkerRegistry:
                         logger.debug(f"Removed worker {worker_id} from local cache via sync alert.")
             except Exception as e:
                 logger.error(f"Error in Pub/Sub sync listener loop: {e!s}")
-            
             await asyncio.sleep(0.1)
 
     def _trigger_sync_broadcast(self, worker_id: str, action: str = "sync") -> None:
