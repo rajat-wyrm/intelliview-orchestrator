@@ -42,8 +42,7 @@ class WorkerRegistry:
             self.lock = Lock()
             self._hydrated = False
             self._hydrate_from_redis()
-
-            # Keep a strong reference to background tasks to prevent garbage collection 
+            # Keep a strong reference to background tasks to prevent garbage collection
             self.background_tasks: set[asyncio.Task[Any]] = set()
 
             # Start background listener for real-time synchronization

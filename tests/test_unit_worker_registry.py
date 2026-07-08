@@ -1,20 +1,30 @@
 """Unit tests for WorkerRegistry — register, heartbeat, capacity, deregister."""
 
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from orchestrator.worker_registry import WorkerRegistry
 
 
 def _new_registry():
-    with patch("orchestrator.worker_registry.redis.from_url") as mock_redis:
-        mock_redis.return_value.ping.return_value = True
-        mock_redis.return_value.hset.return_value = True
-        mock_redis.return_value.sadd.return_value = True
-        mock_redis.return_value.expire.return_value = True
-        mock_redis.return_value.setex.return_value = True
-        mock_redis.return_value.delete.return_value = 1
-        mock_redis.return_value.srem.return_value = 1
-        mock_redis.return_value.hincrby.return_value = 1
+    with patch("orchestrator.worker_registry.get_redis_client") as mock_get_client, \
+         patch("orchestrator.worker_registry.asyncio.create_task") as mock_create_task:
+
+        mock_client = MagicMock()
+        mock_client.ping.return_value = True
+        mock_client.hset.return_value = True
+        mock_client.sadd.return_value = True
+        mock_client.expire.return_value = True
+        mock_client.setex.return_value = True
+        mock_client.delete.return_value = 1
+        mock_client.srem.return_value = 1
+        mock_client.hincrby.return_value = 1
+        mock_client.hgetall.return_value = {}
+
+        mock_client._client = MagicMock()
+        mock_client._client.pubsub.return_value = MagicMock()
+        mock_client._client.publish.return_value = True
+
+        mock_get_client.return_value = mock_client
         return WorkerRegistry()
 
 
