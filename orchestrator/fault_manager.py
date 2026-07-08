@@ -267,25 +267,27 @@ class FaultManager:
             log_entry = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "session_id": session_id,
-                "failure_type": failure_type.value,
+                "failure_type": failure_type.value if hasattr(failure_type, 'value') else str(failure_type),
                 "error_message": error_message,
                 "worker_id": worker_id,
             }
 
+            # Write to a structured local JSON Lines log file (.jsonl)
+            with open("failed_logs.jsonl", "a") as f:
+                f.write(json.dumps(log_entry) + "\n") 
+
             if self.redis_client:
-                # Add to failure log list (keep last 1000 failures)
                 log_key = f"{self.failure_log_prefix}{datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
                 self.redis_client.lpush(log_key, json.dumps(log_entry))
                 self.redis_client.ltrim(log_key, 0, 999)
                 self.redis_client.expire(log_key, 604800)  # 7 day TTL
 
-            logger.info(f"Failure logged: {failure_type.value} - {error_message}")
+            logger.info(f"Failure logged: {log_entry['failure_type']} - {error_message}")
             return True
 
         except Exception as e:
             logger.error(f"Error logging failure: {e!s}")
             return False
-
     def move_to_dead_letter_queue(self, session_id: str, reason: str) -> bool:
         """
         Move permanently failed task to dead letter queue for manual inspection
