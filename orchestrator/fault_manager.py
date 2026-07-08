@@ -15,6 +15,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
+import redis
+
 
 from orchestrator.redis_client import get_redis_client
 
