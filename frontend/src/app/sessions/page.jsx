@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo, lazy, Suspense, useCallback } from "react";
+import { useState, useMemo, lazy, Suspense, useCallback, useEffect } from "react";
 import useSWR from "swr";
 import { Play, RefreshCcw, X } from "lucide-react";
 import Card from "@/components/Card";
@@ -94,6 +94,8 @@ export default function SessionsPage() {
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState(null);
   const [compareIds, setCompareIds] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState(null);
   const token = useAppStore((s) => s.token);
 
   const active = useSWR("/active-sessions", { refreshInterval: 2000 });
@@ -101,6 +103,12 @@ export default function SessionsPage() {
   const failed = useSWR("/failed-sessions?limit=100", { refreshInterval: 10000 });
 
   const data = tab === "active" ? active : tab === "completed" ? completed : failed;
+
+  useEffect(() => {
+    if (data.data && !data.error && !data.isValidating) {
+      setRefreshError(null);
+    }
+  }, [data.data, data.error, data.isValidating]);
 
   const { connected } = useWebSocket({
     path: "/monitoring/ws/metrics",
@@ -127,6 +135,27 @@ export default function SessionsPage() {
     );
   }, []);
 
+  async function handleRefresh() {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshError(null);
+    try {
+      const refreshed =
+        tab === "active"
+          ? await endpoints.activeSessions()
+          : tab === "completed"
+            ? await endpoints.completedSessions(100)
+            : await endpoints.failedSessions(100);
+      await data.mutate(refreshed, { revalidate: false });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setRefreshError(msg);
+      toast.error("Failed to refresh sessions", msg);
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   const compareSessions = useMemo(
     () => [...(completed.data?.sessions ?? []), ...(failed.data?.sessions ?? [])].filter((s) => compareIds.includes(s.session_id)),
     [completed.data, failed.data, compareIds]
@@ -148,7 +177,10 @@ export default function SessionsPage() {
           {TABS.map((t) => (
             <button
               key={t}
-              onClick={() => setTab(t)}
+              onClick={() => {
+                setTab(t);
+                setRefreshError(null);
+              }}
               className={cn(
                 "rounded-md px-3 py-1.5 text-xs font-medium capitalize",
                 tab === t ? "bg-accent/15 text-accent-light" : "text-muted hover:bg-bg-card hover:text-zinc-200",
@@ -165,13 +197,30 @@ export default function SessionsPage() {
               className="w-64"
             />
             <button
-              onClick={() => data.mutate()}
-              className="flex items-center gap-1 rounded-md border border-border bg-bg-card px-2 py-1 text-xs text-muted hover:text-zinc-200"
+              type="button"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              aria-disabled={refreshing}
+              aria-busy={refreshing}
+              className={cn(
+                "flex items-center gap-1 rounded-md border border-border bg-bg-card px-2 py-1 text-xs text-muted hover:text-zinc-200",
+                refreshing && "cursor-not-allowed opacity-50"
+              )}
             >
-              <RefreshCcw size={12} /> Refresh
+              <RefreshCcw size={12} className={refreshing ? "animate-spin" : ""} />
+              {refreshing ? "Refreshing..." : "Refresh"}
             </button>
           </div>
         </div>
+
+        {refreshError && (
+          <div
+            role="alert"
+            className="mb-4 rounded-md border border-rose-500/30 bg-rose-500/5 px-3 py-2 text-xs text-rose-300"
+          >
+            Failed to refresh sessions. Please try again.
+          </div>
+        )}
 
         {data.error ? (
           <ErrorState error={data.error} onRetry={() => data.mutate()} />
