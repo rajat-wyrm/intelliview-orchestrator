@@ -100,14 +100,15 @@ class SessionManager:
             session_id = f"session_{uuid.uuid4().hex[:16]}"
 
             logger.info(f"Creating new interview session: {session_id} for candidate {candidate_id}")
+            now = _utcnow()
 
             # Create database record
             interview_session = InterviewSession(
                 session_id=session_id,
                 candidate_id=candidate_id,
                 status=self.CREATED,
-                created_at=_utcnow(),
-                updated_at=_utcnow(),
+                created_at=now,
+                updated_at=now,
             )
 
             session_db.add(interview_session)
@@ -120,8 +121,8 @@ class SessionManager:
                 "candidate_name": candidate_name or "Unknown",
                 "position": position or "Unknown",
                 "status": self.CREATED,
-                "created_at": _utcnow().isoformat(),
-                "updated_at": _utcnow().isoformat(),
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
                 "risk_score": None,
             }
             self.state_sync.set_session_state(session_id, session_data)
