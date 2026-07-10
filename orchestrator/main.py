@@ -35,6 +35,16 @@ from database.db import engine
 from database.models import Base
 from monitoring.dashboard_api import create_dashboard_routes
 from monitoring.metrics_collector import MetricsCollector
+
+# Import Prometheus metrics used for application monitoring
+from monitoring.prometheus_metrics import (
+    REQUEST_COUNT,
+    REQUEST_DURATION,
+    SESSIONS_CREATED,
+    SESSIONS_ACTIVE,
+    WORKERS_REGISTERED,
+    get_metrics_text,
+)
 from monitoring.websocket_manager import ws_manager
 from orchestrator import http_cache
 from orchestrator.candidate_manager import CandidateManager
@@ -140,8 +150,23 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             logger.debug("traceback", exc_info=True)
             raise
         elapsed_ms = (_time.perf_counter() - start) * 1000
+
+        # Record HTTP request metrics for Prometheus monitoring
+        REQUEST_COUNT.labels(
+            method=request.method,
+            path=request.url.path,
+            status=str(response.status_code),
+        ).inc()
+
+        # Measure request processing time for each API endpoint
+        REQUEST_DURATION.labels(
+            method=request.method,
+            path=request.url.path,
+        ).observe(elapsed_ms / 1000)
+
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Response-Time-ms"] = f"{elapsed_ms:.1f}"
+
         if request.url.path != "/health":
             log_event(
                 logger,
@@ -153,6 +178,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 status=response.status_code,
                 elapsed_ms=round(elapsed_ms, 1),
             )
+
         return response
 
 
@@ -476,12 +502,17 @@ async def start_interview(request: StartInterviewRequest):
         }
         priority = priority_map.get(request.priority.lower(), TaskPriority.MEDIUM)
 
-        # Create session
+        # Create a new interview session
         session_id = session_manager.create_session(
             candidate_id=request.candidate_id,
             candidate_name=request.candidate_name,
             position=request.position,
         )
+
+        # Increment total interview sessions created
+        SESSIONS_CREATED.inc()
+        # Increase active interview session count
+        SESSIONS_ACTIVE.inc()
 
         logger.info(f"Session created: {session_id}")
 

@@ -10,6 +10,15 @@ Responsibilities:
 """
 
 import logging
+
+# Import Prometheus worker monitoring metrics
+from monitoring.prometheus_metrics import (
+    WORKERS_REGISTERED,
+    WORKERS_HEALTHY,
+    WORKERS_UNHEALTHY,
+    WORKER_ACTIVE_TASKS,
+    WORKER_CAPACITY,
+)
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Any
@@ -119,6 +128,20 @@ class WorkerRegistry:
                 self.redis_client.expire(key, int(timedelta(hours=24).total_seconds()))
 
             logger.info(f"Registered worker: {worker_id} with capacity {capacity}")
+            # Update total registered workers metric
+            WORKERS_REGISTERED.set(len(self.local_workers))
+            # Update healthy worker count
+            WORKERS_HEALTHY.set(
+                sum(1 for w in self.local_workers.values() if w["status"] == "healthy")
+            )
+            # Update unhealthy worker count
+            WORKERS_UNHEALTHY.set(
+                sum(1 for w in self.local_workers.values() if w["status"] == "unhealthy")
+            )
+            # Store capacity allocated to this worker
+            WORKER_CAPACITY.labels(worker_id=worker_id).set(capacity)
+            # Initialize active task metric for the new worker
+            WORKER_ACTIVE_TASKS.labels(worker_id=worker_id).set(0)
             return True
 
         except Exception as e:
@@ -191,6 +214,19 @@ class WorkerRegistry:
                 self.redis_client.set(hb_key, "ok", ex=self.HEARTBEAT_TIMEOUT)
 
             logger.debug(f"Heartbeat from {worker_id}: {active_tasks} active tasks")
+            # Update worker active task count from heartbeat
+            WORKER_ACTIVE_TASKS.labels(worker_id=worker_id).set(active_tasks)
+
+            # Refresh healthy worker metric after heartbeat    
+            WORKERS_HEALTHY.set(
+                sum(1 for w in self.local_workers.values() if w["status"] == "healthy")
+            )
+
+            # Refresh unhealthy worker metric after heartbeat
+            WORKERS_UNHEALTHY.set(
+                sum(1 for w in self.local_workers.values() if w["status"] == "unhealthy")
+            )
+
             return True
 
         except Exception as e:
@@ -353,6 +389,18 @@ class WorkerRegistry:
                 key = f"{self.WORKER_KEY_PREFIX}{worker_id}"
                 self.redis_client.delete(key)
                 self.redis_client.srem(self.WORKER_SET_KEY, worker_id)
+
+            logger.info(f"Deregistered worker: {worker_id}")
+            # Update Prometheus metrics
+            WORKERS_REGISTERED.set(len(self.local_workers))
+
+            WORKERS_HEALTHY.set(
+                sum(1 for w in self.local_workers.values() if w["status"] == "healthy")
+            )
+
+            WORKERS_UNHEALTHY.set(
+                sum(1 for w in self.local_workers.values() if w["status"] == "unhealthy")
+            )
 
             logger.info(f"Deregistered worker: {worker_id}")
             return True
