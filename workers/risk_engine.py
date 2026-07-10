@@ -190,7 +190,7 @@ class RiskScoringEngine:
             risk_classification,
         )
         risk_factors = RiskScoringEngine._identify_risk_factors(video_result, audio_result, evaluation_result)
-
+        explaination = RiskScoringEngine._generate_explaination(risk_classification,risk_factors)
         report = {
             "session_id": session_id,
             "final_risk_score": final_risk,
@@ -201,6 +201,7 @@ class RiskScoringEngine:
                 "evaluation_risk": evaluation_risk,
             },
             "risk_factors": risk_factors,
+            "explaination": explaination,
             "recommendation": RiskScoringEngine._generate_recommendation(risk_classification),
         }
 
@@ -252,68 +253,3 @@ class RiskScoringEngine:
             "CRITICAL": "Significant fraud indicators detected. Recommend rejection or investigation.",
         }
         return recommendations.get(risk_classification, "Review interview manually.")
-
-
-class RiskDecisionTree:
-    """
-    Decision tree for interview risk classification.
-    Determines the final interview risk using decision rules
-    instead of weighted scoring.
-    """
-
-    @staticmethod
-    def classify(
-        video_result: dict[str, Any],
-        audio_result: dict[str, Any],
-        evaluation_result: dict[str, Any],
-    ) -> str:
-
-        # Multiple people detected
-        if video_result.get("multiple_persons", {}).get("multiple_persons_detected"):
-            return "CRITICAL"
-
-        # Face not detected
-        if not video_result.get("face_detected", {}).get("faces_found"):
-            return "HIGH"
-
-        # Phone detected
-        if video_result.get("phone_detected", {}).get("phone_detected"):
-            return "HIGH"
-
-        # Suspicious head movement
-        if video_result.get("head_movement_suspicious", {}).get("suspicious_movement_detected"):
-            return "HIGH"
-
-        # Background voices + suspicious conversation together
-        if audio_result.get("background_voices", {}).get("background_voices_detected") and audio_result.get(
-            "suspicious_conversation", {}
-        ).get("suspicious_pattern_detected"):
-            return "HIGH"
-
-        # Background voices only
-        if audio_result.get("background_voices", {}).get("background_voices_detected"):
-            return "MEDIUM"
-
-        # Suspicious conversation only
-        if audio_result.get("suspicious_conversation", {}).get("suspicious_pattern_detected"):
-            return "MEDIUM"
-
-        # Poor answer quality
-        quality = evaluation_result.get("answer_quality_score", {}).get("overall_quality_score", 50)
-
-        if quality < 40:
-            return "MEDIUM"
-
-        # Poor technical accuracy
-        accuracy = evaluation_result.get("technical_accuracy", {}).get("accuracy_score", 50)
-
-        if accuracy < 40:
-            return "MEDIUM"
-
-        # Poor communication
-        clarity = evaluation_result.get("communication_clarity", {}).get("clarity_score", 50)
-
-        if clarity < 40:
-            return "MEDIUM"
-
-        return "LOW"
