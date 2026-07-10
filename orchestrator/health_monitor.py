@@ -16,6 +16,12 @@ Responsibilities:
 import json
 import logging
 import time
+# Import Prometheus system health monitoring metrics
+from monitoring.prometheus_metrics import (
+    REDIS_HEALTH,
+    QUEUE_DEPTH,
+    POSTGRES_HEALTH,
+)
 from datetime import datetime, timezone
 from typing import Any
 
@@ -187,9 +193,14 @@ class HealthMonitor:
                 result = conn.execute(__import__("sqlalchemy").text("SELECT 1 AS ok"))
                 row = result.fetchone()
                 dep.healthy = row is not None and row[0] == 1
+
+                # Mark PostgreSQL as healthy in Prometheus
+                POSTGRES_HEALTH.set(1)
             dep.latency_ms = (time.monotonic() - start) * 1000
             dep.last_check = datetime.now(timezone.utc).isoformat()
         except Exception as exc:
+            # Mark PostgreSQL as unhealthy in Prometheus
+            POSTGRES_HEALTH.set(0)
             dep.healthy = False
             dep.error = str(exc)
             dep.latency_ms = (time.monotonic() - start) * 1000
@@ -237,6 +248,16 @@ class HealthMonitor:
             }
 
             redis_status = self._check_redis_health()
+
+            # Perform PostgreSQL health check
+            postgres_status = self._deep_check_postgres()
+
+            # Include PostgreSQL status in overall health report
+            health_status["components"]["postgres"] = postgres_status
+
+            # Mark system as critical if PostgreSQL is unavailable
+            if not postgres_status["healthy"]:
+                health_status["overall_status"] = HealthStatus.CRITICAL
             health_status["components"]["redis"] = redis_status
             if redis_status["status"] != HealthStatus.HEALTHY:
                 health_status["overall_status"] = HealthStatus.CRITICAL
@@ -365,7 +386,9 @@ class HealthMonitor:
                 return {"status": HealthStatus.UNHEALTHY, "error": "Redis not available"}
 
             queue_length = self.redis_client.llen("celery_queue") if self.redis_client else 0
-
+            
+            # Update current Celery queue depth
+            QUEUE_DEPTH.set(queue_length)
             status = HealthStatus.HEALTHY
             if queue_length > self.queue_threshold:
                 status = HealthStatus.CRITICAL
@@ -392,6 +415,9 @@ class HealthMonitor:
                 return {"status": HealthStatus.UNHEALTHY, "error": "Redis client not initialized"}
 
             self.redis_client.ping()
+
+            # Mark Redis as healthy in Prometheus
+            REDIS_HEALTH.set(1)
             info = self.redis_client.info()
             connected_clients = info.get("connected_clients", 0)
             used_memory = info.get("used_memory_human", "unknown")
@@ -404,6 +430,9 @@ class HealthMonitor:
             }
 
         except Exception as e:
+
+            # Mark Redis as unhealthy in Prometheus
+            REDIS_HEALTH.set(0)
             logger.error("Error checking Redis health: %s", e)
             return {"status": HealthStatus.UNHEALTHY, "error": str(e)}
 
