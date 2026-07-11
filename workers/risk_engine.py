@@ -9,7 +9,7 @@ Responsibilities:
 - Provide risk classification
 
 All weights and thresholds are configurable via RISK_CONFIG, a single
-source of truth for every numeric constant in the scoring pipeline
+source of truth for every numeric constant in the scoring pipeline.
 """
 
 import logging
