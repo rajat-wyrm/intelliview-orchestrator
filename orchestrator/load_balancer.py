@@ -49,14 +49,18 @@ class LoadBalancer:
         Returns:
             dict: Selected worker details or None if no workers available
         """
-        if self.strategy == BalancingStrategy.ROUND_ROBIN:
-            return self._select_round_robin()
-        if self.strategy == BalancingStrategy.LEAST_LOADED:
+        try:
+            if self.strategy == BalancingStrategy.ROUND_ROBIN:
+                return self._select_round_robin()
+            if self.strategy == BalancingStrategy.LEAST_LOADED:
+                return self._select_least_loaded()
+            if self.strategy == BalancingStrategy.QUEUE_BASED:
+                return self._select_queue_based()
+            # Default to least loaded
             return self._select_least_loaded()
-        if self.strategy == BalancingStrategy.QUEUE_BASED:
-            return self._select_queue_based()
-        # Default to least loaded
-        return self._select_least_loaded()
+        except Exception as exc:
+            logger.exception("Failed to select worker: %s", exc)
+            return None
 
     def _select_round_robin(self) -> dict[str, Any] | None:
         """
@@ -78,7 +82,7 @@ class LoadBalancer:
         worker = available[self.round_robin_index % len(available)]
         self.round_robin_index += 1
 
-        logger.debug(f"Round Robin selected worker: {worker['worker_id']}")
+        logger.debug("Round Robin selected worker: %s",worker['worker_id'],)
         return worker
 
     def _select_least_loaded(self) -> dict[str, Any] | None:
@@ -98,8 +102,10 @@ class LoadBalancer:
             return None
 
         logger.debug(
-            f"Least Loaded selected worker: {worker['worker_id']} "
-            f"(active: {worker['active_tasks']}/{worker['capacity']})"
+            "Least Loaded selected worker: %s (active: %s/%s)",
+            worker["worker_id"],
+            worker["active_tasks"],
+            worker["capacity"],
         )
         return worker
 
@@ -119,7 +125,7 @@ class LoadBalancer:
             logger.debug("No workers available - task will be queued in Redis")
             return None
 
-        logger.debug(f"Queue-based selected worker: {worker['worker_id']}")
+        logger.debug("Queue-based selected worker: %s",worker["worker_id"],)
         return worker
 
     def switch_strategy(self, strategy: BalancingStrategy) -> None:
@@ -130,7 +136,7 @@ class LoadBalancer:
             strategy: New strategy to use
         """
         self.strategy = strategy
-        logger.info(f"Switched to {strategy.value} strategy")
+        logger.info("Switched to %s strategy", strategy.value,)
 
     def get_best_worker_for_priority(self, priority: str) -> dict[str, Any] | None:
         """
@@ -179,8 +185,9 @@ class LoadBalancer:
 
         if is_overloaded:
             logger.warning(
-                f"System overloaded! Utilization: {stats['capacity_utilization']}% "
-                f"(threshold: {threshold * 100}%)"
+                "System overloaded! Utilization: %.2f%% (threshold: %.2f%%)",
+                stats["capacity_utilization"],
+                threshold * 100,
             )
 
         return is_overloaded
