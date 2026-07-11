@@ -167,30 +167,37 @@ class RiskScoringEngine:
         evaluation_result: dict[str, Any],
     ) -> dict[str, Any]:
         """Generate comprehensive risk report from all analysis results."""
-        logger.info(f"Generating risk report for session {session_id}")
+        logger.info("Generating risk report for session %s",session_id,)
 
-        video_risk = RiskScoringEngine.calculate_video_risk(video_result)
-        audio_risk = RiskScoringEngine.calculate_audio_risk(audio_result)
-        evaluation_risk = RiskScoringEngine.calculate_evaluation_risk(evaluation_result)
-        final_risk = RiskScoringEngine.calculate_final_risk(video_risk, audio_risk, evaluation_risk)
-        risk_classification = RiskScoringEngine.classify_risk(final_risk)
-        risk_factors = RiskScoringEngine._identify_risk_factors(video_result, audio_result, evaluation_result)
+        try:
+            video_risk = RiskScoringEngine.calculate_video_risk(video_result)
+            audio_risk = RiskScoringEngine.calculate_audio_risk(audio_result)
+            evaluation_risk = RiskScoringEngine.calculate_evaluation_risk(evaluation_result)
+            final_risk = RiskScoringEngine.calculate_final_risk(video_risk, audio_risk, evaluation_risk)
+            risk_classification = RiskScoringEngine.classify_risk(final_risk)
+            risk_factors = RiskScoringEngine._identify_risk_factors(video_result, audio_result, evaluation_result)
 
-        report = {
-            "session_id": session_id,
-            "final_risk_score": final_risk,
-            "risk_classification": risk_classification,
-            "component_risks": {
-                "video_risk": video_risk,
-                "audio_risk": audio_risk,
-                "evaluation_risk": evaluation_risk,
-            },
-            "risk_factors": risk_factors,
-            "recommendation": RiskScoringEngine._generate_recommendation(risk_classification),
-        }
+            report = {
+                "session_id": session_id,
+                "final_risk_score": final_risk,
+                "risk_classification": risk_classification,
+                "component_risks": {
+                    "video_risk": video_risk,
+                    "audio_risk": audio_risk,
+                    "evaluation_risk": evaluation_risk,
+                },
+                "risk_factors": risk_factors,
+                "recommendation": RiskScoringEngine._generate_recommendation(risk_classification),
+            }
 
-        logger.info(f"Risk report generated: {risk_classification} (score: {final_risk})")
-        return report
+            logger.info(f"Risk report generated: {risk_classification} (score: {final_risk})")
+            return report
+        except Exception:
+            logger.exception(
+                "Failed to generate risk report for session %s",
+                session_id,
+            )
+            raise
 
     @staticmethod
     def _identify_risk_factors(
