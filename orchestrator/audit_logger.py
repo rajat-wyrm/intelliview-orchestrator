@@ -97,17 +97,46 @@ class AuditLogger:
         self._buffer_max = 500
         logger.info("AuditLogger initialized (file=%s)", self.log_file or "stdout-only")
 
+    def _write_to_file(self, event: AuditEvent) -> None:
+        """Helper method to append JSON logs to the specified file."""
+        try:
+            with open(self.log_file, "a", encoding="utf-8") as f:
+                f.write(event.to_json() + "\n")
+        except Exception:
+            logger.exception("Failed to write audit event to file: %s", self.log_file)
+
     def log_event(self, event: AuditEvent) -> None:
-        """Emit an audit event to the logger and optionally buffer for export."""
-        level = getattr(logging, event.severity, logging.INFO)
-        logger.log(level, f"[AUDIT] {event.event_type}", extra=event.to_dict())
-
-        if self.log_file:
-            self._write_to_file(event)
-
-        self._buffer.append(event.to_dict())
-        if len(self._buffer) > self._buffer_max:
-            self._buffer = self._buffer[-self._buffer_max :]
+        """
+        Emit an audit event to the logger and optionally buffer for export.
+    
+        Includes exception handling so that logging failures do not
+        interrupt normal application execution.
+        """
+        try:
+            level = getattr(logging, event.severity, logging.INFO)
+    
+            logger.log(
+                level,
+                "[AUDIT] %s | Category=%s | Actor=%s",
+                event.event_type,
+                event.category,
+                event.actor,
+                extra=event.to_dict(),
+            )
+    
+            if self.log_file:
+                self._write_to_file(event)
+    
+            self._buffer.append(event.to_dict())
+    
+            if len(self._buffer) > self._buffer_max:
+                self._buffer = self._buffer[-self._buffer_max :]
+    
+        except Exception:
+            logger.exception(
+                "Unexpected error while processing audit event '%s'",
+                event.event_type,
+            )
 
     def log_api_mutation(
         self,
@@ -231,58 +260,22 @@ class AuditLogger:
 
     def get_recent_events(self, limit: int = 100) -> list[dict[str, Any]]:
         """Return recent audit events from the in-memory buffer."""
-        return list(reversed(self._buffer[-limit:]))
+        try:
+            return list(reversed(self._buffer[-limit:]))
+    
+        except Exception:
+            logger.exception("Failed to retrieve recent audit events.")
+            return []
 
     def get_events_by_category(self, category: str, limit: int = 100) -> list[dict[str, Any]]:
         """Filter recent events by category."""
-        cat_key = self.CATEGORIES.get(category, category)
-        return [e for e in reversed(self._buffer) if e.get("category") == cat_key][:limit]
-
-    def export_events(
-        self,
-        format: str = "json",
-        start_time: str | None = None,
-        end_time: str | None = None,
-        category: str | None = None,
-    ) -> str:
-        """Export audit events for compliance / analysis.
-
-        Args:
-            format: Output format - "json" or "jsonl" (JSON Lines).
-            start_time: ISO timestamp filter (inclusive).
-            end_time: ISO timestamp filter (inclusive).
-            category: Filter by category key.
-
-        Returns:
-            String of formatted audit events.
-        """
-        events = list(self._buffer)
-
-        if start_time:
-            events = [e for e in events if e.get("timestamp", "") >= start_time]
-        if end_time:
-            events = [e for e in events if e.get("timestamp", "") <= end_time]
-        if category:
-            cat_key = self.CATEGORIES.get(category, category)
-            events = [e for e in events if e.get("category") == cat_key]
-
-        if format == "jsonl":
-            return "\n".join(json.dumps(e, default=str) for e in events)
-        return json.dumps(events, default=str, indent=2)
-
-    def _write_to_file(self, event: AuditEvent) -> None:
-        """Append a single event line to the audit log file."""
         try:
-            os.makedirs(os.path.dirname(self.log_file) or ".", exist_ok=True)
-            with open(self.log_file, "a", encoding="utf-8") as f:
-                f.write(event.to_json() + "\n")
-        except OSError as exc:
-            logger.error("Failed to write audit log to %s: %s", self.log_file, exc)
-
-    def close(self) -> None:
-        """Flush and close."""
-        self._buffer.clear()
-
-
-# Module-level singleton
-audit_logger = AuditLogger()
+            cat_key = self.CATEGORIES.get(category, category)
+            return [
+                e
+                for e in reversed(self._buffer)
+                if e.get("category") == cat_key
+            ][:limit]
+        except Exception:
+            logger.exception("Failed to retrieve audit events for category '%s'.", category)
+            return []
