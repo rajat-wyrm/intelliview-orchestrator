@@ -14,9 +14,6 @@ from typing import Any
 
 from orchestrator.redis_client import get_redis_client
 
-import logging
-
-logger = logging.getLogger(__name__)
 _TTL_PREFIX = "httpcache:"
 _DEFAULT_TTL = 2  # seconds — short, dashboard polls every 5s
 
@@ -36,13 +33,7 @@ def get(name: str) -> Any | None:
     try:
         raw = c.get(_key(name))
         return json.loads(raw) if raw else None
-    except Exception as exc:
-        logger.warning(
-            "Failed to retrieve cache for key '%s': %s",
-            name,
-            exc,
-            exc_info=True,
-        )
+    except Exception:
         return None
 
 
@@ -52,13 +43,8 @@ def set(name: str, value: Any, ttl: int = _DEFAULT_TTL) -> None:
         return
     try:
         c.set(_key(name), json.dumps(value), ex=ttl)
-    except Exception as exc:
-        logger.warning(
-            "Failed to cache key '%s': %s",
-            name,
-            exc,
-            exc_info=True,
-        )
+    except Exception:
+        pass
 
 
 def invalidate(*names: str) -> None:
