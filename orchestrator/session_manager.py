@@ -129,8 +129,11 @@ class SessionManager:
             logger.info(f"Session {session_id} created successfully")
             return session_id
 
-        except Exception as e:
-            logger.error(f"Error creating session: {e!s}")
+        except Exception:
+            logger.exception(
+                "Failed to create session for candidate_id=%s",
+                candidate_id,
+            )
             session_db.rollback()
             raise
         finally:
@@ -196,8 +199,12 @@ class SessionManager:
 
             return True
 
-        except Exception as e:
-            logger.error(f"Error updating session status: {e!s}")
+        except Exception:
+            logger.exception(
+                "Failed to update session status. session_id=%s new_status=%s",
+                session_id,
+                new_status,
+            )
             session_db.rollback()
             return False
         finally:
@@ -255,11 +262,12 @@ class SessionManager:
 
             finally:
                 session_db.close()
-
-        except Exception as e:
-            logger.error(f"Error retrieving session: {e!s}")
+        except Exception:
+            logger.exception(
+                "Failed to retrieve session. session_id=%s",
+                session_id,
+            )
             return None
-
     def mark_session_failed(self, session_id: str, error_message: str) -> bool:
         """
         Mark a session as failed with error details
@@ -314,9 +322,11 @@ class SessionManager:
 
             logger.info(f"Session {session_id} marked as completed")
             return True
-
-        except Exception as e:
-            logger.error(f"Error marking session completed: {e!s}")
+        except Exception:
+            logger.exception(
+                "Failed to mark session completed. session_id=%s",
+                session_id,
+            )
             session_db.rollback()
             return False
         finally:
@@ -356,8 +366,11 @@ class SessionManager:
                     details=details,
                     risk_score=risk_score,
                 )
-            except Exception as exc:
-                logger.debug("ws broadcast failed for %s: %s", session_id, exc)
+            except Exception:
+                logger.exception(
+                    "WebSocket broadcast failed for session_id=%s",
+                    session_id,
+                )
 
         # The task is intentionally fire-and-forget; we keep a reference to
         # avoid RUF006 ("Store a reference to the return value") but don't
