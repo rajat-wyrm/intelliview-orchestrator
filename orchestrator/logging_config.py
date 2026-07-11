@@ -51,72 +51,44 @@ class JsonFormatter(logging.Formatter):
     }
 
     def format(self, record: logging.LogRecord) -> str:
-        try:
-            payload: dict[str, Any] = {
-                "timestamp": datetime.fromtimestamp(
-                    record.created,
-                    tz=timezone.utc,
-                ).isoformat(),
-                "level": record.levelname,
-                "logger": record.name,
-                "message": record.getMessage(),
-            }
+        payload: dict[str, Any] = {
+            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        if record.exc_info:
+            payload["exc"] = self.formatException(record.exc_info)
+        # Surface any `extra={...}` fields
+        for key, value in record.__dict__.items():
+            if key not in self.RESERVED and not key.startswith("_"):
+                payload[key] = value
+        return json.dumps(payload, default=str, separators=(",", ":"))
 
-            if record.exc_info:
-                payload["exception"] = self.formatException(record.exc_info)
-            for key, value in record.__dict__.items():
-                if key not in self.RESERVED and not key.startswith("_"):
-                    payload[key] = value
 
-            return json.dumps(
-                payload,
-                default=str,
-                separators=(",", ":"),
-            )
-
-        except Exception:
-            return json.dumps(
-                {
-                    "level": "ERROR",
-                    "message": "Failed to format log record.",
-                }
-            )
 def configure_logging(level: str | None = None) -> None:
     """Configure the root logger with the chosen format."""
-    try:
-        chosen_level = (level or os.getenv("LOG_LEVEL", "INFO")).upper()
-        json_mode = os.getenv("JSON_LOGGING", "1") == "1"
+    chosen_level = (level or os.getenv("LOG_LEVEL", "INFO")).upper()
+    json_mode = os.getenv("JSON_LOGGING", "1") == "1"
 
-        root = logging.getLogger()
-        root.setLevel(getattr(logging, chosen_level, logging.INFO))
-        for h in list(root.handlers):
-            root.removeHandler(h)
+    root = logging.getLogger()
+    root.setLevel(getattr(logging, chosen_level, logging.INFO))
+    for h in list(root.handlers):
+        root.removeHandler(h)
 
-        handler = logging.StreamHandler(stream=sys.stdout)
-        if json_mode:
-            handler.setFormatter(JsonFormatter())
-        else:
-            handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
-        root.addHandler(handler)
-        root.info("Logging configured successfully.",extra={"log_level": chosen_level,"json_logging": json_mode,},)
-    except Exception:
-        logging.getLogger(__name__).exception(
-            "Failed to configure logging."
-        )
+    handler = logging.StreamHandler(stream=sys.stdout)
+    if json_mode:
+        handler.setFormatter(JsonFormatter())
+    else:
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    root.addHandler(handler)
 
 
 def log_event(logger: logging.Logger, level: int, event: str, **fields: Any) -> None:
-    """Emit a structured log event with arbitrary fields."""
+    """Emit a structured log event with arbitrary fields.
 
-    try:
-        logger.log(
-            level,
-            event,
-            extra=fields,
-        )
-
-    except Exception:
-        logger.exception(
-            "Failed to emit structured log event '%s'.",
-            event,
-        )
+    Example:
+        log_event(logger, logging.INFO, "session_completed",
+                  session_id=..., risk_score=0.3)
+    """
+    logger.log(level, event, extra=fields)
