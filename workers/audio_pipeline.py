@@ -14,6 +14,7 @@ HIGH/CRITICAL thresholds fire correctly without GPU dependencies.
 """
 
 import logging
+import os
 import time
 from typing import Any
 
