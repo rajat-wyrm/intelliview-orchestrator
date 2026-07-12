@@ -32,7 +32,7 @@ def _llm_evaluate_answer_quality(session_id: str, question: str, answer: str) ->
     prompt = (
         "You are an expert technical interviewer. Evaluate this candidate answer. "
         "Return a JSON object with keys: overall_quality_score (0-100), "
-        "relevance (0-1), completeness (0-1), clarity (0-1), feedback (string)."
+        "relevance (0-1),accuracy (0-1),coherence (0-1), completeness (0-1), clarity (0-1), feedback (string)."
     )
     user_msg = f"Question: {question}\n\nAnswer: {answer}"
 
@@ -51,6 +51,8 @@ def _llm_evaluate_answer_quality(session_id: str, question: str, answer: str) ->
                 return {
                     "overall_quality_score": round(parsed.get("overall_quality_score", 50), 2),
                     "relevance": round(parsed.get("relevance", 0.5), 2),
+                    "accuracy": round(parsed.get("accuracy", 0.5), 2),
+                    "coherence": round(parsed.get("coherence", 0.5), 2),
                     "completeness": round(parsed.get("completeness", 0.5), 2),
                     "clarity": round(parsed.get("clarity", 0.5), 2),
                     "feedback": parsed.get("feedback", ""),
@@ -69,6 +71,8 @@ def _llm_evaluate_answer_quality(session_id: str, question: str, answer: str) ->
                 return {
                     "overall_quality_score": round(parsed.get("overall_quality_score", 50), 2),
                     "relevance": round(parsed.get("relevance", 0.5), 2),
+                    "accuracy": round(parsed.get("accuracy", 0.5), 2),
+                    "coherence": round(parsed.get("coherence", 0.5), 2),
                     "completeness": round(parsed.get("completeness", 0.5), 2),
                     "clarity": round(parsed.get("clarity", 0.5), 2),
                     "feedback": parsed.get("feedback", ""),
@@ -91,6 +95,8 @@ def _llm_evaluate_answer_quality(session_id: str, question: str, answer: str) ->
                 return {
                     "overall_quality_score": round(parsed.get("overall_quality_score", 50), 2),
                     "relevance": round(parsed.get("relevance", 0.5), 2),
+                    "accuracy": round(parsed.get("accuracy", 0.5), 2),
+                    "coherence": round(parsed.get("coherence", 0.5), 2),
                     "completeness": round(parsed.get("completeness", 0.5), 2),
                     "clarity": round(parsed.get("clarity", 0.5), 2),
                     "feedback": parsed.get("feedback", ""),
@@ -295,6 +301,12 @@ def evaluate_answers(session_id: str) -> dict[str, Any]:
         "answer_quality_score": quality,
         "technical_accuracy": accuracy,
         "communication_clarity": clarity,
+            "evaluation_metrics": {
+        "relevance": quality.get("relevance", 0.0),
+        "accuracy": quality.get("accuracy", 0.0),
+        "coherence": quality.get("coherence", 0.0),
+        "completeness": quality.get("completeness", 0.0),
+    },
         "feedback": feedback,
         "risk_score": 0.0,
     }
@@ -320,6 +332,8 @@ def evaluate_answer_quality(session_id: str) -> dict[str, Any]:
     return {
         "overall_quality_score": round(base * 100, 2),
         "relevance": round(base * 0.95, 2),
+        "accuracy": round(base * 0.94, 2),
+        "coherence": round(base * 0.93, 2),
         "completeness": round(base * 0.9, 2),
         "clarity": round(base * 0.92, 2),
         "feedback": "Response is on-topic and reasonably complete.",
