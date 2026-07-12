@@ -40,12 +40,21 @@ def _llm_evaluate_answer_quality(session_id: str, question: str, answer: str) ->
         from workers.ai_client import HAS_OPENAI, chat_completion
 
         if HAS_OPENAI:
-            response = chat_completion(
+            response, usage = chat_completion(
                 [{"role": "system", "content": prompt}, {"role": "user", "content": user_msg}],
                 model="gpt-4o",
                 temperature=0.3,
                 max_tokens=512,
-            )
+            )   
+        if usage:
+            logger.info("LLM token usage(%s): prompt=%s completion=%s total=%s",
+                        usage["provider"],
+                        usage["prompt_tokens"],
+                        usage["completion_tokens"],
+                        usage["total_tokens"]
+                        )
+            
+        
             if response:
                 parsed = json.loads(response)
                 return {
@@ -100,7 +109,7 @@ def _llm_evaluate_answer_quality(session_id: str, question: str, answer: str) ->
         logger.debug("Grok quality evaluation failed: %s", exc)
 
     return None
-
+  
 
 def _llm_evaluate_technical_accuracy(session_id: str, question: str, answer: str) -> dict[str, Any] | None:
     """Use GPT-4o/Gemini/Grok to evaluate technical accuracy."""
@@ -116,7 +125,7 @@ def _llm_evaluate_technical_accuracy(session_id: str, question: str, answer: str
         from workers.ai_client import HAS_OPENAI, chat_completion
 
         if HAS_OPENAI:
-            response = chat_completion(
+            response, usage = chat_completion(
                 [{"role": "system", "content": prompt}, {"role": "user", "content": user_msg}],
                 model="gpt-4o",
                 temperature=0.3,
@@ -180,7 +189,7 @@ def _llm_evaluate_communication(session_id: str, question: str, answer: str) -> 
     try:
         from workers.ai_client import chat_completion
 
-        response = chat_completion(
+        response, usage = chat_completion(
             [
                 {
                     "role": "system",
@@ -216,7 +225,7 @@ def _llm_generate_feedback(session_id: str, question: str, answer: str) -> dict[
     try:
         from workers.ai_client import chat_completion
 
-        response = chat_completion(
+        response, usage = chat_completion(
             [
                 {
                     "role": "system",
@@ -256,7 +265,7 @@ def _llm_generate_question(session_id: str, topic: str = "systems_design") -> st
     try:
         from workers.ai_client import chat_completion
 
-        response = chat_completion(
+        response, usage = chat_completion(
             [
                 {
                     "role": "system",

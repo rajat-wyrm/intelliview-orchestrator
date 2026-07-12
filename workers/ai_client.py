@@ -97,17 +97,18 @@ except ImportError:
 # OpenAI helpers
 # ---------------------------------------------------------------------------
 
-
 def chat_completion(
     messages: list[dict[str, str]],
     *,
     model: str = "gpt-4o",
     temperature: float = 0.7,
     max_tokens: int = 1024,
-) -> str | None:
+) -> Any:
     """Send a chat completion request; returns the assistant text or None."""
+
     if not HAS_OPENAI:
-        return None
+        return None, None
+
     try:
         resp = openai_client.chat.completions.create(
             model=model,
@@ -115,10 +116,21 @@ def chat_completion(
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        return resp.choices[0].message.content
+
+        return (
+            resp.choices[0].message.content,
+            {
+                "prompt_tokens": resp.usage.prompt_tokens,
+                "completion_tokens": resp.usage.completion_tokens,
+                "total_tokens": resp.usage.total_tokens,
+                "provider": "openai",
+                "model": model,
+            },
+        )
+
     except Exception as exc:
         logger.warning("OpenAI chat completion failed: %s", exc)
-        return None
+        return None, None
 
 
 # ---------------------------------------------------------------------------

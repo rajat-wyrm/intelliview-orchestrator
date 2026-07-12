@@ -47,7 +47,7 @@ def _real_transcribe(session_id: str) -> dict[str, Any] | None:
     except Exception as exc:
         logger.debug("Real transcription unavailable: %s", exc)
         return None
-
+ 
 
 def _real_detect_background_voices(session_id: str) -> dict[str, Any] | None:
     """Detect background voices using pyannote speaker diarisation."""
@@ -82,7 +82,7 @@ def _real_detect_suspicious(session_id: str) -> dict[str, Any] | None:
         if not text:
             return None
 
-        response = chat_completion(
+        response, usage = chat_completion(
             [
                 {
                     "role": "system",
