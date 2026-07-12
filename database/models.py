@@ -5,7 +5,7 @@ Defines database models using declarative base
 
 from datetime import datetime
 
-from sqlalchemy import JSON, Column, DateTime, Float, Integer, String
+from sqlalchemy import JSON,Boolean, Column, DateTime, Float, Integer, String
 from sqlalchemy.sql import func  # noqa: F401  (re-exported for ORM consumers)
 
 from database.db import Base
@@ -108,3 +108,26 @@ class InterviewTemplate(Base):
 
     def __repr__(self):
         return f"<InterviewTemplate(template_id='{self.template_id}', name='{self.name}', type='{self.interview_type}')>"
+
+class Notification(Base):
+    """In-app notification"""
+
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    user_id = Column(String(255), nullable=False, index=True)
+
+    message = Column(String(500), nullable=False)
+
+    read = Column(Boolean, nullable=False, default=False)
+
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    def __repr__(self):
+        return (
+            f"<Notification(id={self.id}, "
+            f"user_id='{self.user_id}', "
+            f"message='{self.message}', "
+            f"read={self.read})>"
+        )
