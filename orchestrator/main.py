@@ -11,7 +11,7 @@ Integrates:
 - Worker Registry for node tracking
 - Task Queue integration with Celery
 """
-
+import json
 import logging
 import re
 import time as _time
@@ -30,6 +30,7 @@ from config import (
     CORS_ALLOW_ORIGINS,
     ENABLE_PROMETHEUS,
     MAX_REQUEST_BODY_BYTES,
+    get_settings,
 )
 from database.db import engine
 from database.models import Base
@@ -45,7 +46,10 @@ from orchestrator.load_balancer import BalancingStrategy, LoadBalancer
 from orchestrator.logging_config import configure_logging, log_event
 from orchestrator.question_bank import QuestionBank
 from orchestrator.rate_limiter import RateLimiterMiddleware
-from orchestrator.redis_client import circuit_breaker
+from orchestrator.redis_client import (
+    circuit_breaker,
+    get_redis_client,
+)
 from orchestrator.request_validation import RequestValidationMiddleware
 from orchestrator.retry_manager import RetryManager, RetryStrategy
 from orchestrator.scheduler import Scheduler, TaskPriority
@@ -53,6 +57,7 @@ from orchestrator.session_manager import SessionManager
 from orchestrator.session_tracker import SessionTracker
 from orchestrator.state_sync import StateSynchronizer
 from orchestrator.worker_registry import WorkerRegistry
+ 
 
 # Configure logging after imports so startup messages are structured.
 configure_logging()
@@ -61,25 +66,47 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Execute on application startup/shutdown.
+    """Execute on application startup/shutdown."""
 
-    Startup: ensure schema exists, run an initial health probe, and warn
-    loudly if the default API token is still in use.
-
-    Shutdown: best-effort graceful drain — flush the request-id log line,
-    close the shared Redis client, and notify clients.
-    """
     Base.metadata.create_all(bind=engine)
+
     if API_TOKEN == "dev-token-change-me":
         logger.warning(
             "API_TOKEN is the built-in dev default — set a strong token "
             "in production via the API_TOKEN env var."
         )
+
     logger.info("AI Interview Orchestrator server starting...")
+
+    settings = get_settings()
+    redis_client = get_redis_client()
+
+    try:
+        redis_client.hset(
+            "config:startup",
+            mapping={
+                "worker_concurrency": str(settings.worker_concurrency),
+                "max_retries": str(settings.max_retries),
+                "cors_allow_origins": json.dumps(settings.cors_allow_origins),
+                "realtime_enabled": str(settings.realtime_enabled),
+                "moment_tracking_enabled": str(settings.moment_tracking_enabled),
+            },
+        )
+
+        logger.info("Configuration cache warmed successfully.")
+
+    except Exception as exc:
+        logger.warning(
+            "Configuration cache warm-up failed: %s",
+            exc,
+        )
+
     try:
         yield
+
     finally:
         logger.info("AI Interview Orchestrator server shutting down...")
+
         for resource in (ws_manager, state_sync, metrics_collector):
             close = getattr(resource, "close", None)
             if callable(close):
@@ -87,8 +114,6 @@ async def lifespan(app: FastAPI):
                     close()
                 except Exception as exc:
                     logger.debug("shutdown close failed: %s", exc)
-        # Close the shared Redis client
-        from orchestrator.redis_client import get_redis_client
 
         rc = get_redis_client()
         if rc is not None:
@@ -96,8 +121,6 @@ async def lifespan(app: FastAPI):
                 rc.raw.close()
             except Exception:
                 pass
-
-
 # Initialize FastAPI application
 app = FastAPI(
     title="AI Interview Orchestrator",
