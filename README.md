@@ -133,6 +133,37 @@ ruff check . && ruff format --check .
 | Monitoring | Prometheus, Grafana |
 | Deploy | Docker Compose |
 
+
+## Authentication
+
+The application uses API Token authentication to protect privileged API endpoints.
+
+### API Token
+
+Configure the API token in the `.env` file:
+
+```env
+API_TOKEN=your-api-token
+```
+
+### Protected Endpoints
+
+Protected endpoints require the `X-API-Token` request header.
+
+Example:
+
+```http
+X-API-Token: api123
+```
+
+### Authentication Responses
+
+- **200 OK** – Valid API token.
+- **401 Unauthorized** – Missing or invalid API token.
+
+Authentication is enforced through the `require_token` dependency for protected API endpoints.
+
+
 ## License
 
 MIT — [Rajat Kumar](https://github.com/rajat-wyrm)
