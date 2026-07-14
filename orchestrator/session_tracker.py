@@ -28,8 +28,13 @@ class SessionTracker:
 
     def __init__(self):
         """Initialize session tracker"""
-
-    def get_active_sessions(self) -> list[dict[str, Any]]:
+    def get_active_sessions(
+        self,
+        status=None,
+        since=None,
+        sort_by="start_time",
+        order="desc",
+    ) -> list[dict[str, Any]]:
         """
         Get all currently active sessions (CREATED, QUEUED, PROCESSING)
 
@@ -46,13 +51,31 @@ class SessionTracker:
                 "AUDIO_PROCESSING",
                 "EVALUATING",
             ]
-            sessions = (
-                session_db.execute(
-                    select(InterviewSession).where(InterviewSession.status.in_(active_statuses))
-                )
-                .scalars()
-                .all()
-            )
+            
+            # 1. Start with the baseline query for active statuses
+            stmt = select(InterviewSession).where(InterviewSession.status.in_(active_statuses))
+
+            # 2. Filter by status subset if provided
+            if status:
+                stmt = stmt.where(InterviewSession.status == status.upper())
+
+            # 3. Filter by date cutoff if provided
+            if since:
+                try:
+                    since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
+                    stmt = stmt.where(InterviewSession.start_time > since_dt)
+                except ValueError:
+                    logger.error(f"Invalid ISO datetime string format passed: {since}")
+
+            # 4. Handle dynamic column sorting safely
+            sort_column = getattr(InterviewSession, sort_by, InterviewSession.start_time)
+            if order.lower() == "desc":
+                stmt = stmt.order_by(sort_column.desc().nullslast())
+            else:
+                stmt = stmt.order_by(sort_column.asc().nullslast())
+
+            # 5. Execute the constructed statement
+            sessions = session_db.execute(stmt).scalars().all()
 
             result = []
             for s in sessions:
@@ -62,6 +85,7 @@ class SessionTracker:
                         "candidate_id": s.candidate_id,
                         "status": s.status,
                         "assigned_node": s.assigned_node,
+                        "start_time": s.start_time.isoformat() if hasattr(s, "start_time") and s.start_time else None,
                         "created_at": s.created_at.isoformat() if s.created_at else None,
                         "updated_at": s.updated_at.isoformat() if s.updated_at else None,
                     }
@@ -76,6 +100,7 @@ class SessionTracker:
         finally:
             session_db.close()
 
+    
     def get_completed_sessions(self, limit: int = 100) -> list[dict[str, Any]]:
         """
         Get recently completed sessions
