@@ -19,7 +19,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Path
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -901,7 +901,7 @@ async def create_candidate(request: CreateCandidateRequest):
 
 
 @app.get("/candidates/{candidate_id}")
-async def get_candidate(candidate_id: str):
+async def get_candidate(candidate_id: str = Path(..., pattern=r"^candidate_[a-f0-9]{12}$")):
     """Get candidate details by ID"""
     try:
         candidate = candidate_manager.get_candidate(candidate_id)
@@ -916,7 +916,7 @@ async def get_candidate(candidate_id: str):
 
 
 @app.get("/candidates/{candidate_id}/history")
-async def get_candidate_history(candidate_id: str):
+async def get_candidate_history(candidate_id: str = Path(..., pattern=r"^candidate_[a-f0-9]{12}$")):
     """Get candidate interview history"""
     try:
         candidate = candidate_manager.get_candidate(candidate_id)
