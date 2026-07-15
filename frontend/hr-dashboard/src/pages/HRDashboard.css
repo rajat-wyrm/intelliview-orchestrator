@@ -1,0 +1,141 @@
+.hr-dashboard {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+  font-family: Arial, sans-serif;
+  color: #e5e5e5;
+}
+
+.hr-dashboard-title {
+  font-size: 28px;
+  margin-bottom: 20px;
+}
+
+/* Stats Cards */
+.stats-cards {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.stat-card {
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 10px;
+  padding: 16px 20px;
+  min-width: 140px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 26px;
+  font-weight: bold;
+  margin: 0;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #999;
+  margin: 4px 0 0;
+}
+
+/* Filter Bar */
+.filter-bar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding: 14px;
+  background: #16161f;
+  border-radius: 8px;
+  border: 1px solid #2a2a2a;
+}
+
+.filter-bar input,
+.filter-bar select {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background: #0f0f17;
+  color: #e5e5e5;
+  font-size: 14px;
+}
+
+/* Table */
+.candidate-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+}
+
+.candidate-table th,
+.candidate-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #2a2a2a;
+  text-align: left;
+  font-size: 14px;
+}
+
+.candidate-table th {
+  background: #1a1a2e;
+  color: #aaa;
+  font-weight: 600;
+}
+
+.candidate-table tr:hover {
+  background: #191927;
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.pagination button {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background: #1a1a2e;
+  color: #e5e5e5;
+  cursor: pointer;
+}
+
+.pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Error + Skeleton */
+.hr-dashboard-error {
+  background: #2a1414;
+  border: 1px solid #5c2323;
+  color: #ff8080;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hr-dashboard-retry-btn {
+  background: #5c2323;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.dashboard-skeleton {
+  padding: 40px;
+  text-align: center;
+  color: #888;
+  background: #16161f;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
