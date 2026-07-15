@@ -32,13 +32,11 @@ def _run_celery() -> None:
 
 
 def main() -> int:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
-
     api_url = os.getenv("API_URL", "http://fastapi:8000")
     worker_id = os.getenv("WORKER_ID", f"worker-{os.uname().nodename}-{os.getpid()}")
+
+    from orchestrator.logging_config import configure_logging
+    configure_logging(service="worker", worker_id=worker_id)
 
     agent = WorkerAgent(api_url=api_url, worker_id=worker_id, capacity=WORKER_CONCURRENCY)
     if not agent.register():

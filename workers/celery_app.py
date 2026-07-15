@@ -6,11 +6,27 @@ FAILED only after Celery has exhausted its retries (rather than on
 every transient exception).
 """
 
+import os
+
 from celery import Celery, signals
 
 from config import REDIS_URL
 
 celery_app = Celery("interview_tasks", broker=REDIS_URL, backend=REDIS_URL)
+
+
+@signals.setup_logging.connect
+def _use_json_logging(**_extra):
+    """Prevent Celery from installing its own plain-text root logger.
+
+    Connecting to this signal tells Celery "logging is handled elsewhere" —
+    it will skip its default setup entirely and defer to ours.
+    """
+    from orchestrator.logging_config import configure_logging
+
+    worker_id = os.getenv("WORKER_ID", f"worker-{os.getpid()}")
+    configure_logging(service="worker", worker_id=worker_id)
+
 
 celery_app.conf.update(
     task_serializer="json",
