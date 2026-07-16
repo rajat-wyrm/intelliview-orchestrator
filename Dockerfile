@@ -29,5 +29,12 @@ EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -fsS http://localhost:8000/health || exit 1
+# Create a secure, non-root system group and user
+RUN groupadd -r appgroup && useradd -r -g appgroup -d /app -s /sbin/nologin appuser
 
+# Give our new user ownership over the application files
+RUN chown -R appuser:appgroup /app
+
+# Tell Docker to switch from root to this new user for the rest of the execution
+USER appuser
 CMD ["uvicorn", "orchestrator.main:app", "--host", "0.0.0.0", "--port", "8000"]
