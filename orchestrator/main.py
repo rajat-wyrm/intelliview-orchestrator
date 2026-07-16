@@ -169,7 +169,7 @@ app.add_middleware(
     allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["*"],
 )
 app.add_middleware(RateLimiterMiddleware, limit=60, window_seconds=60)
 app.add_middleware(
