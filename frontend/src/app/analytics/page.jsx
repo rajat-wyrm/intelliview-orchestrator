@@ -40,7 +40,7 @@ const DATE_PRESETS = [
 ];
 
 const TOOLTIP_STYLE = {
-  contentStyle: { background: "#12121a", border: "1px solid #27272a", borderRadius: 8 },
+  contentStyle: { background: "var(--bg-panel)", border: "1px solid var(--border)" },
 };
 
 function filterByDate(sessions, range) {

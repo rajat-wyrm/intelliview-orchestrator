@@ -93,6 +93,22 @@ html.light ::-webkit-scrollbar-thumb:hover { background: #a1a1aa; }
 .animate-spin-slow { animation: spin-slow 3s linear infinite; }
 .animate-gradient { animation: gradient-shift 3s ease infinite; background-size: 200% 200%; }
 
+.animate-delay-0 {
+  animation-delay: 0ms;
+}
+
+.animate-delay-50 {
+  animation-delay: 50ms;
+}
+
+.animate-delay-100 {
+  animation-delay: 100ms;
+}
+
+.animate-delay-150 {
+  animation-delay: 150ms;
+}
+
 @layer components {
   .glass-panel {
     @apply bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl;

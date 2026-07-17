@@ -124,14 +124,14 @@ export default function CandidatesPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="glass-card p-4 animate-slide-in-up" style={{ animationDelay: "0ms" }}>
+        <div className="glass-card p-4 animate-slide-in-up animate-delay-0">
           <Stat
             label="Total candidates"
             value={isLoading ? <Skeleton className="h-7 w-12" /> : candidates.length}
             icon={<UserCircle size={16} />}
           />
         </div>
-        <div className="glass-card p-4 animate-slide-in-up" style={{ animationDelay: "50ms" }}>
+        <div className="glass-card p-4 animate-slide-in-up animate-delay-50">
           <Stat
             label="Avg success rate"
             value={
@@ -153,7 +153,7 @@ export default function CandidatesPage() {
             icon={<CheckCircle2 size={16} />}
           />
         </div>
-        <div className="glass-card p-4 animate-slide-in-up" style={{ animationDelay: "100ms" }}>
+        <div className="glass-card p-4 animate-slide-in-up animate-delay-100">
           <Stat
             label="Avg risk score"
             value={
@@ -172,7 +172,7 @@ export default function CandidatesPage() {
             icon={<AlertTriangle size={16} />}
           />
         </div>
-        <div className="glass-card p-4 animate-slide-in-up" style={{ animationDelay: "150ms" }}>
+        <div className="glass-card p-4 animate-slide-in-up animate-delay-150">
           <Stat
             label="Total sessions"
             value={
@@ -292,11 +292,11 @@ export default function CandidatesPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
                       <XAxis dataKey="status" stroke="#71717a" fontSize={11} />
                       <YAxis stroke="#71717a" fontSize={11} />
-                      <Tooltip
-                        contentStyle={{
-                          background: "#12121a",
-                          border: "1px solid #27272a",
-                          borderRadius: 8,
+                      <tooltip
+                       contentStyle={{
+                        background: "var(--bg-panel)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 8,
                         }}
                       />
                       <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
