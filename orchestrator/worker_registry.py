@@ -16,6 +16,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from orchestrator.cache_manager import CacheManager
+from orchestrator.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 # Backward-compatible patch target for tests/consumers mocking module.redis.from_url.
