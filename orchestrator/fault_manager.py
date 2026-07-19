@@ -19,6 +19,7 @@ from typing import Any
 
 from orchestrator.redis_client import get_redis_client
 from orchestrator.session_payload import deserialize_session_payload
+from orchestrator.cache_manager import CacheManager
 
 logger = logging.getLogger(__name__)
 # Backward-compatible patch target for tests/consumers mocking module.redis.from_url.
@@ -56,6 +57,7 @@ class FaultManager:
         """
         self.debounce_time = debounce_time
         self.redis_client = redis.from_url()
+        self.redis_client = CacheManager()
         self.failure_log_prefix = "failure_log:"
         self.recovery_queue_prefix = "recovery_queue:"
         self.dead_letter_queue = "dead_letter_queue"

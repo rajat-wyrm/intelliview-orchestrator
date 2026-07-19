@@ -15,7 +15,7 @@ from threading import Lock
 from types import SimpleNamespace
 from typing import Any
 
-from orchestrator.redis_client import get_redis_client
+from orchestrator.cache_manager import CacheManager
 
 logger = logging.getLogger(__name__)
 # Backward-compatible patch target for tests/consumers mocking module.redis.from_url.
@@ -37,6 +37,7 @@ class WorkerRegistry:
         """Initialize worker registry"""
         try:
             self.redis_client = redis.from_url()
+            self.redis_client = CacheManager()
             self.local_workers: dict[str, dict[str, Any]] = {}
             self.lock = Lock()
             self._hydrated = False

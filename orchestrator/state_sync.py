@@ -19,6 +19,7 @@ from sqlalchemy import select
 
 from orchestrator.redis_client import get_redis_client
 from orchestrator.session_payload import deserialize_session_payload, serialize_session_payload
+from orchestrator.cache_manager import CacheManager
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ class StateSynchronizer:
     def __init__(self):
         """Initialize Redis connection"""
         try:
-            self.redis_client = get_redis_client()
+            self.redis_client = CacheManager()
             logger.info("Connected to Redis for state caching")
         except Exception as e:
             logger.error(f"Error initializing Redis connection: {e!s}")
