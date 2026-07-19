@@ -420,20 +420,15 @@ class MetricsCollector:
         except Exception as e:
             logger.warning(f"Error getting uptime: {e!s}")
             return 0
-    from monitoring.prometheus_metrics import get_session_metrics
 
     def _get_session_metrics(self):
-      metrics = get_session_metrics()
+        metrics = self.get_session_metrics(self.session_tracker)
 
-      total = (
-        metrics["completed"]
-        + metrics["failed"]
-        + metrics["active"]
-      )
+        total = metrics["completed"] + metrics["failed"] + metrics["active"]
 
-      return {
-        "active": metrics["active"],
-        "completed": metrics["completed"],
-        "failed": metrics["failed"],
-        "total": total,
-      }
+        return {
+            "active": metrics["active"],
+            "completed": metrics["completed"],
+            "failed": metrics["failed"],
+            "total": total,
+        }

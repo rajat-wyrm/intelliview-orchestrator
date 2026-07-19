@@ -13,7 +13,6 @@ import signal
 import sys
 import time
 from threading import Thread
-from typing import Optional
 
 import httpx
 
@@ -38,7 +37,7 @@ class WorkerAgent:
         self._stop = False
         self._headers = {"X-API-Token": API_TOKEN, "Content-Type": "application/json"}
 
-    def _request(self, method: str, path: str, payload: Optional[dict] = None, retries: int = 5) -> bool:
+    def _request(self, method: str, path: str, payload: dict | None = None, retries: int = 5) -> bool:
         """Shared retry-with-backoff logic for any HTTP call to the orchestrator API."""
         for attempt in range(1, retries + 1):
             try:
@@ -51,7 +50,9 @@ class WorkerAgent:
                 )
                 if r.status_code < 500:
                     return r.status_code < 400
-                logger.warning("API %s %s returned %s, retrying (%d/%d)", method, path, r.status_code, attempt, retries)
+                logger.warning(
+                    "API %s %s returned %s, retrying (%d/%d)", method, path, r.status_code, attempt, retries
+                )
             except Exception as exc:
                 logger.warning("API %s %s failed (%s), retrying (%d/%d)", method, path, exc, attempt, retries)
             if attempt < retries:

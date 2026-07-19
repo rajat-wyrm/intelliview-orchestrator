@@ -16,9 +16,8 @@ import uuid
 import httpx
 import pytest
 
-API_HEADERS = {
-    "X-API-Token": os.getenv("API_TOKEN", "dev-token-change-me")
-}
+API_HEADERS = {"X-API-Token": os.getenv("API_TOKEN", "dev-token-change-me")}
+
 
 def _wait_for_api(base_url: str, timeout: float = 30.0) -> None:
     deadline = time.time() + timeout

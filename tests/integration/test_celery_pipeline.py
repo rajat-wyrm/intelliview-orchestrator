@@ -20,7 +20,6 @@ def test_process_interview_session_pipeline(
     Only verifies pipeline orchestration.
     """
 
-
     mock_db = MagicMock()
     mock_session_local.return_value = mock_db
 
@@ -28,7 +27,6 @@ def test_process_interview_session_pipeline(
     interview.status = "QUEUED"
 
     mock_db.execute.return_value.scalar_one_or_none.return_value = interview
-
 
     group_result = MagicMock()
 
@@ -39,10 +37,7 @@ def test_process_interview_session_pipeline(
 
     mock_group.return_value.apply_async.return_value = group_result
 
-
     result = process_interview_session.run("test-session-001")
-
-
 
     assert result["session_id"] == "test-session-001"
     assert result["status"] == "processing_parallel"

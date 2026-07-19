@@ -21,7 +21,7 @@ import logging
 import socket
 from datetime import datetime, timezone
 
-from celery import group
+from celery import chord
 from sqlalchemy import select
 
 from database.db import SessionLocal
@@ -47,11 +47,9 @@ state_sync = StateSynchronizer()
 @celery_app.task(
     bind=True,
     max_retries=3,
-    # If video processing fails, don't hammer it again right away -
-    # back off and give it some breathing room first.
-    retry_backoff=True,       # roughly doubles the wait each retry (1s, 2s, 4s...)
-    retry_backoff_max=120,    # but cap it at 2 minutes so it doesn't drag on forever
-    retry_jitter=True,        # shake up the timing a bit so retries don't all land together
+    retry_backoff=True,  # roughly doubles the wait each retry (1s, 2s, 4s...)
+    retry_backoff_max=120,  # but cap it at 2 minutes so it doesn't drag on forever
+    retry_jitter=True,  # shake up the timing a bit so retries don't all land together
     name="workers.tasks._run_video",
 )
 def _run_video(self, session_id: str) -> dict:
@@ -64,7 +62,6 @@ def _run_video(self, session_id: str) -> dict:
 @celery_app.task(
     bind=True,
     max_retries=3,
-    # Same backoff behavior as the video task above.
     retry_backoff=True,
     retry_backoff_max=120,
     retry_jitter=True,
@@ -83,11 +80,18 @@ def _run_audio(self, session_id: str) -> dict:
 
 
 @celery_app.task(name="workers.tasks._after_parallel")
-def _after_parallel(session_id: str, video_result: dict, audio_result: dict):
+def _after_parallel(results: list[dict], session_id: str):
     """Once video and audio results are both in, run the evaluation and
-    build the risk report."""
+    build the risk report.
+
+    `results` is passed automatically by Celery chord containing
+    [video_result, audio_result].
+    """
     try:
         logger.info("Parallel video+audio done for %s - running evaluation", session_id)
+
+        video_result = results[0] if len(results) > 0 else {}
+        audio_result = results[1] if len(results) > 1 else {}
 
         session_manager.update_session_status(session_id, session_manager.EVALUATING, {"stage": "evaluation"})
         evaluation_result = evaluate_answers(session_id)
@@ -134,8 +138,6 @@ def _after_parallel(session_id: str, video_result: dict, audio_result: dict):
 @celery_app.task(
     bind=True,
     max_retries=3,
-    # Same backoff setup as the video/audio tasks - fail, wait, try again,
-    # wait a bit longer next time.
     retry_backoff=True,
     retry_backoff_max=120,
     retry_jitter=True,
@@ -145,8 +147,8 @@ def process_interview_session(self, session_id):
     """Kicks off video, audio, evaluation, and risk scoring for one
     interview session.
 
-    Video and audio run at the same time (Celery group). Once both are
-    done, evaluation and risk scoring run one after the other.
+    Video and audio run at the same time asynchronously via Celery chord.
+    Once both complete, _after_parallel handles evaluation and risk scoring.
     """
     worker_hostname = socket.gethostname()
 
@@ -183,36 +185,23 @@ def process_interview_session(self, session_id):
         finally:
             db_session.close()
 
-        # Kick off video and audio together instead of one after the other
         session_manager.update_session_status(
             session_id, session_manager.VIDEO_PROCESSING, {"stage": "parallel_video_audio"}
         )
 
-        parallel_group = group(
-            _run_video.s(session_id),
-            _run_audio.s(session_id),
-        )
-        result = parallel_group.apply_async()
+        # Non-blocking workflow: execute video & audio in parallel and trigger _after_parallel upon completion
+        workflow = chord([_run_video.s(session_id), _run_audio.s(session_id)], _after_parallel.s(session_id))
+        workflow.apply_async()
 
-        # Block here until both finish
-        video_result, audio_result = result.get(timeout=600)
-        logger.info("Parallel video+audio completed for session %s", session_id)
-
-        # Now hand off to evaluation + risk scoring
-        _after_parallel.delay(session_id, video_result, audio_result)
+        logger.info("Dispatched parallel video+audio chord for session %s", session_id)
 
         return {
             "session_id": session_id,
             "status": "processing_parallel",
-            "video_result": video_result,
-            "audio_result": audio_result,
             "processed_by": worker_hostname,
         }
 
     except Exception as exc:
-        # We used to calculate the wait time ourselves here. Not anymore -
-        # retry_backoff=True on the decorator already handles that for us,
-        # so this just needs to trigger the retry.
         logger.warning(
             "Task for session %s failed (attempt %d/3), Celery will retry with backoff: %s",
             session_id,
