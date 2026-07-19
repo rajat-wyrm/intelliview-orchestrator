@@ -19,7 +19,10 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
 
+
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Query
+from workers.evaluation_pipeline import _llm_generate_question
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -968,20 +971,44 @@ async def create_template(request: CreateTemplateRequest):
 
 # ========== Interview Q&A Endpoints ==========
 
-
 @app.post("/interviews/ask-question")
-async def ask_question(request: AskQuestionRequest):
-    """Get next question for a session"""
+async def ask_question(
+    request: AskQuestionRequest,
+    strategy: str = Query("static", description="Options: static, generative, adaptive, hybrid")
+):
+    """Get next question for a session using the chosen strategy"""
     try:
         session_data = session_manager.get_session(request.session_id)
         if not session_data:
             raise HTTPException(status_code=404, detail="Session not found")
 
         asked_ids = session_data.get("questions_asked", [])
-        question = question_bank.get_next_question(
-            category=request.category,
-            exclude_ids=[q.get("question_id") for q in asked_ids] if asked_ids else [],
-        )
+        exclude_list = [q.get("question_id") for q in asked_ids] if asked_ids else []
+
+        question = None
+
+        # Process Generative/Adaptive strategies if selected
+        if strategy != "static":
+            try:
+                # 1. Fire the back-end AI generation task
+                generated_text = _llm_generate_question()
+                
+                if generated_text and len(generated_text.strip()) >= 10:
+                    # 2. Save directly into PostgreSQL database bank
+                    question = question_bank.save_generated_question(
+                        text=generated_text,
+                        category=request.category or "technical"
+                    )
+            except Exception as ai_err:
+                logger.error(f"LLM question generation failed: {ai_err!s}. Dropping to static fallback.")
+
+        # Static path or fallback if the AI pipeline errored out
+        if not question:
+            question = question_bank.get_next_question(
+                category=request.category,
+                exclude_ids=exclude_list,
+            )
+
         if not question:
             raise HTTPException(status_code=404, detail="No more questions available")
 
@@ -997,7 +1024,6 @@ async def ask_question(request: AskQuestionRequest):
     except Exception as e:
         logger.error(f"Error getting question: {e!s}")
         raise HTTPException(status_code=500, detail="Error getting question")
-
 
 @app.post("/interviews/submit-answer")
 async def submit_answer(request: SubmitAnswerRequest):

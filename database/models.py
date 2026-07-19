@@ -5,7 +5,7 @@ Defines database models using declarative base
 
 from datetime import datetime
 
-from sqlalchemy import JSON, Column, DateTime, Float, Integer, String
+from sqlalchemy import Column, String, Integer, Float, DateTime, JSON, Boolean
 from sqlalchemy.sql import func  # noqa: F401  (re-exported for ORM consumers)
 
 from database.db import Base
@@ -61,6 +61,9 @@ class Question(Base):
 
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # ADD THIS LINE: Tracking flag for audit trail to identify AI-generated questions
+    generated_by_llm = Column(Boolean, default=False, nullable=False)
 
     def __repr__(self):
         return f"<Question(question_id='{self.question_id}', category='{self.category}', difficulty='{self.difficulty}')>"

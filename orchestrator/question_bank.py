@@ -185,5 +185,56 @@ class QuestionBank:
         finally:
             db.close()
 
+    def save_generated_question(
+        self,
+        text: str,
+        category: str = "technical",
+        difficulty: str = "medium",
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Add an LLM-generated question to the database bank with the audit flag set to True"""
+        category = category.strip().lower()
+        difficulty = difficulty.strip().lower()
+
+        question_id = f"q_{uuid.uuid4().hex[:12]}"
+        now = utcnow()
+
+        db = SessionLocal()
+        try:
+            question = Question(
+                question_id=question_id,
+                text=text,
+                category=category,
+                difficulty=difficulty,
+                tags=tags or [],
+                usage_count=0,
+                avg_score=None,
+                created_at=now,
+                updated_at=now,
+                generated_by_llm=True,
+            )
+            db.add(question)
+            db.commit()
+
+            logger.info(f"Dynamically generated question saved: {question_id} [{category}/{difficulty}]")
+            
+            return {
+                "question_id": question_id,
+                "text": text,
+                "category": category,
+                "difficulty": difficulty,
+                "tags": tags or [],
+                "usage_count": 0,
+                "avg_score": None,
+                "created_at": now.isoformat(),
+                "generated_by_llm": True,
+            }
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error saving dynamically generated question: {e}")
+            raise
+        finally:
+            db.close()
+
 
 question_bank = QuestionBank()
