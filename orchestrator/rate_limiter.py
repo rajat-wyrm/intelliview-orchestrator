@@ -16,7 +16,7 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from orchestrator.cache_manager import CacheManager
+from orchestrator.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         client_key = self._client_key(request)
-        redis_client = CacheManager()
+        redis_client = get_redis_client()
 
         if redis_client is None:
             return await call_next(request)

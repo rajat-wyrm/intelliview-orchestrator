@@ -16,7 +16,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from orchestrator.cache_manager import CacheManager
+from orchestrator.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ class MetricsCollector:
         """
         Initialize MetricsCollector
         """
-        self.redis_client = CacheManager()
+        self.redis_client = get_redis_client()
         self.metrics_prefix = "metrics:"
         self._system_cache = _TTLCache()
         logger.info("MetricsCollector initialized")

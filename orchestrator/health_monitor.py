@@ -19,7 +19,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from orchestrator.cache_manager import CacheManager
+from orchestrator.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ class HealthMonitor:
         self.heartbeat_timeout = heartbeat_timeout
         self.session_timeout = session_timeout
         self.queue_threshold = queue_threshold
-        self.redis_client = CacheManager()
+        self.redis_client = get_redis_client()
         self.health_status_key = "system:health_status"
         self.last_check_key = "system:last_health_check"
         self._dep_status: dict[str, DependencyStatus] = {}

@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
 
-from orchestrator.cache_manager import CacheManager
+from orchestrator.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ class RetryManager:
         self.base_delay = base_delay
         self.max_delay = max_delay
         self.strategy = strategy
-        self.redis_client = CacheManager()
+        self.redis_client = get_redis_client()
         self.retry_key_prefix = "retry:"
         self.retry_count_key = "retry_count:"
         self.retry_scheduled_key = "retry_scheduled:"
