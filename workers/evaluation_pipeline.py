@@ -16,7 +16,9 @@ thresholds exercise without external services.
 import json
 import logging
 from typing import Any
-
+from difflib import SequenceMatcher
+from statistics import mean
+import random
 logger = logging.getLogger(__name__)
 
 
@@ -281,14 +283,67 @@ def _llm_generate_question(session_id: str, topic: str = "systems_design") -> st
     except Exception:
         return None
 
+def generate_multiple_feedbacks(session_id: str, runs: int = 3) -> list[str]:
+    """
+    Generate multiple local feedback responses without using any API.
+    """
 
+    templates = [
+        "The candidate demonstrated a good understanding of distributed systems and explained the concepts clearly.",
+        "The candidate showed solid knowledge of distributed systems with relevant examples.",
+        "The answer covered the main concepts of distributed systems but could include more implementation details.",
+        "The explanation was technically sound and communicated effectively.",
+        "The response demonstrated strong problem-solving skills and good technical understanding."
+    ]
+
+    random.seed(session_id)
+
+    responses = []
+
+    for _ in range(runs):
+        responses.append(random.choice(templates))
+
+    return responses
+
+def calculate_response_consistency(responses: list[str]) -> dict:
+    """
+    Calculate confidence score based on similarity of responses.
+    """
+
+    if len(responses) < 2:
+        return {
+            "confidence_score": 100.0,
+            "average_similarity": 1.0,
+            "pairwise_scores": [],
+        }
+
+    scores = []
+
+    for i in range(len(responses)):
+        for j in range(i + 1, len(responses)):
+            similarity = SequenceMatcher(
+                None,
+                responses[i].lower(),
+                responses[j].lower(),
+            ).ratio()
+
+            scores.append(similarity)
+
+    avg = mean(scores)
+
+    return {
+        "confidence_score": round(avg * 100, 2),
+        "average_similarity": round(avg, 3),
+        "pairwise_scores": [round(x, 3) for x in scores],
+    }
 # ---------------------------------------------------------------------------
 # Public pipeline API — real LLM evaluation with seeded stub fallback
 # ---------------------------------------------------------------------------
 
 
 def evaluate_answers(session_id: str) -> dict[str, Any]:
-    """Execute answer evaluation pipeline for an interview session."""
+    """Execute answer evaluation pipeline."""
+
     logger.info(f"Starting answer evaluation for session {session_id}")
 
     quality = evaluate_answer_quality(session_id)
@@ -296,23 +351,41 @@ def evaluate_answers(session_id: str) -> dict[str, Any]:
     clarity = evaluate_communication(session_id)
     feedback = generate_feedback(session_id)
 
+    # Generate multiple local responses
+    responses = generate_multiple_feedbacks(session_id, runs=3)
+
+    # Calculate confidence
+    consistency = calculate_response_consistency(responses)
+
     results = {
         "session_id": session_id,
+
         "answer_quality_score": quality,
+
         "technical_accuracy": accuracy,
+
         "communication_clarity": clarity,
-            "evaluation_metrics": {
-        "relevance": quality.get("relevance", 0.0),
-        "accuracy": quality.get("accuracy", 0.0),
-        "coherence": quality.get("coherence", 0.0),
-        "completeness": quality.get("completeness", 0.0),
-    },
+
+        "evaluation_metrics": {
+            "relevance": quality.get("relevance", 0.0),
+            "accuracy": quality.get("accuracy", 0.0),
+            "coherence": quality.get("coherence", 0.0),
+            "completeness": quality.get("completeness", 0.0),
+        },
+
         "feedback": feedback,
+
+        "response_consistency": consistency,
+
+        "confidence_score": consistency["confidence_score"],
+
         "risk_score": 0.0,
     }
 
     results["risk_score"] = calculate_evaluation_risk_score(results)
-    logger.info(f"Answer evaluation completed for session {session_id}: {results}")
+
+    logger.info(results)
+
     return results
 
 
@@ -403,16 +476,48 @@ def generate_feedback(session_id: str) -> dict[str, Any]:
 
 
 def calculate_evaluation_risk_score(results: dict[str, Any]) -> float:
-    """Calculate a 0–1 risk score (inverse of performance)."""
+
     from workers.risk_engine import RiskScoringEngine
 
-    quality = results.get("answer_quality_score", {}).get("overall_quality_score", 50) / 100.0
-    accuracy = results.get("technical_accuracy", {}).get("accuracy_score", 50) / 100.0
-    clarity = results.get("communication_clarity", {}).get("clarity_score", 50) / 100.0
+    quality = results.get(
+        "answer_quality_score", {}
+    ).get("overall_quality_score", 50) / 100
 
-    quality_risk = (1 - quality) * RiskScoringEngine.EVALUATION_FACTORS["low_quality_answers"]
-    accuracy_risk = (1 - accuracy) * RiskScoringEngine.EVALUATION_FACTORS["low_accuracy"]
-    clarity_risk = (1 - clarity) * RiskScoringEngine.EVALUATION_FACTORS["poor_communication"]
+    accuracy = results.get(
+        "technical_accuracy", {}
+    ).get("accuracy_score", 50) / 100
 
-    score = quality_risk + accuracy_risk + clarity_risk
+    clarity = results.get(
+        "communication_clarity", {}
+    ).get("clarity_score", 50) / 100
+
+    confidence = results.get(
+        "confidence_score",
+        100,
+    ) / 100
+
+    quality_risk = (
+        (1 - quality)
+        * RiskScoringEngine.EVALUATION_FACTORS["low_quality_answers"]
+    )
+
+    accuracy_risk = (
+        (1 - accuracy)
+        * RiskScoringEngine.EVALUATION_FACTORS["low_accuracy"]
+    )
+
+    clarity_risk = (
+        (1 - clarity)
+        * RiskScoringEngine.EVALUATION_FACTORS["poor_communication"]
+    )
+
+    confidence_risk = (1 - confidence) * 0.20
+
+    score = (
+        quality_risk
+        + accuracy_risk
+        + clarity_risk
+        + confidence_risk
+    )
+
     return round(min(score, 1.0), 3)
