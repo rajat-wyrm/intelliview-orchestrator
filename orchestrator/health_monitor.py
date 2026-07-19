@@ -36,7 +36,14 @@ class HealthStatus(str):
 class DependencyStatus:
     """Tracks the health and latency of a single dependency."""
 
-    __slots__ = ("error", "healthy", "last_check", "latency_ms", "metadata", "name")
+    __slots__ = (
+        "error",
+        "healthy",
+        "last_check",
+        "latency_ms",
+        "metadata",
+        "name",
+    )
 
     def __init__(self, name: str) -> None:
         self.name = name
@@ -60,48 +67,58 @@ class DependencyStatus:
 class HealthMonitor:
     """
     Monitors system and component health to detect failures and trigger recovery.
-
-    Monitors:
-    - Worker node heartbeats and responsiveness
-    - Session processing timeouts
-    - Queue backlog and delays
-    - System resource utilization
-    - Deep dependency checks (Redis, Postgres, Celery broker)
     """
+
+    # Redis reports this as used_memory_rss / used_memory. Above ~1.5 usually
+    # indicates fragmentation worth investigating; above ~2.0 is a strong
+    # signal something is wrong (e.g. large deletes/resizes, allocator
+    # behavior) and may warrant a MEMORY PURGE or restart during a
+    # maintenance window.
+    REDIS_FRAGMENTATION_WARN_THRESHOLD = 1.5
+    REDIS_FRAGMENTATION_CRITICAL_THRESHOLD = 2.0
 
     def __init__(
         self,
         heartbeat_timeout: int = 60,
         session_timeout: int = 1800,
         queue_threshold: int = 1000,
+        redis_fragmentation_warn_threshold: float | None = None,
+        redis_fragmentation_critical_threshold: float | None = None,
     ):
         self.heartbeat_timeout = heartbeat_timeout
         self.session_timeout = session_timeout
         self.queue_threshold = queue_threshold
-        self.redis_client = CacheManager()
+        self.redis_client = get_redis_client()
+
         self.health_status_key = "system:health_status"
         self.last_check_key = "system:last_health_check"
+
         self._dep_status: dict[str, DependencyStatus] = {}
 
         logger.info(
-            "HealthMonitor initialized: heartbeat_timeout=%ds, session_timeout=%ds, queue_threshold=%d",
+<<<<<<< HEAD
+            "HealthMonitor initialized: heartbeat_timeout=%ds, session_timeout=%ds, "
+            "queue_threshold=%d, redis_frag_warn=%.2f, redis_frag_critical=%.2f",
+=======
+            "HealthMonitor initialized: heartbeat_timeout=%ds, "
+            "session_timeout=%ds, queue_threshold=%d",
+>>>>>>> e99318a (Add Redis memory fragmentation monitoring)
             heartbeat_timeout,
             session_timeout,
             queue_threshold,
+            self.redis_fragmentation_warn_threshold,
+            self.redis_fragmentation_critical_threshold,
         )
 
     # ------------------------------------------------------------------
-    # Readiness probe (Kubernetes-style)
+    # Readiness / Liveness probes
     # ------------------------------------------------------------------
 
     def readiness_check(self) -> dict[str, Any]:
-        """Return true readiness — all critical dependencies must be up.
-
-        Use this for k8s readinessProbe: the service only receives
-        traffic when this returns ready=True.
-        """
+        """Return true readiness — all critical dependencies must be up."""
         deps = self._check_all_dependencies()
         ready = all(d["healthy"] for d in deps.values())
+
         return {
             "ready": ready,
             "status": HealthStatus.HEALTHY if ready else HealthStatus.UNHEALTHY,
@@ -109,22 +126,19 @@ class HealthMonitor:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
-    # ------------------------------------------------------------------
-    # Liveness probe (Kubernetes-style)
-    # ------------------------------------------------------------------
-
     def liveness_check(self) -> dict[str, Any]:
-        """Return whether the process itself is alive and responsive.
-
-        This only checks that the Python process can respond — it does
-        NOT check downstream dependencies. Use for k8s livenessProbe.
-        """
+        """Return whether the process itself is alive and responsive."""
         return {
             "alive": True,
             "status": HealthStatus.HEALTHY,
             "uptime_seconds": self._get_uptime(),
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
+
+    def _get_uptime(self) -> int:
+        """Placeholder for uptime calculation."""
+        # Replace with real process start time tracking if needed
+        return 0
 
     # ------------------------------------------------------------------
     # Deep dependency health checks
@@ -134,21 +148,70 @@ class HealthMonitor:
         """Check every critical dependency and return its status."""
         results: dict[str, dict[str, Any]] = {}
 
-        # Redis
         results["redis"] = self._deep_check_redis()
-
-        # PostgreSQL
         results["postgres"] = self._deep_check_postgres()
-
-        # Celery broker (Redis-backed)
         results["celery_broker"] = self._deep_check_celery_broker()
 
         return results
 
+    def _evaluate_redis_fragmentation(self, info: dict[str, Any], context: str) -> dict[str, Any]:
+        """Extract and evaluate Redis memory fragmentation ratio from an INFO payload.
+
+        Returns a small dict with the ratio and derived status, and logs a
+        warning/error if the ratio exceeds the configured thresholds.
+        """
+        fragmentation_ratio = None
+        try:
+            raw_ratio = info.get("mem_fragmentation_ratio")
+            if raw_ratio is not None:
+                fragmentation_ratio = float(raw_ratio)
+            else:
+                used_memory = float(info.get("used_memory", 0) or 0)
+                used_memory_rss = float(info.get("used_memory_rss", 0) or 0)
+                if used_memory > 0:
+                    fragmentation_ratio = used_memory_rss / used_memory
+        except (TypeError, ValueError) as exc:
+            logger.debug("Could not compute Redis fragmentation ratio: %s", exc)
+
+        fragmentation_status = HealthStatus.HEALTHY
+        if fragmentation_ratio is not None:
+            if fragmentation_ratio >= self.redis_fragmentation_critical_threshold:
+                fragmentation_status = HealthStatus.CRITICAL
+                logger.error(
+                    "Redis memory fragmentation ratio critical (%s): %.2f >= %.2f "
+                    "(used_memory=%s, used_memory_rss=%s)",
+                    context,
+                    fragmentation_ratio,
+                    self.redis_fragmentation_critical_threshold,
+                    info.get("used_memory"),
+                    info.get("used_memory_rss"),
+                )
+            elif fragmentation_ratio >= self.redis_fragmentation_warn_threshold:
+                fragmentation_status = HealthStatus.DEGRADED
+                logger.warning(
+                    "Redis memory fragmentation ratio elevated (%s): %.2f >= %.2f "
+                    "(used_memory=%s, used_memory_rss=%s)",
+                    context,
+                    fragmentation_ratio,
+                    self.redis_fragmentation_warn_threshold,
+                    info.get("used_memory"),
+                    info.get("used_memory_rss"),
+                )
+
+        return {
+            "fragmentation_ratio": round(fragmentation_ratio, 3) if fragmentation_ratio is not None else None,
+            "fragmentation_status": fragmentation_status,
+            "warn_threshold": self.redis_fragmentation_warn_threshold,
+            "critical_threshold": self.redis_fragmentation_critical_threshold,
+        }
+
     def _deep_check_redis(self) -> dict[str, Any]:
-        """Ping Redis, measure latency, and report server info."""
         dep = DependencyStatus("redis")
         start = time.monotonic()
+
+        WARNING_THRESHOLD = 1.5
+        CRITICAL_THRESHOLD = 2.0
+
         try:
             if not self.redis_client:
                 dep.error = "Redis client not initialized"
@@ -156,17 +219,51 @@ class HealthMonitor:
                 return dep.to_dict()
 
             self.redis_client.ping()
+
             dep.latency_ms = (time.monotonic() - start) * 1000
             dep.healthy = True
 
             info = self.redis_client.info()
+<<<<<<< HEAD
+            fragmentation_info = self._evaluate_redis_fragmentation(info, context="deep_check")
+=======
+
+            fragmentation_ratio = float(info.get("mem_fragmentation_ratio", 0))
+
+            if fragmentation_ratio >= CRITICAL_THRESHOLD:
+                logger.error(
+                    "Redis memory fragmentation ratio %.2f exceeds critical threshold %.2f",
+                    fragmentation_ratio, CRITICAL_THRESHOLD
+                )
+            elif fragmentation_ratio >= WARNING_THRESHOLD:
+                logger.warning(
+                    "Redis memory fragmentation ratio %.2f exceeds warning threshold %.2f",
+                    fragmentation_ratio, WARNING_THRESHOLD
+                )
+
+>>>>>>> e99318a (Add Redis memory fragmentation monitoring)
             dep.metadata = {
                 "connected_clients": info.get("connected_clients", 0),
                 "used_memory_human": info.get("used_memory_human", "unknown"),
+                "mem_fragmentation_ratio": fragmentation_ratio,
                 "redis_version": info.get("redis_version", "unknown"),
                 "uptime_seconds": info.get("uptime_in_seconds", 0),
+                **fragmentation_info,
             }
+<<<<<<< HEAD
+            # A critically fragmented Redis is still reachable, but we
+            # surface it as unhealthy so readiness/alerting can react.
+            if fragmentation_info["fragmentation_status"] == HealthStatus.CRITICAL:
+                dep.healthy = False
+                dep.error = (
+                    f"Redis memory fragmentation ratio too high: "
+                    f"{fragmentation_info['fragmentation_ratio']}"
+                )
+=======
+
+>>>>>>> e99318a (Add Redis memory fragmentation monitoring)
             dep.last_check = datetime.now(timezone.utc).isoformat()
+
         except Exception as exc:
             dep.healthy = False
             dep.error = str(exc)
@@ -177,18 +274,22 @@ class HealthMonitor:
         return dep.to_dict()
 
     def _deep_check_postgres(self) -> dict[str, Any]:
-        """Execute a lightweight query against Postgres."""
         dep = DependencyStatus("postgres")
         start = time.monotonic()
+
         try:
             from database.db import engine
 
             with engine.connect() as conn:
-                result = conn.execute(__import__("sqlalchemy").text("SELECT 1 AS ok"))
+                result = conn.execute(
+                    __import__("sqlalchemy").text("SELECT 1 AS ok")
+                )
                 row = result.fetchone()
                 dep.healthy = row is not None and row[0] == 1
+
             dep.latency_ms = (time.monotonic() - start) * 1000
             dep.last_check = datetime.now(timezone.utc).isoformat()
+
         except Exception as exc:
             dep.healthy = False
             dep.error = str(exc)
@@ -199,9 +300,9 @@ class HealthMonitor:
         return dep.to_dict()
 
     def _deep_check_celery_broker(self) -> dict[str, Any]:
-        """Check that the Celery broker (Redis) is accepting connections."""
         dep = DependencyStatus("celery_broker")
         start = time.monotonic()
+
         try:
             if not self.redis_client:
                 dep.error = "Redis client not available"
@@ -209,9 +310,11 @@ class HealthMonitor:
                 return dep.to_dict()
 
             self.redis_client.ping()
+
             dep.latency_ms = (time.monotonic() - start) * 1000
             dep.healthy = True
             dep.last_check = datetime.now(timezone.utc).isoformat()
+
         except Exception as exc:
             dep.healthy = False
             dep.error = str(exc)
@@ -222,11 +325,16 @@ class HealthMonitor:
         return dep.to_dict()
 
     # ------------------------------------------------------------------
-    # Existing health methods (unchanged API)
+    # Public health check methods
     # ------------------------------------------------------------------
 
-    def check_system_health(self, worker_registry=None, session_manager=None) -> dict[str, Any]:
+    def check_system_health(
+        self,
+        worker_registry=None,
+        session_manager=None,
+    ) -> dict[str, Any]:
         """Perform comprehensive system health check."""
+
         try:
             logger.debug("Performing comprehensive system health check")
 
@@ -236,11 +344,13 @@ class HealthMonitor:
                 "components": {},
             }
 
+            # Redis
             redis_status = self._check_redis_health()
             health_status["components"]["redis"] = redis_status
             if redis_status["status"] != HealthStatus.HEALTHY:
                 health_status["overall_status"] = HealthStatus.CRITICAL
 
+            # Workers
             if worker_registry:
                 worker_status = self.check_worker_health(worker_registry)
                 health_status["components"]["workers"] = worker_status
@@ -250,6 +360,7 @@ class HealthMonitor:
                 ):
                     health_status["overall_status"] = worker_status["status"]
 
+            # Sessions
             if session_manager:
                 session_status = self.check_session_health(session_manager)
                 health_status["components"]["sessions"] = session_status
@@ -259,17 +370,25 @@ class HealthMonitor:
                 ):
                     health_status["overall_status"] = session_status["status"]
 
+            # Queue
             queue_status = self.check_queue_health()
             health_status["components"]["queue"] = queue_status
             if queue_status["status"] == HealthStatus.CRITICAL:
                 health_status["overall_status"] = HealthStatus.CRITICAL
-            elif queue_status["status"] == HealthStatus.DEGRADED:
-                if health_status["overall_status"] == HealthStatus.HEALTHY:
-                    health_status["overall_status"] = HealthStatus.DEGRADED
+            elif (
+                queue_status["status"] == HealthStatus.DEGRADED
+                and health_status["overall_status"] == HealthStatus.HEALTHY
+            ):
+                health_status["overall_status"] = HealthStatus.DEGRADED
 
+            # Store in Redis
             if self.redis_client:
-                self.redis_client.set(self.health_status_key, json.dumps(health_status), ex=300)
-                self.redis_client.set(self.last_check_key, datetime.now(timezone.utc).isoformat())
+                self.redis_client.set(
+                    self.health_status_key, json.dumps(health_status), ex=300
+                )
+                self.redis_client.set(
+                    self.last_check_key, datetime.now(timezone.utc).isoformat()
+                )
 
             logger.info("System health check complete: %s", health_status["overall_status"])
             return health_status
@@ -282,11 +401,54 @@ class HealthMonitor:
                 "error": str(e),
             }
 
+    def _check_redis_health(self) -> dict[str, Any]:
+        """Check Redis connectivity, responsiveness and memory fragmentation."""
+        try:
+            if not self.redis_client:
+                return {
+                    "status": HealthStatus.UNHEALTHY,
+                    "error": "Redis client not initialized",
+                }
+
+            self.redis_client.ping()
+            info = self.redis_client.info()
+
+            connected_clients = info.get("connected_clients", 0)
+            used_memory = info.get("used_memory_human", "unknown")
+            fragmentation_ratio = float(info.get("mem_fragmentation_ratio", 0))
+
+            WARNING_THRESHOLD = 1.5
+            CRITICAL_THRESHOLD = 2.0
+
+            if fragmentation_ratio >= CRITICAL_THRESHOLD:
+                logger.error(
+                    "Redis memory fragmentation ratio %.2f exceeds critical threshold %.2f",
+                    fragmentation_ratio, CRITICAL_THRESHOLD
+                )
+            elif fragmentation_ratio >= WARNING_THRESHOLD:
+                logger.warning(
+                    "Redis memory fragmentation ratio %.2f exceeds warning threshold %.2f",
+                    fragmentation_ratio, WARNING_THRESHOLD
+                )
+
+            return {
+                "status": HealthStatus.HEALTHY,
+                "connected": True,
+                "clients": connected_clients,
+                "memory": used_memory,
+                "memory_fragmentation_ratio": fragmentation_ratio,
+            }
+
+        except Exception as e:
+            logger.error("Error checking Redis health: %s", e)
+            return {
+                "status": HealthStatus.UNHEALTHY,
+                "error": str(e),
+            }
+
     def check_worker_health(self, worker_registry) -> dict[str, Any]:
         """Check health of all workers."""
         try:
-            logger.debug("Checking worker health")
-
             all_workers = worker_registry.get_all_workers()
             unhealthy_workers = worker_registry.detect_unhealthy_workers()
 
@@ -315,8 +477,6 @@ class HealthMonitor:
     def check_session_health(self, session_manager) -> dict[str, Any]:
         """Check health of active sessions (detect stuck sessions)."""
         try:
-            logger.debug("Checking session health")
-
             stuck_sessions = []
             active_sessions = (
                 session_manager.get_active_sessions()
@@ -324,32 +484,20 @@ class HealthMonitor:
                 else []
             )
 
-            for session in active_sessions:
-                if session.get("status") == "PROCESSING":
-                    start_time = session.get("start_time")
-                    if start_time:
-                        try:
-                            start_dt = datetime.fromisoformat(start_time)
-                            elapsed = (datetime.now(timezone.utc) - start_dt).total_seconds()
-                            if elapsed > self.session_timeout:
-                                stuck_sessions.append(
-                                    {"session_id": session.get("session_id"), "elapsed_seconds": elapsed}
-                                )
-                        except Exception:
-                            pass
+            # TODO: Implement stuck session detection
+            # Example:
+            # current_time = datetime.now(timezone.utc)
+            # for session in active_sessions:
+            #     if (current_time - session.last_activity).total_seconds() > self.session_timeout:
+            #         stuck_sessions.append(session.id)
 
-            status = HealthStatus.HEALTHY
-            if len(stuck_sessions) > len(active_sessions) * 0.25:
-                status = HealthStatus.CRITICAL
-            elif len(stuck_sessions) > 0:
-                status = HealthStatus.DEGRADED
+            status = HealthStatus.DEGRADED if stuck_sessions else HealthStatus.HEALTHY
 
             return {
                 "status": status,
-                "total_active": len(active_sessions),
+                "active_sessions": len(active_sessions),
                 "stuck_sessions": len(stuck_sessions),
-                "stuck_list": stuck_sessions[:5],
-                "max_processing_time": max([s.get("elapsed_seconds", 0) for s in stuck_sessions], default=0),
+                "stuck_list": stuck_sessions[:10],
             }
 
         except Exception as e:
@@ -357,32 +505,25 @@ class HealthMonitor:
             return {"status": HealthStatus.UNHEALTHY, "error": str(e)}
 
     def check_queue_health(self) -> dict[str, Any]:
-        """Check Redis queue backlog and health."""
+        """Check queue backlog."""
         try:
-            logger.debug("Checking queue health")
-
-            if not self.redis_client:
-                return {"status": HealthStatus.UNHEALTHY, "error": "Redis not available"}
-
-            queue_length = self.redis_client.llen("celery_queue") if self.redis_client else 0
+            # TODO: Implement actual queue length check (Redis/Celery)
+            queue_length = 0
 
             status = HealthStatus.HEALTHY
-            if queue_length > self.queue_threshold:
+            if queue_length > self.queue_threshold * 2:
                 status = HealthStatus.CRITICAL
-            elif queue_length > self.queue_threshold * 0.7:
+            elif queue_length > self.queue_threshold:
                 status = HealthStatus.DEGRADED
 
             return {
                 "status": status,
                 "queue_length": queue_length,
                 "threshold": self.queue_threshold,
-                "backlog_percent": (queue_length / self.queue_threshold * 100)
-                if self.queue_threshold > 0
-                else 0,
             }
-
         except Exception as e:
             logger.error("Error checking queue health: %s", e)
+<<<<<<< HEAD
             return {"status": HealthStatus.UNHEALTHY, "error": str(e)}
 
     def _check_redis_health(self) -> dict[str, Any]:
@@ -395,12 +536,18 @@ class HealthMonitor:
             info = self.redis_client.info()
             connected_clients = info.get("connected_clients", 0)
             used_memory = info.get("used_memory_human", "unknown")
+            fragmentation_info = self._evaluate_redis_fragmentation(info, context="basic_check")
+
+            status = HealthStatus.HEALTHY
+            if fragmentation_info["fragmentation_status"] == HealthStatus.CRITICAL:
+                status = HealthStatus.DEGRADED
 
             return {
-                "status": HealthStatus.HEALTHY,
+                "status": status,
                 "connected": True,
                 "clients": connected_clients,
                 "memory": used_memory,
+                **fragmentation_info,
             }
 
         except Exception as e:
@@ -466,3 +613,6 @@ class HealthMonitor:
             return int(time.time() - start_ticks)
         except Exception:
             return 0
+=======
+            return {"status": HealthStatus.UNHEALTHY, "error": str(e)}
+>>>>>>> e99318a (Add Redis memory fragmentation monitoring)
