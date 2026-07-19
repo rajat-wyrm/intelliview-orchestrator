@@ -29,10 +29,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 
 from config import (
-    API_TOKEN,
     CORS_ALLOW_ORIGINS,
     ENABLE_PROMETHEUS,
     MAX_REQUEST_BODY_BYTES,
+    get_settings,
 )
 from database.db import engine, get_db
 from database.models import Base, InterviewSession
@@ -74,7 +74,9 @@ async def lifespan(app: FastAPI):
     close the shared Redis client, and notify clients.
     """
     Base.metadata.create_all(bind=engine)
-    if API_TOKEN == "dev-token-change-me":
+    # Do not rely on module-level API_TOKEN aliases (which can be evaluated
+    # at import-time). Always read from settings at runtime.
+    if get_settings().api_token == "dev-token-change-me":
         logger.warning(
             "API_TOKEN is the built-in dev default — set a strong token "
             "in production via the API_TOKEN env var."
@@ -185,16 +187,17 @@ app.add_middleware(
 # ========== Auth ==========
 
 
-def require_token(x_api_token: str | None = Header(default=None)) -> None:
+def require_token(x_api_token: str | None = Header(default=None, alias="X-API-Token")) -> None:
     """Dependency that requires a valid API token.
 
     Worker agents (and any privileged caller) must send `X-API-Token`.
     Set the expected token via the API_TOKEN env var.
     """
-    if not API_TOKEN or API_TOKEN == "dev-token-change-me":
+    api_token = get_settings().api_token
+    if not api_token or api_token == "dev-token-change-me":
         # In dev with the default token, accept but log.
         logger.debug("Using default API token — set API_TOKEN in production")
-    if x_api_token != API_TOKEN:
+    if x_api_token != api_token:
         raise HTTPException(status_code=401, detail="invalid or missing API token")
 
 
