@@ -1,4 +1,6 @@
 "use client";
+import { Pagination } from "@/components/Pagination";
+
 import { useState, useMemo } from "react";
 import useSWR from "swr";
 import {
@@ -13,6 +15,7 @@ import {
 } from "lucide-react";
 import Card from "@/components/Card";
 import Stat from "@/components/Stat";
+import StatsCards from "@/components/StatsCards";
 import { StatusBadge, Badge } from "@/components/Badge";
 import { Skeleton, ErrorState, EmptyState } from "@/components/States";
 import { SearchInput, Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui";
@@ -113,6 +116,7 @@ export default function CandidatesPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <Pagination />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-zinc-50">Candidates</h1>
@@ -123,69 +127,14 @@ export default function CandidatesPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="glass-card p-4 animate-slide-in-up" style={{ animationDelay: "0ms" }}>
-          <Stat
-            label="Total candidates"
-            value={isLoading ? <Skeleton className="h-7 w-12" /> : candidates.length}
-            icon={<UserCircle size={16} />}
-          />
-        </div>
-        <div className="glass-card p-4 animate-slide-in-up" style={{ animationDelay: "50ms" }}>
-          <Stat
-            label="Avg success rate"
-            value={
-              isLoading ? (
-                <Skeleton className="h-7 w-12" />
-              ) : (
-                formatPercent(
-                  candidates.length > 0
-                    ? (candidates.reduce((a, c) => a + c.completed_sessions, 0) /
-                        Math.max(
-                          1,
-                          candidates.reduce((a, c) => a + c.total_sessions, 0)
-                        )) *
-                        100
-                    : 0
-                )
-              )
-            }
-            icon={<CheckCircle2 size={16} />}
-          />
-        </div>
-        <div className="glass-card p-4 animate-slide-in-up" style={{ animationDelay: "100ms" }}>
-          <Stat
-            label="Avg risk score"
-            value={
-              isLoading ? (
-                <Skeleton className="h-7 w-16" />
-              ) : (
-                (() => {
-                  const withRisk = candidates.filter((c) => c.avg_risk_score != null);
-                  if (withRisk.length === 0) return "—";
-                  return (
-                    withRisk.reduce((a, c) => a + c.avg_risk_score, 0) / withRisk.length
-                  ).toFixed(3);
-                })()
-              )
-            }
-            icon={<AlertTriangle size={16} />}
-          />
-        </div>
-        <div className="glass-card p-4 animate-slide-in-up" style={{ animationDelay: "150ms" }}>
-          <Stat
-            label="Total sessions"
-            value={
-              isLoading ? (
-                <Skeleton className="h-7 w-12" />
-              ) : (
-                candidates.reduce((a, c) => a + c.total_sessions, 0)
-              )
-            }
-            icon={<Activity size={16} />}
-          />
-        </div>
-      </div>
+      <StatsCards
+        data={{
+          totalCandidates: candidates.length,
+          pendingReview: candidates.reduce((a, c) => a + c.active_sessions, 0),
+          completed: candidates.reduce((a, c) => a + c.completed_sessions, 0),
+          activeNow: candidates.filter((c) => c.active_sessions > 0).length,
+        }}
+      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-1">
@@ -343,6 +292,55 @@ export default function CandidatesPage() {
                       ))}
                   </Tbody>
                 </Table>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-left text-xs uppercase tracking-wide text-muted">
+                      <tr>
+                        <th className="py-2 pr-4">Session</th>
+                        <th className="py-2 pr-4">Pipeline</th>
+                        <th className="py-2 pr-4">Status</th>
+                        <th className="py-2 pr-4">Risk</th>
+                        <th className="py-2 pr-4">Worker</th>
+                        <th className="py-2 pr-4">Updated</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selected.sessions
+                        .sort(
+                          (a, b) =>
+                            new Date(b.updated_at || 0) - new Date(a.updated_at || 0)
+                        )
+                        .map((s) => (
+                          <tr key={s.session_id} className="border-t border-border">
+                            <td className="py-2 pr-4 font-mono text-xs text-zinc-300">
+                              {s.session_id}
+                            </td>
+                            <td className="py-2 pr-4">
+                              <Pipeline current={s.status} />
+                            </td>
+                            <td className="py-2 pr-4">
+                              <StatusBadge status={s.status} />
+                            </td>
+                            <td className="py-2 pr-4">
+                              {s.risk_score != null ? (
+                                <Badge variant={riskColor(s.risk_score)}>
+                                  {s.risk_score.toFixed(2)}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted">—</span>
+                              )}
+                            </td>
+                            <td className="py-2 pr-4 font-mono text-xs text-muted">
+                              {s.assigned_node ?? "—"}
+                            </td>
+                            <td className="py-2 pr-4 text-muted">
+                              {formatDate(s.updated_at ?? s.end_time)}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div> <Pagination />
               </Card>
             </div>
           )}
