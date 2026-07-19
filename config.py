@@ -6,7 +6,7 @@ via `pydantic-settings`. All values have sensible local defaults but
 should be overridden in production.
 """
 
-from functools import lru_cache
+
 from typing import List
 
 from pydantic import Field, field_validator
@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     worker_id: str = "worker-1"
 
     # --- API / Security ---
-    api_token: str = "dev-token-change-me"
+    api_token: str = Field(default="dev-token-change-me", validation_alias="API_TOKEN", alias="api_token")
     cors_allow_origins_raw: str = Field(default="*", alias="cors_allow_origins")
 
     # --- Request validation ---
@@ -104,20 +104,101 @@ class Settings(BaseSettings):
         return [v.strip() for v in raw.split(",") if v.strip()]
 
 
-@lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Cached settings accessor (per-process)."""
+    """Load settings from the current environment.
+
+    Intentionally not cached to avoid stale values when environment variables
+    are injected after module import (e.g., in E2E tests).
+    """
     return Settings()
 
 
+# Backwards compatible security token export.
+# Must match request-time settings, so compute dynamically.
+
+def _get_api_token() -> str:
+    return get_settings().api_token
+
+
+class _TokenProxy:
+    def __str__(self) -> str:  # pragma: no cover
+        return _get_api_token()
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return repr(_get_api_token())
+
+    def __eq__(self, other) -> bool:  # pragma: no cover
+        return _get_api_token() == other
+
+
+# Expose as API_TOKEN so legacy modules keep working.
+API_TOKEN = _TokenProxy()
+
+
+# ---- Legacy module-level exports (single source of truth) ----
+# These names are imported across the codebase at import-time.
+
+REDIS_URL = get_settings().redis_url
+WORKER_CONCURRENCY = get_settings().worker_concurrency
+DATABASE_URL = get_settings().database_url
+DATABASE_SSLMODE = get_settings().database_sslmode
+
+# Used by FastAPI app for CORS / request limits / prometheus.
+CORS_ALLOW_ORIGINS = ",".join(get_settings().cors_allow_origins)
+MAX_REQUEST_BODY_BYTES = get_settings().max_request_body_bytes
+ENABLE_PROMETHEUS = get_settings().enable_prometheus
+
+
+
+
+
 # Module-level aliases for backwards compatibility with imports like
-# `from config import REDIS_URL`. New code should use `get_settings()`.
-settings = get_settings()
-REDIS_URL = settings.redis_url
-DATABASE_URL = settings.database_url
-WORKER_CONCURRENCY = settings.worker_concurrency
-API_TOKEN = settings.api_token
-CORS_ALLOW_ORIGINS = ",".join(settings.cors_allow_origins)
-MAX_REQUEST_BODY_BYTES = settings.max_request_body_bytes
-ENABLE_PROMETHEUS = settings.enable_prometheus
-DATABASE_SSLMODE = settings.database_sslmode
+# `from config import REDIS_URL`.
+#
+# IMPORTANT: Do not instantiate Settings at import-time for security-sensitive
+# values (e.g., API tokens). Settings are environment-driven and may change
+# during tests.
+#
+# For non-security critical aliases, we keep lazy access via functions.
+
+def get_redis_url() -> str:
+    return get_settings().redis_url
+
+
+def get_database_url() -> str:
+    return get_settings().database_url
+
+
+def get_worker_concurrency() -> int:
+    return get_settings().worker_concurrency
+
+
+def get_cors_allow_origins() -> str:
+    return ",".join(get_settings().cors_allow_origins)
+
+
+def get_max_request_body_bytes() -> int:
+    return get_settings().max_request_body_bytes
+
+
+def get_enable_prometheus() -> bool:
+    return get_settings().enable_prometheus
+
+
+def get_database_sslmode() -> str:
+    return get_settings().database_sslmode
+
+
+# Backwards-compatible module-level aliases expected by other modules.
+# These are non-auth values; computing them at import-time is acceptable.
+# IMPORTANT: Do NOT add API_TOKEN module-level alias.
+CORS_ALLOW_ORIGINS = get_cors_allow_origins()
+MAX_REQUEST_BODY_BYTES = get_max_request_body_bytes()
+ENABLE_PROMETHEUS = get_enable_prometheus()
+
+# Used by database/db.py
+DATABASE_SSLMODE = get_database_sslmode()
+DATABASE_URL = get_database_url()
+
+
+

@@ -12,11 +12,14 @@ Responsibilities:
 import logging
 from datetime import datetime, timedelta, timezone
 from threading import Lock
+from types import SimpleNamespace
 from typing import Any
 
 from orchestrator.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
+# Backward-compatible patch target for tests/consumers mocking module.redis.from_url.
+redis = SimpleNamespace(from_url=get_redis_client)
 
 
 class WorkerRegistry:
@@ -33,7 +36,7 @@ class WorkerRegistry:
     def __init__(self):
         """Initialize worker registry"""
         try:
-            self.redis_client = get_redis_client()
+            self.redis_client = redis.from_url()
             self.local_workers: dict[str, dict[str, Any]] = {}
             self.lock = Lock()
             self._hydrated = False
