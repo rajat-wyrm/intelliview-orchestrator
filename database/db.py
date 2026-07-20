@@ -35,6 +35,8 @@ engine = create_engine(DATABASE_URL, **_engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
+
+
 def get_db():
     """
     FastAPI dependency that provides a database session.
@@ -45,4 +47,3 @@ def get_db():
         yield db
     finally:
         db.close()
-        
