@@ -857,16 +857,22 @@ async def list_interviews(
 
 @app.get("/questions")
 async def list_questions(
+    category: str | None = None,
+    difficulty: str | None = None,
+    limit: int = 100,
     session_db: Session = Depends(get_db),
 ):
     """List questions with optional category/difficulty filter"""
     try:
-        questions = question_bank.get_questions(category=category, difficulty=difficulty, limit=limit)
+        questions = question_bank.get_questions(
+            category=category,
+            difficulty=difficulty,
+            limit=limit,
+        )
         return {"count": len(questions), "questions": questions}
     except Exception as e:
-        logger.error(f"Error listing questions: {e!s}")
+        logger.error(f"Error listing questions: {e}")
         raise HTTPException(status_code=500, detail="Error listing questions")
-
 
 @app.post("/questions")
 async def add_question(
