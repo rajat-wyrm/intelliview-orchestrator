@@ -1,59 +1,141 @@
 "use client";
+
 import { create } from "zustand";
+
 const STORAGE_KEY = "app_theme";
-function readStored() {
-  if (typeof window === "undefined") return "dark";
-  const v = localStorage.getItem(STORAGE_KEY);
-  if (v === "dark" || v === "light" || v === "system") return v;
-  return "dark";
+const DEFAULT_THEME = "dark";
+
+/**
+
+* Read the user's saved theme preference.
+* Falls back to dark mode if no valid preference exists.
+  */
+  function readStoredTheme() {
+  if (typeof window === "undefined") {
+  return DEFAULT_THEME;
+  }
+
+try {
+const storedTheme = localStorage.getItem(STORAGE_KEY);
+
+
+if (storedTheme === "dark" || storedTheme === "light") {
+  return storedTheme;
 }
-function resolve(theme) {
-  if (theme !== "system") return theme;
-  if (typeof window === "undefined") return "dark";
-  return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+
+} catch {
+// localStorage may be unavailable in some browser environments.
 }
-function apply(resolved) {
-  if (typeof document === "undefined") return;
-  const root = document.documentElement;
-  root.classList.toggle("dark", resolved === "dark");
-  root.classList.toggle("light", resolved === "light");
-  root.style.colorScheme = resolved;
+
+return DEFAULT_THEME;
 }
-const useThemeStore = create((set, get) => ({
-  theme: "dark",
-  resolved: "dark",
-  setTheme: (t) => {
-    const r = resolve(t);
-    try {
-      localStorage.setItem(STORAGE_KEY, t);
-    } catch {
-    }
-    apply(r);
-    set({ theme: t, resolved: r });
-  },
+
+/**
+
+* Apply the selected theme globally to the document.
+  */
+  function applyTheme(theme) {
+  if (typeof document === "undefined") {
+  return;
+  }
+
+const root = document.documentElement;
+
+root.classList.toggle("dark", theme === "dark");
+root.classList.toggle("light", theme === "light");
+
+root.style.colorScheme = theme;
+}
+
+/**
+
+* Zustand theme store.
+*
+* The application currently requires two themes:
+* * dark
+* * light
+    */
+    const useThemeStore = create((set, get) => ({
+    theme: DEFAULT_THEME,
+    resolved: DEFAULT_THEME,
+
+/**
+
+* Set a specific theme.
+  */
+  setTheme: (theme) => {
+  if (theme !== "dark" && theme !== "light") {
+  return;
+  }
+
+
+try {
+
+
+
+  localStorage.setItem(STORAGE_KEY, theme);
+} catch {
+  // Ignore storage errors while still applying the theme.
+}
+
+applyTheme(theme);
+
+set({
+  theme,
+  resolved: theme,
+});
+
+
+},
+
+/**
+
+* Toggle between dark and light mode.
+  */
+  toggleTheme: () => {
+  const currentTheme = get().theme;
+  const nextTheme = currentTheme === "dark" ? "light" : "dark";
+
+
+get().setTheme(nextTheme);
+
+
+},
+
+/**
+
+* Kept for compatibility with existing components that may
+* still call cycle().
+*
+* This now cycles only between light and dark.
+  */
   cycle: () => {
-    const cur = get().theme;
-    const next = cur === "dark" ? "light" : cur === "light" ? "system" : "dark";
-    get().setTheme(next);
-  }
+  const currentTheme = get().theme;
+  const nextTheme = currentTheme === "dark" ? "light" : "dark";
+
+
+get().setTheme(nextTheme);
+
+
+},
 }));
-function hydrateTheme() {
-  const theme = readStored();
-  const resolved = resolve(theme);
-  apply(resolved);
-  useThemeStore.setState({ theme, resolved });
-  if (typeof window !== "undefined") {
-    const mq = window.matchMedia("(prefers-color-scheme: light)");
-    mq.addEventListener?.("change", () => {
-      if (useThemeStore.getState().theme === "system") {
-        const r = resolve("system");
-        apply(r);
-        useThemeStore.setState({ resolved: r });
-      }
-    });
-  }
+
+/**
+
+* Restore the user's saved theme when the client application loads.
+  */
+  function hydrateTheme() {
+  const theme = readStoredTheme();
+
+applyTheme(theme);
+
+useThemeStore.setState({
+theme,
+resolved: theme,
+});
 }
+
 export {
-  hydrateTheme,
-  useThemeStore
+hydrateTheme,
+useThemeStore,
 };
