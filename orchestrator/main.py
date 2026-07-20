@@ -11,13 +11,16 @@ Integrates:
 - Worker Registry for node tracking
 - Task Queue integration with Celery
 """
-
 import logging
 import re
 import time as _time
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from database.models import Base, InterviewSession
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
+
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -821,17 +824,14 @@ async def list_interviews(
     session_db: Session = Depends(get_db),
 ):
     """
-    List interview sessions, newest first. Optional `status` filter.
-
-    Returns:
-        dict: List of interview sessions + total count.
+    List interview sessions, newest first.
     """
-    from sqlalchemy import select
-    from database.models import InterviewSession
+
     stmt = select(InterviewSession)
-    
+
     if status:
-            stmt = stmt.where(InterviewSession.status == status.upper())
+        stmt = stmt.where(InterviewSession.status == status.upper())
+
     stmt = stmt.order_by(InterviewSession.created_at.desc().nullslast()).limit(limit)
     rows = session_db.execute(stmt).scalars().all()
     return {
