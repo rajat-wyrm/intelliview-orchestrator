@@ -12,14 +12,14 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
-from orchestrator.redis_client import get_redis_client
+from orchestrator.cache_manager import CacheManager
 
 _TTL_PREFIX = "httpcache:"
 _DEFAULT_TTL = 2  # seconds — short, dashboard polls every 5s
 
 
 def _client():
-    return get_redis_client()
+    return CacheManager()
 
 
 def _key(name: str) -> str:
