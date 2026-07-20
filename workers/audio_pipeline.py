@@ -20,7 +20,7 @@ from typing import Any, TypedDict
 logger = logging.getLogger(__name__)
 
 
-from workers._stubs import _seeded_unit
+from workers_stubs import _seeded_unit
 
 # ---------------------------------------------------------------------------
 # Real detection helpers (Whisper / pyannote / OpenAI) with fallback to stubs
