@@ -1,7 +1,6 @@
 """
 FastAPI Orchestration Server
 Main entry point for the AI Interview Orchestrator API
-
 Integrates:
 - Session Manager for lifecycle management
 - Session Tracker for monitoring
@@ -11,20 +10,17 @@ Integrates:
 - Worker Registry for node tracking
 - Task Queue integration with Celery
 """
-
 import logging
 import re
 import time as _time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
-
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
-
 from config import (
     API_TOKEN,
     CORS_ALLOW_ORIGINS,
@@ -53,12 +49,9 @@ from orchestrator.session_manager import SessionManager
 from orchestrator.session_tracker import SessionTracker
 from orchestrator.state_sync import StateSynchronizer
 from orchestrator.worker_registry import WorkerRegistry
-
 # Configure logging after imports so startup messages are structured.
 configure_logging()
 logger = logging.getLogger(__name__)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Execute on application startup/shutdown.
@@ -89,15 +82,12 @@ async def lifespan(app: FastAPI):
                     logger.debug("shutdown close failed: %s", exc)
         # Close the shared Redis client
         from orchestrator.redis_client import get_redis_client
-
         rc = get_redis_client()
         if rc is not None:
             try:
                 rc.raw.close()
             except Exception:
                 pass
-
-
 # Initialize FastAPI application
 app = FastAPI(
     title="AI Interview Orchestrator",
@@ -105,8 +95,6 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
-
-
 # ========== Request ID + duration middleware ==========
 
 _VALID_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
@@ -373,7 +361,11 @@ class CreateTemplateRequest(BaseModel):
     difficulty_distribution: dict[str, float] | None = None
 
 
-@app.get("/health")
+
+@app.get(
+    "/health",
+    tags=["Health"],
+)
 async def health_check():
     """
     Health check endpoint
@@ -385,13 +377,19 @@ async def health_check():
 # ========== Deep Health & Probe Endpoints ==========
 
 
-@app.get("/livez")
+@app.get(
+    "/livez",
+    tags=["Health"],
+)
 async def liveness_probe():
     """Kubernetes-style liveness probe. Returns 200 if the process is alive."""
     return health_monitor.liveness_check()
 
 
-@app.get("/readyz")
+@app.get(
+    "/readyz",
+    tags=["Health"],
+)
 async def readiness_probe():
     """Kubernetes-style readiness probe. Returns 200 only when all dependencies are up."""
     result = health_monitor.readiness_check()
@@ -402,7 +400,10 @@ async def readiness_probe():
     return result
 
 
-@app.get("/dependencies")
+@app.get(
+    "/dependencies",
+    tags=["Health"],
+)
 async def get_dependency_statuses():
     """Deep health check of all dependencies (Redis, Postgres, Celery broker)."""
     return health_monitor._check_all_dependencies()
@@ -873,7 +874,10 @@ async def add_question(request: AddQuestionRequest):
 # ========== Candidate Endpoints ==========
 
 
-@app.get("/candidates")
+@app.get(
+    "/candidates",
+    tags=["Candidates"],
+)
 async def list_candidates(limit: int = 100):
     """List all candidates"""
     try:
@@ -884,7 +888,10 @@ async def list_candidates(limit: int = 100):
         raise HTTPException(status_code=500, detail="Error listing candidates")
 
 
-@app.post("/candidates")
+@app.post(
+    "/candidates",
+    tags=["Candidates"],
+)
 async def create_candidate(request: CreateCandidateRequest):
     """Create a new candidate profile"""
     try:
@@ -900,7 +907,10 @@ async def create_candidate(request: CreateCandidateRequest):
         raise HTTPException(status_code=500, detail="Error creating candidate")
 
 
-@app.get("/candidates/{candidate_id}")
+@app.get(
+    "/candidates/{candidate_id}",
+    tags=["Candidates"],
+)
 async def get_candidate(candidate_id: str):
     """Get candidate details by ID"""
     try:
@@ -915,7 +925,10 @@ async def get_candidate(candidate_id: str):
         raise HTTPException(status_code=500, detail="Error fetching candidate")
 
 
-@app.get("/candidates/{candidate_id}/history")
+@app.get(
+    "/candidates/{candidate_id}/history",
+    tags=["Candidates"],
+)
 async def get_candidate_history(candidate_id: str):
     """Get candidate interview history"""
     try:
@@ -934,7 +947,10 @@ async def get_candidate_history(candidate_id: str):
 # ========== Template Endpoints ==========
 
 
-@app.get("/templates")
+@app.get(
+    "/templates",
+    tags=["Templates"],
+)
 async def list_templates(interview_type: str | None = None, limit: int = 100):
     """List interview templates with optional type filter"""
     try:
@@ -945,7 +961,10 @@ async def list_templates(interview_type: str | None = None, limit: int = 100):
         raise HTTPException(status_code=500, detail="Error listing templates")
 
 
-@app.post("/templates")
+@app.post(
+    "/templates",
+    tags=["Templates"],
+)
 async def create_template(request: CreateTemplateRequest):
     """Create a new interview template"""
     try:
@@ -969,7 +988,10 @@ async def create_template(request: CreateTemplateRequest):
 # ========== Interview Q&A Endpoints ==========
 
 
-@app.post("/interviews/ask-question")
+@app.post(
+    "/interviews/ask-question",
+    tags=["Interviews"],
+)
 async def ask_question(request: AskQuestionRequest):
     """Get next question for a session"""
     try:
@@ -999,7 +1021,10 @@ async def ask_question(request: AskQuestionRequest):
         raise HTTPException(status_code=500, detail="Error getting question")
 
 
-@app.post("/interviews/submit-answer")
+@app.post(
+    "/interviews/submit-answer",
+    tags=["Interviews"],
+)
 async def submit_answer(request: SubmitAnswerRequest):
     """Submit an answer and get feedback"""
     try:
