@@ -21,7 +21,7 @@ from sqlalchemy import select
 
 from database.db import SessionLocal
 from database.models import InterviewSession
-from orchestrator.redis_client import get_redis_client
+from orchestrator.cache_manager import CacheManager
 from orchestrator.session_manager import SessionManager
 from orchestrator.state_sync import StateSynchronizer
 from workers.celery_app import celery_app
@@ -200,7 +200,7 @@ def scan_and_dispatch_retries():
     passed and re-dispatch the corresponding session through the normal
     scheduling path.  Runs every 60 s via Celery Beat.
     """
-    redis_client = get_redis_client()
+    redis_client = CacheManager()
 
     retry_scheduled_prefix = "retry_scheduled:"
 

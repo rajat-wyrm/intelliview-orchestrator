@@ -88,9 +88,9 @@ async def lifespan(app: FastAPI):
                 except Exception as exc:
                     logger.debug("shutdown close failed: %s", exc)
         # Close the shared Redis client
-        from orchestrator.redis_client import get_redis_client
+        from orchestrator.cache_manager import CacheManager
 
-        rc = get_redis_client()
+        rc = CacheManager()
         if rc is not None:
             try:
                 rc.raw.close()
