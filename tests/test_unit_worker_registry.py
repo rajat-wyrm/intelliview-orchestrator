@@ -1,24 +1,34 @@
-"""Unit tests for WorkerRegistry — register, heartbeat, capacity, deregister."""
+"""Unit tests for WorkerRegistry — register, heartbeat, capacity, deregister, pubsub listener."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from orchestrator.worker_registry import WorkerRegistry
 
 
 def _new_registry():
-    with patch("orchestrator.worker_registry.get_redis_client") as mock_redis:
-        mock_redis.return_value.ping.return_value = True
-        mock_redis.return_value.hset.return_value = True
-        mock_redis.return_value.sadd.return_value = True
-        mock_redis.return_value.expire.return_value = True
-        mock_redis.return_value.setex.return_value = True
-        mock_redis.return_value.delete.return_value = 1
-        mock_redis.return_value.srem.return_value = 1
-        mock_redis.return_value.hincrby.return_value = 1
-        mock_redis.return_value.smembers.return_value = set()
-        mock_redis.return_value.hgetall.return_value = {}
-        mock_redis.return_value.scan_iter.return_value = iter([])
+    client = MagicMock()
 
+    client.ping.return_value = True
+    client.hset.return_value = True
+    client.sadd.return_value = True
+    client.expire.return_value = True
+    client.set.return_value = True
+    client.setex.return_value = True
+    client.delete.return_value = 1
+    client.srem.return_value = 1
+    client.hincrby.return_value = 1
+    client.smembers.return_value = set()
+    client.hgetall.return_value = {}
+    client.scan_iter.return_value = iter([])
+
+    client._client = MagicMock()
+    client._client.pubsub.return_value = MagicMock()
+    client._client.publish.return_value = True
+
+    with (
+        patch("orchestrator.worker_registry.get_redis_client", return_value=client),
+        patch("orchestrator.worker_registry.asyncio.create_task"),
+    ):
         return WorkerRegistry()
 
 
@@ -90,3 +100,32 @@ def test_deregister_worker_removes_entry():
     reg.register_worker("w4", capacity=2)
     assert reg.deregister_worker("w4") is True
     assert reg.get_worker("w4") is None
+
+
+def test_pubsub_sync_message_updates_local_workers():
+    reg = _new_registry()
+    fake_message = {"type": "message", "data": '{"worker_id": "test_sync_worker", "action": "sync"}'}
+    with patch.object(
+        reg.redis_client, "hgetall", return_value={"status": "healthy", "active_tasks": "2", "capacity": "4"}
+    ):
+        reg._handle_pubsub_message(fake_message)
+    assert "test_sync_worker" in reg.local_workers
+    assert reg.local_workers["test_sync_worker"]["active_tasks"] == 2
+
+
+def test_pubsub_deregister_message_removes_worker():
+    reg = _new_registry()
+    reg.local_workers["dead_worker"] = {"worker_id": "dead_worker", "status": "healthy"}
+    fake_message = {"type": "message", "data": '{"worker_id": "dead_worker", "action": "deregister"}'}
+    reg._handle_pubsub_message(fake_message)
+    assert "dead_worker" not in reg.local_workers
+
+
+def test_pubsub_malformed_message_handled_safely():
+    reg = _new_registry()
+    fake_message = {
+        "type": "message",
+        "data": "invalid-json-payload-string",
+    }
+    reg._handle_pubsub_message(fake_message)
+    assert reg.local_workers == {}
