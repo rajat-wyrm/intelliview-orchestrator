@@ -1,3 +1,4 @@
+// Reusable FilterBar component for HR Dashboard
 "use client";
 
 import { SearchInput } from "./SearchInput";
