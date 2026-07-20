@@ -11,20 +11,19 @@ Integrates:
 - Worker Registry for node tracking
 - Task Queue integration with Celery
 """
+
 import logging
 import re
 import time as _time
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-from database.models import Base, InterviewSession
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
 
-
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 
@@ -35,7 +34,7 @@ from config import (
     MAX_REQUEST_BODY_BYTES,
 )
 from database.db import engine, get_db
-from database.models import Base
+from database.models import Base, InterviewSession
 from monitoring.dashboard_api import create_dashboard_routes
 from monitoring.metrics_collector import MetricsCollector
 from monitoring.websocket_manager import ws_manager
@@ -56,7 +55,6 @@ from orchestrator.session_manager import SessionManager
 from orchestrator.session_tracker import SessionTracker
 from orchestrator.state_sync import StateSynchronizer
 from orchestrator.worker_registry import WorkerRegistry
-from sqlalchemy.orm import Session
 
 # Configure logging after imports so startup messages are structured.
 configure_logging()
@@ -574,7 +572,10 @@ async def get_session_status(
     except Exception as e:
         logger.error(f"Error fetching session status: {e!s}")
         raise HTTPException(status_code=500, detail=f"Error fetching session: {e!s}")
-session_db: Session = Depends(get_db),
+
+
+session_db: Session = (Depends(get_db),)
+
 
 @app.get("/task-status/{task_id}", response_model=TaskStatusResponse)
 async def get_task_status(
@@ -609,12 +610,12 @@ async def get_task_status(
 
 # ========== Session Tracking Endpoints ==========
 
+
 @app.get("/active-sessions")
 @http_cache.cached("active-sessions", ttl=2)
 async def get_active_sessions(
     session_db: Session = Depends(get_db),
 ):
-    
     """
     Get all currently active sessions
 
@@ -653,6 +654,7 @@ async def get_completed_sessions(limit: int = 100):
 
 @app.get("/stuck-sessions")
 async def get_stuck_sessions(
+    timeout_minutes: int = 30,
     session_db: Session = Depends(get_db),
 ):
     """
@@ -723,6 +725,8 @@ async def get_worker_distribution(
 
 @app.get("/high-risk-sessions")
 async def get_high_risk_sessions(
+    threshold: float = 0.8,
+    limit: int = 50,
     session_db: Session = Depends(get_db),
 ):
     """
@@ -835,22 +839,23 @@ async def list_interviews(
     stmt = stmt.order_by(InterviewSession.created_at.desc().nullslast()).limit(limit)
     rows = session_db.execute(stmt).scalars().all()
     return {
-            "total_count": len(rows),
-            "sessions": [
-                {
-                    "session_id": r.session_id,
-                    "candidate_id": r.candidate_id,
-                    "status": r.status,
-                    "risk_score": r.risk_score,
-                    "assigned_node": r.assigned_node,
-                    "start_time": r.start_time.isoformat() if r.start_time else None,
-                    "end_time": r.end_time.isoformat() if r.end_time else None,
-                    "created_at": r.created_at.isoformat() if r.created_at else None,
-                    "updated_at": r.updated_at.isoformat() if r.updated_at else None,
-                }
-                for r in rows
-            ],
-        }
+        "total_count": len(rows),
+        "sessions": [
+            {
+                "session_id": r.session_id,
+                "candidate_id": r.candidate_id,
+                "status": r.status,
+                "risk_score": r.risk_score,
+                "assigned_node": r.assigned_node,
+                "start_time": r.start_time.isoformat() if r.start_time else None,
+                "end_time": r.end_time.isoformat() if r.end_time else None,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+            }
+            for r in rows
+        ],
+    }
+
 
 # ========== Question Endpoints ==========
 
@@ -873,6 +878,7 @@ async def list_questions(
     except Exception as e:
         logger.error(f"Error listing questions: {e}")
         raise HTTPException(status_code=500, detail="Error listing questions")
+
 
 @app.post("/questions")
 async def add_question(
