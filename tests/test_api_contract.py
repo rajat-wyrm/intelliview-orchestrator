@@ -51,6 +51,7 @@ EXPECTED = {
     ("POST", "/retry-session/{session_id}"),
     ("GET", "/system-health"),
     ("GET", "/worker-health"),
+    ("GET", "/admin/fairness-audit"),
     ("GET", "/recovery-queue"),
     ("GET", "/failure-log"),
     ("GET", "/dead-letter-queue"),
