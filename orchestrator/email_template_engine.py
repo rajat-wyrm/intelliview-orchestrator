@@ -1,6 +1,5 @@
 from jinja2 import Template
 
-
 # Email HTML Template
 email_template = """
 <!DOCTYPE html>
@@ -43,33 +42,16 @@ template = Template(email_template)
 
 # Recipient Data
 recipients = [
-    {
-        "name": "Sai",
-        "interview_time": "10:00 AM",
-        "link": "https://meet.com/sai"
-    },
-
-    {
-        "name": "Rahul",
-        "interview_time": "12:30 PM",
-        "link": "https://meet.com/rahul"
-    },
-
-    {
-        "name": "Priya",
-        "interview_time": "3:00 PM",
-        "link": "https://meet.com/priya"
-    }
+    {"name": "Sai", "interview_time": "10:00 AM", "link": "https://meet.com/sai"},
+    {"name": "Rahul", "interview_time": "12:30 PM", "link": "https://meet.com/rahul"},
+    {"name": "Priya", "interview_time": "3:00 PM", "link": "https://meet.com/priya"},
 ]
 
 
 # Generate Dynamic Emails
 for person in recipients:
-
     result = template.render(
-        name=person["name"],
-        interview_time=person["interview_time"],
-        link=person["link"]
+        name=person["name"], interview_time=person["interview_time"], link=person["link"]
     )
 
     print("==============================")
