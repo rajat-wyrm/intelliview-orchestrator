@@ -23,11 +23,10 @@ def _new_registry():
     client.hget.return_value = None
 
     with patch(
-        "orchestrator.worker_registry.get_redis_client",
-        return_value=client,
-    ):
-        return WorkerRegistry()
-
+       "orchestrator.worker_registry.CacheManager",
+     return_value=client,
+):
+     return WorkerRegistry()
 
 def test_register_worker_records_capacity():
     reg = _new_registry()
