@@ -7,6 +7,7 @@ every transient exception).
 """
 
 from celery import Celery, signals
+from kombu import Queue
 
 from config import REDIS_URL
 
@@ -26,6 +27,14 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,  # fair distribution across workers
     broker_connection_retry_on_startup=True,
     # Periodic beat schedule — scan for due retries every 60 seconds
+    task_queues=(
+    Queue("fast"),
+    Queue("slow"),
+    ),
+
+    task_routes={
+    "workers.tasks.scan_and_dispatch_retries": {"queue": "fast"},
+    },
     beat_schedule={
         "scan-due-retries": {
             "task": "workers.tasks.scan_and_dispatch_retries",
