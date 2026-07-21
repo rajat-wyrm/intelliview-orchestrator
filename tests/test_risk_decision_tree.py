@@ -16,10 +16,7 @@ def test_multiple_persons_returns_critical():
 
     evaluation = {}
 
-    assert (
-        RiskDecisionTree.classify(video, audio, evaluation)
-        == "CRITICAL"
-    )
+    assert RiskDecisionTree.classify(video, audio, evaluation) == "CRITICAL"
 
 
 def test_no_face_returns_high():
@@ -33,10 +30,7 @@ def test_no_face_returns_high():
     audio = {}
     evaluation = {}
 
-    assert (
-        RiskDecisionTree.classify(video, audio, evaluation)
-        == "HIGH"
-    )
+    assert RiskDecisionTree.classify(video, audio, evaluation) == "HIGH"
 
 
 def test_phone_detected_returns_high():
@@ -50,10 +44,7 @@ def test_phone_detected_returns_high():
     audio = {}
     evaluation = {}
 
-    assert (
-        RiskDecisionTree.classify(video, audio, evaluation)
-        == "HIGH"
-    )
+    assert RiskDecisionTree.classify(video, audio, evaluation) == "HIGH"
 
 
 def test_background_voice_and_conversation_returns_high():
@@ -71,10 +62,7 @@ def test_background_voice_and_conversation_returns_high():
 
     evaluation = {}
 
-    assert (
-        RiskDecisionTree.classify(video, audio, evaluation)
-        == "HIGH"
-    )
+    assert RiskDecisionTree.classify(video, audio, evaluation) == "HIGH"
 
 
 def test_background_voice_only_returns_medium():
@@ -92,10 +80,7 @@ def test_background_voice_only_returns_medium():
 
     evaluation = {}
 
-    assert (
-        RiskDecisionTree.classify(video, audio, evaluation)
-        == "MEDIUM"
-    )
+    assert RiskDecisionTree.classify(video, audio, evaluation) == "MEDIUM"
 
 
 def test_low_quality_returns_medium():
@@ -109,21 +94,12 @@ def test_low_quality_returns_medium():
     audio = {}
 
     evaluation = {
-        "answer_quality_score": {
-            "overall_quality_score": 30
-        },
-        "technical_accuracy": {
-            "accuracy_score": 80
-        },
-        "communication_clarity": {
-            "clarity_score": 80
-        },
+        "answer_quality_score": {"overall_quality_score": 30},
+        "technical_accuracy": {"accuracy_score": 80},
+        "communication_clarity": {"clarity_score": 80},
     }
 
-    assert (
-        RiskDecisionTree.classify(video, audio, evaluation)
-        == "MEDIUM"
-    )
+    assert RiskDecisionTree.classify(video, audio, evaluation) == "MEDIUM"
 
 
 def test_clean_interview_returns_low():
@@ -131,33 +107,18 @@ def test_clean_interview_returns_low():
         "multiple_persons": {"multiple_persons_detected": False},
         "face_detected": {"faces_found": True},
         "phone_detected": {"phone_detected": False},
-        "head_movement_suspicious": {
-            "suspicious_movement_detected": False
-        },
+        "head_movement_suspicious": {"suspicious_movement_detected": False},
     }
 
     audio = {
-        "background_voices": {
-            "background_voices_detected": False
-        },
-        "suspicious_conversation": {
-            "suspicious_pattern_detected": False
-        },
+        "background_voices": {"background_voices_detected": False},
+        "suspicious_conversation": {"suspicious_pattern_detected": False},
     }
 
     evaluation = {
-        "answer_quality_score": {
-            "overall_quality_score": 80
-        },
-        "technical_accuracy": {
-            "accuracy_score": 90
-        },
-        "communication_clarity": {
-            "clarity_score": 95
-        },
+        "answer_quality_score": {"overall_quality_score": 80},
+        "technical_accuracy": {"accuracy_score": 90},
+        "communication_clarity": {"clarity_score": 95},
     }
 
-    assert (
-        RiskDecisionTree.classify(video, audio, evaluation)
-        == "LOW"
-    )
+    assert RiskDecisionTree.classify(video, audio, evaluation) == "LOW"
