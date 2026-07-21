@@ -20,7 +20,8 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from enum import Enum
+from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi import Query
 from workers.evaluation_pipeline import _llm_generate_question
 from fastapi.middleware.cors import CORSMiddleware
@@ -968,13 +969,17 @@ async def create_template(request: CreateTemplateRequest):
         logger.error(f"Error creating template: {e!s}")
         raise HTTPException(status_code=500, detail="Error creating template")
 
-
+class QuestionStrategy(str, Enum):
+    STATIC = "static"
+    GENERATIVE = "generative"
+    HYBRID = "hybrid"
+    ADAPTIVE = "adaptive"
 # ========== Interview Q&A Endpoints ==========
 
 @app.post("/interviews/ask-question")
 async def ask_question(
     request: AskQuestionRequest,
-    strategy: str = Query("static", description="Options: static, generative, adaptive, hybrid")
+    strategy: QuestionStrategy = Query(QuestionStrategy.STATIC, description="Options: static, generative, adaptive, hybrid")
 ):
     """Get next question for a session using the chosen strategy"""
     try:
@@ -987,14 +992,16 @@ async def ask_question(
 
         question = None
 
-        # Process Generative/Adaptive strategies if selected
-        if strategy != "static":
+        # Process Generative/Adaptive/Hybrid strategies
+        if strategy != QuestionStrategy.STATIC:
             try:
-                # 1. Fire the back-end AI generation task
-                generated_text = _llm_generate_question()
+                # Calls _llm_generate_question matching signature: (session_id: str, topic: str)
+                generated_text = _llm_generate_question(
+                    session_id=request.session_id,
+                    topic=request.category or "technical"
+                )
                 
                 if generated_text and len(generated_text.strip()) >= 10:
-                    # 2. Save directly into PostgreSQL database bank
                     question = question_bank.save_generated_question(
                         text=generated_text,
                         category=request.category or "technical"
@@ -1002,7 +1009,7 @@ async def ask_question(
             except Exception as ai_err:
                 logger.error(f"LLM question generation failed: {ai_err!s}. Dropping to static fallback.")
 
-        # Static path or fallback if the AI pipeline errored out
+        # Static path or fallback if AI generation failed or returned None
         if not question:
             question = question_bank.get_next_question(
                 category=request.category,
