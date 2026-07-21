@@ -317,3 +317,4 @@ class RiskDecisionTree:
             return "MEDIUM"
 
         return "LOW"
+

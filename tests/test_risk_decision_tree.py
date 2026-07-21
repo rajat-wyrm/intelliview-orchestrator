@@ -1,7 +1,4 @@
-import pytest
-
 from workers.risk_scoring_engine import RiskDecisionTree
-
 
 def test_multiple_persons_returns_critical():
     video = {
@@ -21,8 +18,7 @@ def test_multiple_persons_returns_critical():
     assert (
         RiskDecisionTree.classify(video, audio, evaluation)
         == "CRITICAL"
-    )
-
+)
 
 def test_no_face_returns_high():
     video = {
