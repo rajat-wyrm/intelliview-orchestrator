@@ -37,6 +37,7 @@ SessionLocal = sessionmaker(
     bind=engine
 )
 
+<<<<<<< HEAD
 # ADD THIS FUNCTION HERE
 @contextmanager
 def get_db_session():
@@ -64,3 +65,18 @@ def get_db_session():
         db.close()
 
 Base = declarative_base()
+=======
+Base = declarative_base()
+
+
+def get_db():
+    """
+    FastAPI dependency that provides a database session.
+    Automatically closes the session after the request finishes.
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+>>>>>>> upstream/main
