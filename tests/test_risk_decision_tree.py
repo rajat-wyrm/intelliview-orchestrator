@@ -1,5 +1,4 @@
-from workers.risk_scoring_engine import RiskDecisionTree
-
+from workers.risk_engine import RiskDecisionTree
 
 def test_multiple_persons_returns_critical():
     video = {
