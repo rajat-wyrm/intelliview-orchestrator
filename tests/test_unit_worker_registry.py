@@ -19,6 +19,7 @@ def _new_registry():
 
     client.smembers.return_value = set()
     client.hgetall.return_value = {}
+    client.scan_iter.return_value = iter([])
     client.hget.return_value = None
 
     with patch(

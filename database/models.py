@@ -29,6 +29,7 @@ class InterviewSession(Base):
     __table_args__ = (
     CheckConstraint(
         "status IN ("
+        "'pending',"
         "'CREATED',"
         "'QUEUED',"
         "'VIDEO_PROCESSING',"

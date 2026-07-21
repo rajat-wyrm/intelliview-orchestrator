@@ -76,6 +76,45 @@ class Settings(BaseSettings):
     # --- Database SSL ---
     database_sslmode: str = "disable"
 
+    @field_validator("postgres_host", "postgres_db", "postgres_user")
+    @classmethod
+    def validate_required_database_fields(cls, value: str) -> str:
+        if not value or not value.strip():
+            raise ValueError(
+                "Database configuration values cannot be empty"
+            )
+        return value
+
+
+    @field_validator("postgres_port")
+    @classmethod
+    def validate_database_port(cls, value: int) -> int:
+        if value <= 0 or value > 65535:
+            raise ValueError(
+                "PostgreSQL port must be between 1 and 65535"
+            )
+        return value
+
+
+    @field_validator("database_sslmode")
+    @classmethod
+    def validate_database_sslmode(cls, value: str) -> str:
+        allowed_modes = {
+            "disable",
+            "allow",
+            "prefer",
+            "require",
+            "verify-ca",
+            "verify-full",
+        }
+
+        if value not in allowed_modes:
+            raise ValueError(
+                f"Invalid database SSL mode: {value}"
+            )
+
+        return value
+
     # --- Feature flags ---
     enable_celery_broker: bool = True
     json_logging: bool = True
