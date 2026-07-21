@@ -804,7 +804,7 @@ async def list_interviews(limit: int = 100, status: str | None = None):
     """
     from sqlalchemy import select
 
-    from database.db import SessionLocal
+    from database.db import get_db_session
     from database.models import InterviewSession
 
     session_db = SessionLocal()

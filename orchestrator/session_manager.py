@@ -18,7 +18,7 @@ from typing import Any
 
 from sqlalchemy import select
 
-from database.db import SessionLocal
+from database.db import get_db_session
 from database.models import InterviewSession
 from monitoring.websocket_manager import ws_manager
 from orchestrator.state_sync import StateSynchronizer
@@ -94,8 +94,7 @@ class SessionManager:
         Returns:
             str: Generated session_id
         """
-        session_db = SessionLocal()
-        try:
+        with get_db_session() as session_db:
             # Generate collision-safe unique session ID
             session_id = f"session_{uuid.uuid4().hex[:16]}"
 
@@ -111,7 +110,6 @@ class SessionManager:
             )
 
             session_db.add(interview_session)
-            session_db.commit()
 
             # Sync to Redis cache
             session_data = {
@@ -128,13 +126,6 @@ class SessionManager:
 
             logger.info(f"Session {session_id} created successfully")
             return session_id
-
-        except Exception as e:
-            logger.error(f"Error creating session: {e!s}")
-            session_db.rollback()
-            raise
-        finally:
-            session_db.close()
 
     def update_session_status(
         self,
@@ -153,8 +144,7 @@ class SessionManager:
         Returns:
             bool: True if successful, False otherwise
         """
-        session_db = SessionLocal()
-        try:
+        with get_db_session() as session_db:
             # Get current session
             interview = session_db.execute(
                 select(InterviewSession).where(InterviewSession.session_id == session_id)
@@ -178,7 +168,6 @@ class SessionManager:
             # Update database
             interview.status = new_status
             interview.updated_at = _utcnow()
-            session_db.commit()
 
             # Update Redis cache
             session_data = self.state_sync.get_session_state(session_id)
@@ -196,12 +185,6 @@ class SessionManager:
 
             return True
 
-        except Exception as e:
-            logger.error(f"Error updating session status: {e!s}")
-            session_db.rollback()
-            return False
-        finally:
-            session_db.close()
 
     def get_session(self, session_id: str) -> dict[str, Any] | None:
         """
@@ -221,8 +204,7 @@ class SessionManager:
                 return session_data
 
             # Fall back to database
-            session_db = SessionLocal()
-            try:
+            with get_db_session() as session_db:
                 interview = session_db.execute(
                     select(InterviewSession).where(InterviewSession.session_id == session_id)
                 ).scalar_one_or_none()
@@ -253,9 +235,8 @@ class SessionManager:
                 logger.debug(f"Retrieved session {session_id} from database")
                 return session_data
 
-            finally:
-                session_db.close()
-
+          
+    
         except Exception as e:
             logger.error(f"Error retrieving session: {e!s}")
             return None
@@ -288,8 +269,7 @@ class SessionManager:
         """
         logger.info(f"Marking session {session_id} as completed with risk score {risk_score}")
 
-        session_db = SessionLocal()
-        try:
+        with get_db_session() as session_db:
             interview = session_db.execute(
                 select(InterviewSession).where(InterviewSession.session_id == session_id)
             ).scalar_one_or_none()
@@ -301,7 +281,6 @@ class SessionManager:
             interview.risk_score = risk_score
             interview.end_time = _utcnow()
             interview.updated_at = _utcnow()
-            session_db.commit()
 
             # Update Redis
             session_data = self.state_sync.get_session_state(session_id)
@@ -315,12 +294,7 @@ class SessionManager:
             logger.info(f"Session {session_id} marked as completed")
             return True
 
-        except Exception as e:
-            logger.error(f"Error marking session completed: {e!s}")
-            session_db.rollback()
-            return False
-        finally:
-            session_db.close()
+
 
     def _is_valid_transition(self, current_status: str, new_status: str) -> bool:
         """

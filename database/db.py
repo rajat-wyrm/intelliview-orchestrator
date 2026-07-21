@@ -6,7 +6,7 @@ as a context-manager (or close it manually) and prefer the type-hinted
 """
 
 from __future__ import annotations
-
+from contextlib import contextmanager
 import logging
 
 from sqlalchemy import create_engine
@@ -29,9 +29,38 @@ if DATABASE_SSLMODE and DATABASE_SSLMODE != "disable":
     _connect_args["sslmode"] = DATABASE_SSLMODE
     _engine_kwargs["connect_args"] = _connect_args
     logger.info("Database SSL enabled: mode=%s", DATABASE_SSLMODE)
-
 engine = create_engine(DATABASE_URL, **_engine_kwargs)
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
+
+# ADD THIS FUNCTION HERE
+@contextmanager
+def get_db_session():
+    """
+    Centralized SQLAlchemy session lifecycle management.
+
+    Automatically:
+    - creates a session
+    - commits successful transactions
+    - rolls back failed transactions
+    - closes the session
+    """
+    db = SessionLocal()
+
+    try:
+        yield db
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        logger.exception("Database session failed")
+        raise
+
+    finally:
+        db.close()
 
 Base = declarative_base()

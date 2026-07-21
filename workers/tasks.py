@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from celery import group
 from sqlalchemy import select
 
-from database.db import SessionLocal
+from database.db import get_db_session
 from database.models import InterviewSession
 from orchestrator.redis_client import get_redis_client
 from orchestrator.session_manager import SessionManager
@@ -78,8 +78,7 @@ def _after_parallel(session_id: str, video_result: dict, audio_result: dict):
         logger.info("Risk report: %s (score: %s)", risk_classification, final_risk_score)
 
         now = datetime.now(timezone.utc)
-        db_session = SessionLocal()
-        try:
+        with get_db_session() as db_session:
             interview = db_session.execute(
                 select(InterviewSession).where(InterviewSession.session_id == session_id)
             ).scalar_one_or_none()
@@ -90,9 +89,6 @@ def _after_parallel(session_id: str, video_result: dict, audio_result: dict):
                 interview.evaluation_analysis = evaluation_result
                 interview.end_time = now
                 interview.updated_at = now
-                db_session.commit()
-        finally:
-            db_session.close()
 
         session_manager.mark_session_completed(session_id, final_risk_score)
         state_sync.delete_session_state(session_id)
@@ -120,8 +116,7 @@ def process_interview_session(self, session_id):
     try:
         logger.info("Worker %s starting interview session: %s", worker_hostname, session_id)
 
-        db_session = SessionLocal()
-        try:
+        with get_db_session() as db_session:
             interview = db_session.execute(
                 select(InterviewSession).where(InterviewSession.session_id == session_id)
             ).scalar_one_or_none()
@@ -130,25 +125,18 @@ def process_interview_session(self, session_id):
                 return {"session_id": session_id, "status": "missing"}
             if interview.status == "FAILED":
                 interview.status = "QUEUED"
-                db_session.commit()
-        finally:
-            db_session.close()
 
         session_manager.update_session_status(
             session_id, session_manager.PROCESSING, {"assigned_node": worker_hostname}
         )
 
-        db_session = SessionLocal()
-        try:
+        with get_db_session() as db_session:
             interview = db_session.execute(
                 select(InterviewSession).where(InterviewSession.session_id == session_id)
             ).scalar_one_or_none()
             if interview:
                 interview.assigned_node = worker_hostname
                 interview.start_time = datetime.now(timezone.utc)
-                db_session.commit()
-        finally:
-            db_session.close()
 
         # Parallel: video + audio via Celery group
         session_manager.update_session_status(

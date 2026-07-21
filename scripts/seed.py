@@ -30,7 +30,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from config import get_settings  # noqa: E402
-from database.db import Base, SessionLocal, engine  # noqa: E402
+from database.db import Base, engine, get_db_session  # noqa: E402
 from database.models import InterviewSession  # noqa: E402
 from orchestrator.worker_registry import WorkerRegistry  # noqa: E402
 
@@ -58,13 +58,11 @@ def seed_workers() -> None:
 
 def seed_sessions(reset: bool = False) -> None:
     """Insert a realistic mix of completed, active, and failed sessions."""
-    db = SessionLocal()
-    try:
+    with get_db_session() as db:
         Base.metadata.create_all(bind=engine)
 
         if reset:
             deleted = db.query(InterviewSession).delete()
-            db.commit()
             print(f"  - deleted {deleted} existing sessions")
 
         existing_ids = {row.session_id for row in db.query(InterviewSession.session_id).all()}
@@ -147,10 +145,7 @@ def seed_sessions(reset: bool = False) -> None:
             )
 
         db.add_all(rows)
-        db.commit()
         print(f"  + inserted {len(rows)} demo sessions")
-    finally:
-        db.close()
 
 
 def main() -> int:
