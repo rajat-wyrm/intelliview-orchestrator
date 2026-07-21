@@ -6,15 +6,18 @@ from orchestrator.worker_registry import WorkerRegistry
 
 
 def _new_registry():
-    with patch("orchestrator.worker_registry.redis.from_url") as mock_redis:
+    with patch("orchestrator.worker_registry.get_redis_client") as mock_redis:
         mock_redis.return_value.ping.return_value = True
         mock_redis.return_value.hset.return_value = True
         mock_redis.return_value.sadd.return_value = True
         mock_redis.return_value.expire.return_value = True
-        mock_redis.return_value.setex.return_value = True
+        mock_redis.return_value.set.return_value = True
         mock_redis.return_value.delete.return_value = 1
         mock_redis.return_value.srem.return_value = 1
         mock_redis.return_value.hincrby.return_value = 1
+        mock_redis.return_value.smembers.return_value = set()
+        mock_redis.return_value.hgetall.return_value = {}
+        mock_redis.return_value.scan_iter.return_value = iter([])
         return WorkerRegistry()
 
 

@@ -4,9 +4,9 @@ Combines signals from all pipelines to calculate final interview risk score
 
 Responsibilities:
 - Normalize signals from different pipelines
-- Apply weighted scoring
-- Generate final risk score (0-1 scale)
-- Provide risk classification
+- Generate weighted risk score (for reporting)
+- Classify interview risk using a decision tree
+- Generate final interview risk report
 
 All weights and thresholds are configurable via RISK_CONFIG, a single
 source of truth for every numeric constant in the scoring pipeline.
@@ -172,8 +172,23 @@ class RiskScoringEngine:
         video_risk = RiskScoringEngine.calculate_video_risk(video_result)
         audio_risk = RiskScoringEngine.calculate_audio_risk(audio_result)
         evaluation_risk = RiskScoringEngine.calculate_evaluation_risk(evaluation_result)
-        final_risk = RiskScoringEngine.calculate_final_risk(video_risk, audio_risk, evaluation_risk)
-        risk_classification = RiskScoringEngine.classify_risk(final_risk)
+        final_risk = RiskScoringEngine.calculate_final_risk(
+            video_risk,
+            audio_risk,
+            evaluation_risk,
+        )
+        risk_classification = RiskDecisionTree.classify(
+            video_result,
+            audio_result,
+            evaluation_result,
+        )
+        weighted_classification = RiskScoringEngine.classify_risk(final_risk)
+        logger.info(
+            "Weighted=%s (%.2f), DecisionTree=%s",
+            weighted_classification,
+            final_risk,
+            risk_classification,
+        )
         risk_factors = RiskScoringEngine._identify_risk_factors(video_result, audio_result, evaluation_result)
 
         report = {
@@ -237,3 +252,68 @@ class RiskScoringEngine:
             "CRITICAL": "Significant fraud indicators detected. Recommend rejection or investigation.",
         }
         return recommendations.get(risk_classification, "Review interview manually.")
+
+
+class RiskDecisionTree:
+    """
+    Decision tree for interview risk classification.
+    Determines the final interview risk using decision rules
+    instead of weighted scoring.
+    """
+
+    @staticmethod
+    def classify(
+        video_result: dict[str, Any],
+        audio_result: dict[str, Any],
+        evaluation_result: dict[str, Any],
+    ) -> str:
+
+        # Multiple people detected
+        if video_result.get("multiple_persons", {}).get("multiple_persons_detected"):
+            return "CRITICAL"
+
+        # Face not detected
+        if not video_result.get("face_detected", {}).get("faces_found"):
+            return "HIGH"
+
+        # Phone detected
+        if video_result.get("phone_detected", {}).get("phone_detected"):
+            return "HIGH"
+
+        # Suspicious head movement
+        if video_result.get("head_movement_suspicious", {}).get("suspicious_movement_detected"):
+            return "HIGH"
+
+        # Background voices + suspicious conversation together
+        if audio_result.get("background_voices", {}).get("background_voices_detected") and audio_result.get(
+            "suspicious_conversation", {}
+        ).get("suspicious_pattern_detected"):
+            return "HIGH"
+
+        # Background voices only
+        if audio_result.get("background_voices", {}).get("background_voices_detected"):
+            return "MEDIUM"
+
+        # Suspicious conversation only
+        if audio_result.get("suspicious_conversation", {}).get("suspicious_pattern_detected"):
+            return "MEDIUM"
+
+        # Poor answer quality
+        quality = evaluation_result.get("answer_quality_score", {}).get("overall_quality_score", 50)
+
+        if quality < 40:
+            return "MEDIUM"
+
+        # Poor technical accuracy
+        accuracy = evaluation_result.get("technical_accuracy", {}).get("accuracy_score", 50)
+
+        if accuracy < 40:
+            return "MEDIUM"
+
+        # Poor communication
+        clarity = evaluation_result.get("communication_clarity", {}).get("clarity_score", 50)
+
+        if clarity < 40:
+            return "MEDIUM"
+
+        return "LOW"

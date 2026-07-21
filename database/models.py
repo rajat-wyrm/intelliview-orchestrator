@@ -77,6 +77,9 @@ class Candidate(Base):
     resume_text = Column(String(10000), nullable=True)
     skills = Column(JSON, nullable=True, default=list)
     interview_history = Column(JSON, nullable=True, default=list)
+    # Optional demographic information for fairness auditing.
+    # This data is NOT passed to the LLM and is only used for compliance analytics.
+    demographics = Column(JSON, nullable=True, default=dict)
     avg_score = Column(Float, nullable=True, index=True)
     total_interviews = Column(Integer, nullable=False, default=0, index=True)
 

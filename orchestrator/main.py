@@ -22,6 +22,8 @@ from uuid import uuid4
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 
@@ -31,8 +33,8 @@ from config import (
     ENABLE_PROMETHEUS,
     MAX_REQUEST_BODY_BYTES,
 )
-from database.db import engine
-from database.models import Base
+from database.db import engine, get_db
+from database.models import Base, InterviewSession
 from monitoring.dashboard_api import create_dashboard_routes
 from monitoring.metrics_collector import MetricsCollector
 from monitoring.websocket_manager import ws_manager
@@ -53,6 +55,7 @@ from orchestrator.session_manager import SessionManager
 from orchestrator.session_tracker import SessionTracker
 from orchestrator.state_sync import StateSynchronizer
 from orchestrator.worker_registry import WorkerRegistry
+from workers.bias_auditor import BiasAuditor
 
 # Configure logging after imports so startup messages are structured.
 configure_logging()
@@ -88,9 +91,9 @@ async def lifespan(app: FastAPI):
                 except Exception as exc:
                     logger.debug("shutdown close failed: %s", exc)
         # Close the shared Redis client
-        from orchestrator.redis_client import get_redis_client
+        from orchestrator.cache_manager import CacheManager
 
-        rc = get_redis_client()
+        rc = CacheManager()
         if rc is not None:
             try:
                 rc.raw.close()
@@ -408,6 +411,23 @@ async def get_dependency_statuses():
     return health_monitor._check_all_dependencies()
 
 
+@app.get("/admin/fairness-audit", dependencies=[Depends(require_token)])
+async def get_fairness_audit_report():
+    """Return a lightweight fairness audit report for recent scoring patterns.
+
+    This endpoint uses the existing BiasAuditor heuristic for scoring-dispersion
+    review. It is intentionally informational and does not replace a full
+    compliance or fairness assessment framework.
+    """
+    try:
+        auditor = BiasAuditor(db_session=None)
+        evaluations = []
+        return auditor.analyze_scoring_consistency(evaluations, "gender")
+    except Exception as exc:
+        logger.error("Fairness audit endpoint failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Fairness audit unavailable") from exc
+
+
 # ========== Prometheus Metrics Endpoint ==========
 
 
@@ -445,7 +465,10 @@ async def get_circuit_breaker_status():
     response_model=InterviewSessionResponse,
     dependencies=[Depends(require_token)],
 )
-async def start_interview(request: StartInterviewRequest):
+async def start_interview(
+    request: StartInterviewRequest,
+    session_db: Session = Depends(get_db),
+):
     """
     Start a new interview session using intelligent scheduling
 
@@ -520,7 +543,10 @@ async def start_interview(request: StartInterviewRequest):
 
 
 @app.get("/session-status/{session_id}", response_model=SessionStatusResponse)
-async def get_session_status(session_id: str):
+async def get_session_status(
+    session_id: str,
+    session_db: Session = Depends(get_db),
+):
     """
     Get current status of an interview session
 
@@ -566,8 +592,14 @@ async def get_session_status(session_id: str):
         raise HTTPException(status_code=500, detail=f"Error fetching session: {e!s}")
 
 
+session_db: Session = (Depends(get_db),)
+
+
 @app.get("/task-status/{task_id}", response_model=TaskStatusResponse)
-async def get_task_status(task_id: str):
+async def get_task_status(
+    task_id: str,
+    session_db: Session = Depends(get_db),
+):
     """
     Get the status of a Celery task by its ID.
 
@@ -599,7 +631,9 @@ async def get_task_status(task_id: str):
 
 @app.get("/active-sessions")
 @http_cache.cached("active-sessions", ttl=2)
-async def get_active_sessions():
+async def get_active_sessions(
+    session_db: Session = Depends(get_db),
+):
     """
     Get all currently active sessions
 
@@ -637,7 +671,10 @@ async def get_completed_sessions(limit: int = 100):
 
 
 @app.get("/stuck-sessions")
-async def get_stuck_sessions(timeout_minutes: int = 30):
+async def get_stuck_sessions(
+    timeout_minutes: int = 30,
+    session_db: Session = Depends(get_db),
+):
     """
     Get sessions that appear to be stuck in PROCESSING
 
@@ -664,7 +701,9 @@ async def get_stuck_sessions(timeout_minutes: int = 30):
 
 @app.get("/session-statistics")
 @http_cache.cached("session-statistics", ttl=2)
-async def get_session_statistics():
+async def get_session_statistics(
+    session_db: Session = Depends(get_db),
+):
     """
     Get comprehensive session statistics
 
@@ -685,7 +724,9 @@ async def get_session_statistics():
 
 
 @app.get("/worker-distribution")
-async def get_worker_distribution():
+async def get_worker_distribution(
+    session_db: Session = Depends(get_db),
+):
     """
     Get distribution of sessions across worker nodes
 
@@ -701,7 +742,11 @@ async def get_worker_distribution():
 
 
 @app.get("/high-risk-sessions")
-async def get_high_risk_sessions(threshold: float = 0.8, limit: int = 50):
+async def get_high_risk_sessions(
+    threshold: float = 0.8,
+    limit: int = 50,
+    session_db: Session = Depends(get_db),
+):
     """
     Get high-risk completed sessions
 
@@ -795,65 +840,69 @@ async def clear_session_cache():
 
 
 @app.get("/interviews")
-async def list_interviews(limit: int = 100, status: str | None = None):
+async def list_interviews(
+    limit: int = 100,
+    status: str | None = None,
+    session_db: Session = Depends(get_db),
+):
     """
-    List interview sessions, newest first. Optional `status` filter.
-
-    Returns:
-        dict: List of interview sessions + total count.
+    List interview sessions, newest first.
     """
-    from sqlalchemy import select
 
-    from database.db import SessionLocal
-    from database.models import InterviewSession
+    stmt = select(InterviewSession)
 
-    session_db = SessionLocal()
-    try:
-        stmt = select(InterviewSession)
-        if status:
-            stmt = stmt.where(InterviewSession.status == status.upper())
-        stmt = stmt.order_by(InterviewSession.created_at.desc().nullslast()).limit(limit)
-        rows = session_db.execute(stmt).scalars().all()
-        return {
-            "total_count": len(rows),
-            "sessions": [
-                {
-                    "session_id": r.session_id,
-                    "candidate_id": r.candidate_id,
-                    "status": r.status,
-                    "risk_score": r.risk_score,
-                    "assigned_node": r.assigned_node,
-                    "start_time": r.start_time.isoformat() if r.start_time else None,
-                    "end_time": r.end_time.isoformat() if r.end_time else None,
-                    "created_at": r.created_at.isoformat() if r.created_at else None,
-                    "updated_at": r.updated_at.isoformat() if r.updated_at else None,
-                }
-                for r in rows
-            ],
-        }
-    except Exception as e:
-        logger.error(f"Error listing interviews: {e!s}")
-        raise HTTPException(status_code=500, detail="Error listing interviews")
-    finally:
-        session_db.close()
+    if status:
+        stmt = stmt.where(InterviewSession.status == status.upper())
+
+    stmt = stmt.order_by(InterviewSession.created_at.desc().nullslast()).limit(limit)
+    rows = session_db.execute(stmt).scalars().all()
+    return {
+        "total_count": len(rows),
+        "sessions": [
+            {
+                "session_id": r.session_id,
+                "candidate_id": r.candidate_id,
+                "status": r.status,
+                "risk_score": r.risk_score,
+                "assigned_node": r.assigned_node,
+                "start_time": r.start_time.isoformat() if r.start_time else None,
+                "end_time": r.end_time.isoformat() if r.end_time else None,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+            }
+            for r in rows
+        ],
+    }
 
 
 # ========== Question Endpoints ==========
 
 
 @app.get("/questions")
-async def list_questions(category: str | None = None, difficulty: str | None = None, limit: int = 100):
+async def list_questions(
+    category: str | None = None,
+    difficulty: str | None = None,
+    limit: int = 100,
+    session_db: Session = Depends(get_db),
+):
     """List questions with optional category/difficulty filter"""
     try:
-        questions = question_bank.get_questions(category=category, difficulty=difficulty, limit=limit)
+        questions = question_bank.get_questions(
+            category=category,
+            difficulty=difficulty,
+            limit=limit,
+        )
         return {"count": len(questions), "questions": questions}
     except Exception as e:
-        logger.error(f"Error listing questions: {e!s}")
+        logger.error(f"Error listing questions: {e}")
         raise HTTPException(status_code=500, detail="Error listing questions")
 
 
 @app.post("/questions")
-async def add_question(request: AddQuestionRequest):
+async def add_question(
+    request: AddQuestionRequest,
+    session_db: Session = Depends(get_db),
+):
     """Add a new question to the bank"""
     try:
         question = question_bank.add_question(
@@ -874,7 +923,10 @@ async def add_question(request: AddQuestionRequest):
 
 
 @app.get("/candidates")
-async def list_candidates(limit: int = 100):
+async def list_candidates(
+    limit: int = 100,
+    session_db: Session = Depends(get_db),
+):
     """List all candidates"""
     try:
         candidates = candidate_manager.list_candidates(limit=limit)
@@ -885,7 +937,10 @@ async def list_candidates(limit: int = 100):
 
 
 @app.post("/candidates")
-async def create_candidate(request: CreateCandidateRequest):
+async def create_candidate(
+    request: CreateCandidateRequest,
+    session_db: Session = Depends(get_db),
+):
     """Create a new candidate profile"""
     try:
         candidate = candidate_manager.create_candidate(
@@ -901,7 +956,10 @@ async def create_candidate(request: CreateCandidateRequest):
 
 
 @app.get("/candidates/{candidate_id}")
-async def get_candidate(candidate_id: str):
+async def get_candidate(
+    candidate_id: str,
+    session_db: Session = Depends(get_db),
+):
     """Get candidate details by ID"""
     try:
         candidate = candidate_manager.get_candidate(candidate_id)
@@ -916,7 +974,10 @@ async def get_candidate(candidate_id: str):
 
 
 @app.get("/candidates/{candidate_id}/history")
-async def get_candidate_history(candidate_id: str):
+async def get_candidate_history(
+    candidate_id: str,
+    session_db: Session = Depends(get_db),
+):
     """Get candidate interview history"""
     try:
         candidate = candidate_manager.get_candidate(candidate_id)
@@ -946,7 +1007,10 @@ async def list_templates(interview_type: str | None = None, limit: int = 100):
 
 
 @app.post("/templates")
-async def create_template(request: CreateTemplateRequest):
+async def create_template(
+    request: CreateTemplateRequest,
+    session_db: Session = Depends(get_db),
+):
     """Create a new interview template"""
     try:
         template = interview_template_manager.create_template(
@@ -970,7 +1034,10 @@ async def create_template(request: CreateTemplateRequest):
 
 
 @app.post("/interviews/ask-question")
-async def ask_question(request: AskQuestionRequest):
+async def ask_question(
+    request: AskQuestionRequest,
+    session_db: Session = Depends(get_db),
+):
     """Get next question for a session"""
     try:
         session_data = session_manager.get_session(request.session_id)
@@ -1000,7 +1067,10 @@ async def ask_question(request: AskQuestionRequest):
 
 
 @app.post("/interviews/submit-answer")
-async def submit_answer(request: SubmitAnswerRequest):
+async def submit_answer(
+    request: SubmitAnswerRequest,
+    session_db: Session = Depends(get_db),
+):
     """Submit an answer and get feedback"""
     try:
         session_data = session_manager.get_session(request.session_id)
