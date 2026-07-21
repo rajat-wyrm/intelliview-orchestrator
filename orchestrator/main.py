@@ -16,11 +16,13 @@ import time as _time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
+
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
+
 from config import (
     API_TOKEN,
     CORS_ALLOW_ORIGINS,
@@ -49,6 +51,7 @@ from orchestrator.session_manager import SessionManager
 from orchestrator.session_tracker import SessionTracker
 from orchestrator.state_sync import StateSynchronizer
 from orchestrator.worker_registry import WorkerRegistry
+
 # Configure logging after imports so startup messages are structured.
 configure_logging()
 logger = logging.getLogger(__name__)
