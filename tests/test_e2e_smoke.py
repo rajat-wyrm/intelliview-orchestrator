@@ -46,7 +46,7 @@ def test_start_interview_and_get_status(api_base_url):
         headers={"X-API-Token": "api123"},
         json={"candidate_id": f"cand-{uuid.uuid4().hex[:8]}", "priority": "high"},
         timeout=10.0,
-)
+    )
     assert r.status_code == 200, r.text
     session_id = r.json()["session_id"]
     assert session_id.startswith("session_")
@@ -104,7 +104,7 @@ def test_full_pipeline_completes(api_base_url):
         headers={"X-API-Token": "api123"},
         json={"candidate_id": f"e2e-{uuid.uuid4().hex[:8]}", "priority": "medium"},
         timeout=10.0,
-)
+    )
     assert r.status_code == 200
     session_id = r.json()["session_id"]
 

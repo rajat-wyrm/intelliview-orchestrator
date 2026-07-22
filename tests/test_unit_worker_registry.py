@@ -20,6 +20,8 @@ def _new_registry():
         mock_redis.return_value.scan_iter.return_value = iter([])
 
         return WorkerRegistry()
+
+
 def test_register_worker_records_capacity():
     reg = _new_registry()
     assert reg.register_worker("w1", capacity=4) is True
