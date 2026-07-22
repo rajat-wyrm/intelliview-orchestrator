@@ -4,12 +4,6 @@ services:
     container_name: ai-interview-redis
     ports:
       - "6379:6379"
-    command:
-      - redis-server
-      - --maxmemory
-      - 256mb
-      - --maxmemory-policy
-      - allkeys-lru
     environment:
       - REDIS_REPLICATION_MODE=master
     volumes:
