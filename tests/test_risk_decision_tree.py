@@ -1,5 +1,8 @@
 from workers.risk_scoring_engine import RiskDecisionTree
 
+
+def test_multiple_persons_returns_critical():
+
 def test_multiple_persons_returns_critical():
     video = {
         "multiple_persons": {"multiple_persons_detected": True},
@@ -159,3 +162,5 @@ def test_clean_interview_returns_low():
         RiskDecisionTree.classify(video, audio, evaluation)
         == "LOW"
     )
+
+    
