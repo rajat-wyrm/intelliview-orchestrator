@@ -12,6 +12,7 @@ Integrates:
 - Task Queue integration with Celery
 """
 
+import io
 import logging
 import re
 import time as _time
@@ -19,7 +20,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
@@ -55,6 +56,7 @@ from orchestrator.session_manager import SessionManager
 from orchestrator.session_tracker import SessionTracker
 from orchestrator.state_sync import StateSynchronizer
 from orchestrator.worker_registry import WorkerRegistry
+from workers.bias_auditor import BiasAuditor
 
 # Configure logging after imports so startup messages are structured.
 configure_logging()
@@ -410,6 +412,23 @@ async def get_dependency_statuses():
     return health_monitor._check_all_dependencies()
 
 
+@app.get("/admin/fairness-audit", dependencies=[Depends(require_token)])
+async def get_fairness_audit_report():
+    """Return a lightweight fairness audit report for recent scoring patterns.
+
+    This endpoint uses the existing BiasAuditor heuristic for scoring-dispersion
+    review. It is intentionally informational and does not replace a full
+    compliance or fairness assessment framework.
+    """
+    try:
+        auditor = BiasAuditor(db_session=None)
+        evaluations = []
+        return auditor.analyze_scoring_consistency(evaluations, "gender")
+    except Exception as exc:
+        logger.error("Fairness audit endpoint failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Fairness audit unavailable") from exc
+
+
 # ========== Prometheus Metrics Endpoint ==========
 
 
@@ -574,7 +593,82 @@ async def get_session_status(
         raise HTTPException(status_code=500, detail=f"Error fetching session: {e!s}")
 
 
-session_db: Session = (Depends(get_db),)
+@app.get("/session-status/{session_id}/risk-report")
+async def get_session_risk_report(session_id: str, format: str = "json"):
+    """
+    Get a full detailed risk report for a session, as JSON or downloadable PDF.
+
+    Args:
+        session_id: Interview session identifier
+        format: "json" (default) or "pdf"
+    """
+    try:
+        session_data = session_manager.get_session(session_id)
+
+        if not session_data:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        report = {
+            "session_id": session_id,
+            "candidate_id": session_data.get("candidate_id"),
+            "status": session_data.get("status"),
+            "risk_score": session_data.get("risk_score"),
+            "assigned_node": session_data.get("assigned_node"),
+            "start_time": session_data.get("start_time"),
+            "end_time": session_data.get("end_time"),
+            "created_at": session_data.get("created_at"),
+            "updated_at": session_data.get("updated_at"),
+            "video_analysis": session_data.get("video_analysis"),
+            "audio_analysis": session_data.get("audio_analysis"),
+            "evaluation_analysis": session_data.get("evaluation_analysis"),
+        }
+
+        if format == "pdf":
+            return _build_risk_report_pdf(report)
+
+        return report
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating risk report for {session_id}: {e!s}")
+        raise HTTPException(status_code=500, detail="Error generating risk report")
+
+
+def _build_risk_report_pdf(report: dict) -> Response:
+    """Render a one-page PDF risk report using reportlab."""
+    from reportlab.pdfgen import canvas
+
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer)
+
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(50, 800, "Interview Risk Report")
+
+    c.setFont("Helvetica", 11)
+    y = 760
+    fields = [
+        ("Session ID", report.get("session_id")),
+        ("Candidate ID", report.get("candidate_id")),
+        ("Status", report.get("status")),
+        ("Risk Score", report.get("risk_score")),
+        ("Start Time", report.get("start_time")),
+        ("End Time", report.get("end_time")),
+        ("Created At", report.get("created_at")),
+        ("Updated At", report.get("updated_at")),
+    ]
+    for label, value in fields:
+        c.drawString(50, y, f"{label}: {value}")
+        y -= 22
+
+    c.save()
+    buffer.seek(0)
+
+    return Response(
+        content=buffer.read(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=risk_report_{report['session_id']}.pdf"},
+    )
 
 
 @app.get("/task-status/{task_id}", response_model=TaskStatusResponse)

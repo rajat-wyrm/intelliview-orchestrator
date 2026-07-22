@@ -1,26 +1,23 @@
 """Unit tests for WorkerRegistry — register, heartbeat, capacity, deregister."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from orchestrator.worker_registry import WorkerRegistry
 
 
 def _new_registry():
-    client = MagicMock()
-
-    client.ping.return_value = True
-    client.hset.return_value = True
-    client.sadd.return_value = True
-    client.expire.return_value = True
-    client.set.return_value = True
-    client.delete.return_value = 1
-    client.srem.return_value = 1
-    client.hincrby.return_value = 1
-    client.smembers.return_value = set()
-    client.hgetall.return_value = {}
-    client.scan_iter.return_value = iter([])
-
-    with patch("orchestrator.worker_registry.CacheManager", return_value=client):
+    with patch("orchestrator.worker_registry.get_redis_client") as mock_redis:
+        mock_redis.return_value.ping.return_value = True
+        mock_redis.return_value.hset.return_value = True
+        mock_redis.return_value.sadd.return_value = True
+        mock_redis.return_value.expire.return_value = True
+        mock_redis.return_value.set.return_value = True
+        mock_redis.return_value.delete.return_value = 1
+        mock_redis.return_value.srem.return_value = 1
+        mock_redis.return_value.hincrby.return_value = 1
+        mock_redis.return_value.smembers.return_value = set()
+        mock_redis.return_value.hgetall.return_value = {}
+        mock_redis.return_value.scan_iter.return_value = iter([])
         return WorkerRegistry()
 
 

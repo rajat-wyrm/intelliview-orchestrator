@@ -3,12 +3,17 @@ SQLAlchemy ORM Models for AI Interview Orchestrator
 Defines database models using declarative base
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import JSON, Column, DateTime, Float, Integer, String
 from sqlalchemy.sql import func  # noqa: F401  (re-exported for ORM consumers)
 
 from database.db import Base
+
+
+def utcnow() -> datetime:
+    """Return a timezone-aware UTC datetime."""
+    return datetime.now(timezone.utc)
 
 
 class InterviewSession(Base):
@@ -23,7 +28,7 @@ class InterviewSession(Base):
     candidate_id = Column(String(255), nullable=False, index=True)
     status = Column(String(50), nullable=False, default="pending")
     assigned_node = Column(String(255), nullable=True)
-    start_time = Column(DateTime, nullable=True, default=datetime.utcnow)
+    start_time = Column(DateTime, nullable=True, default=utcnow)
     end_time = Column(DateTime, nullable=True)
     risk_score = Column(Float, nullable=True)
 
@@ -39,8 +44,8 @@ class InterviewSession(Base):
     overall_score = Column(Float, nullable=True)
     template_id = Column(String(255), nullable=True)
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
     def __repr__(self):
         return f"<InterviewSession(session_id='{self.session_id}', candidate_id='{self.candidate_id}', status='{self.status}', risk_score={self.risk_score})>"
@@ -59,8 +64,8 @@ class Question(Base):
     usage_count = Column(Integer, nullable=False, default=0)
     avg_score = Column(Float, nullable=True)
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
     def __repr__(self):
         return f"<Question(question_id='{self.question_id}', category='{self.category}', difficulty='{self.difficulty}')>"
@@ -77,11 +82,14 @@ class Candidate(Base):
     resume_text = Column(String(10000), nullable=True)
     skills = Column(JSON, nullable=True, default=list)
     interview_history = Column(JSON, nullable=True, default=list)
+    # Optional demographic information for fairness auditing.
+    # This data is NOT passed to the LLM and is only used for compliance analytics.
+    demographics = Column(JSON, nullable=True, default=dict)
     avg_score = Column(Float, nullable=True)
     total_interviews = Column(Integer, nullable=False, default=0)
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
     def __repr__(self):
         return f"<Candidate(candidate_id='{self.candidate_id}', name='{self.name}')>"
@@ -103,8 +111,8 @@ class InterviewTemplate(Base):
     usage_count = Column(Integer, nullable=False, default=0)
     success_rate = Column(Float, nullable=True)
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
     def __repr__(self):
         return f"<InterviewTemplate(template_id='{self.template_id}', name='{self.name}', type='{self.interview_type}')>"
