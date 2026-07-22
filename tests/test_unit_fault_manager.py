@@ -1,7 +1,6 @@
 """Unit tests for FaultManager — failure logging, DLQ, recovery queue."""
 
 from datetime import datetime, timezone
-from http import client
 from unittest.mock import MagicMock, patch
 
 from orchestrator.fault_manager import FailureType, FaultManager
@@ -25,7 +24,7 @@ def _manager():
         return_value=client,
     ):
         return FaultManager()
- 
+
 def test_log_failure_appends_to_log_key():
     fm = _manager()
     assert fm.log_failure("s1", FailureType.TASK_EXCEPTION, "boom", "w1") is True
