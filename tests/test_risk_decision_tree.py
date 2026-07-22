@@ -2,8 +2,6 @@ from workers.risk_scoring_engine import RiskDecisionTree
 
 
 def test_multiple_persons_returns_critical():
-
-def test_multiple_persons_returns_critical():
     video = {
         "multiple_persons": {"multiple_persons_detected": True},
         "face_detected": {"faces_found": True},
@@ -21,7 +19,8 @@ def test_multiple_persons_returns_critical():
     assert (
         RiskDecisionTree.classify(video, audio, evaluation)
         == "CRITICAL"
-)
+    )
+
 
 def test_no_face_returns_high():
     video = {
@@ -111,13 +110,13 @@ def test_low_quality_returns_medium():
 
     evaluation = {
         "answer_quality_score": {
-            "overall_quality_score": 30
+            "overall_quality_score": 30,
         },
         "technical_accuracy": {
-            "accuracy_score": 80
+            "accuracy_score": 80,
         },
         "communication_clarity": {
-            "clarity_score": 80
+            "clarity_score": 80,
         },
     }
 
@@ -133,28 +132,28 @@ def test_clean_interview_returns_low():
         "face_detected": {"faces_found": True},
         "phone_detected": {"phone_detected": False},
         "head_movement_suspicious": {
-            "suspicious_movement_detected": False
+            "suspicious_movement_detected": False,
         },
     }
 
     audio = {
         "background_voices": {
-            "background_voices_detected": False
+            "background_voices_detected": False,
         },
         "suspicious_conversation": {
-            "suspicious_pattern_detected": False
+            "suspicious_pattern_detected": False,
         },
     }
 
     evaluation = {
         "answer_quality_score": {
-            "overall_quality_score": 80
+            "overall_quality_score": 80,
         },
         "technical_accuracy": {
-            "accuracy_score": 90
+            "accuracy_score": 90,
         },
         "communication_clarity": {
-            "clarity_score": 95
+            "clarity_score": 95,
         },
     }
 
@@ -162,5 +161,3 @@ def test_clean_interview_returns_low():
         RiskDecisionTree.classify(video, audio, evaluation)
         == "LOW"
     )
-
-    
