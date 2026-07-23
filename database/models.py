@@ -30,9 +30,7 @@ class InterviewSession(Base):
     assigned_node = Column(String(255), nullable=True)
     start_time = Column(DateTime, nullable=True, default=utcnow)
     end_time = Column(DateTime, nullable=True)
-    
-    start_time = Column(DateTime, nullable=True, default=utcnow)
-    end_time = Column(DateTime, nullable=True)
+
     risk_score = Column(Float, nullable=True)
 
     # Analysis results stored as JSON
