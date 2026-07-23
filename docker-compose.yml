@@ -4,6 +4,12 @@ services:
     container_name: ai-interview-redis
     ports:
       - "6379:6379"
+    command:
+      - redis-server
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
     environment:
       - REDIS_REPLICATION_MODE=master
     volumes:
@@ -107,7 +113,7 @@ services:
       postgres:
         condition: service_healthy
       fastapi:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - .:/app
     networks:
@@ -115,11 +121,11 @@ services:
     command: python -m workers.worker_entrypoint
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      test: ["CMD-SHELL", "pgrep -f workers.worker_entrypoint || exit 1"]
       interval: 30s
-      timeout: 5s
-      start_period: 15s
+      timeout: 10s
       retries: 3
+      start_period: 20s
     deploy:
       resources:
         limits:
