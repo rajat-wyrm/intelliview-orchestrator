@@ -20,7 +20,6 @@ from config import API_TOKEN, WORKER_CONCURRENCY
 
 logger = logging.getLogger(__name__)
 
-
 class WorkerAgent:
     def __init__(
         self,
@@ -33,7 +32,11 @@ class WorkerAgent:
         self.worker_id = worker_id
         self.capacity = capacity
         self.heartbeat_interval = heartbeat_interval
+
+        # Process-local counter used for worker heartbeats.
+        # This is accurate only when running with the 'solo' pool.
         self.active_tasks = 0
+
         self._stop = False
         self._headers = {
             "X-API-Token": API_TOKEN,

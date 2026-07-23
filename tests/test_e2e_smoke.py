@@ -14,7 +14,11 @@ import uuid
 
 import httpx
 import pytest
+import os
 
+API_HEADERS = {
+    "X-API-Token": os.getenv("API_TOKEN", "dev-token-change-me")
+}
 
 def _wait_for_api(base_url: str, timeout: float = 30.0) -> None:
     deadline = time.time() + timeout
@@ -43,6 +47,7 @@ def test_start_interview_and_get_status(api_base_url):
     _wait_for_api(api_base_url)
     r = httpx.post(
         f"{api_base_url}/start-interview",
+        headers={"X-API-Token": "api123"},
         json={"candidate_id": f"cand-{uuid.uuid4().hex[:8]}", "priority": "high"},
         timeout=10.0,
     )
@@ -89,7 +94,7 @@ def test_worker_register_requires_token(api_base_url):
     r = httpx.post(
         f"{api_base_url}/register-worker",
         json={"worker_id": "test-w", "capacity": 2},
-        headers={"X-API-Token": "test-token"},
+        headers={"X-API-Token": "api123"},
         timeout=5.0,
     )
     assert r.status_code == 200, r.text
@@ -100,6 +105,7 @@ def test_full_pipeline_completes(api_base_url):
     _wait_for_api(api_base_url)
     r = httpx.post(
         f"{api_base_url}/start-interview",
+        headers={"X-API-Token": "api123"},
         json={"candidate_id": f"e2e-{uuid.uuid4().hex[:8]}", "priority": "medium"},
         timeout=10.0,
     )
