@@ -94,6 +94,18 @@ class InterviewSession(Base):
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
+    candidate = relationship(
+        "Candidate",
+        back_populates="interview_sessions",
+    )
+
+    template = relationship(
+        "InterviewTemplate",
+        back_populates="interview_sessions",
+    )
+
+
+
     def __repr__(self):
         return (
             f"<InterviewSession(session_id='{self.session_id}', "
@@ -117,6 +129,7 @@ class Question(Base):
 
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
     def __repr__(self):
         return (
             f"<Question(question_id='{self.question_id}', "
@@ -145,6 +158,11 @@ class Candidate(Base):
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
+    interview_sessions = relationship(
+    "InterviewSession",
+    back_populates="template",
+)
+
     def __repr__(self):
         return (
             f"<Candidate(candidate_id='{self.candidate_id}', "
@@ -171,9 +189,15 @@ class InterviewTemplate(Base):
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
+    interview_sessions = relationship(
+        "InterviewSession",
+        back_populates="candidate",
+    )
+
     def __repr__(self):
         return (
             f"<InterviewTemplate(template_id='{self.template_id}', "
             f"name='{self.name}', "
             f"type='{self.interview_type}')>"
         )
+
