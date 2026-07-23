@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import Card from "@/components/Card";
 import Stat from "@/components/Stat";
+import StatsCards from "@/components/StatsCards";
 import { StatusBadge, Badge } from "@/components/Badge";
 import { Skeleton, ErrorState, EmptyState } from "@/components/States";
 import { SearchInput } from "@/components/SearchInput";
@@ -123,69 +124,14 @@ export default function CandidatesPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="glass-card p-4 animate-slide-in-up" style={{ animationDelay: "0ms" }}>
-          <Stat
-            label="Total candidates"
-            value={isLoading ? <Skeleton className="h-7 w-12" /> : candidates.length}
-            icon={<UserCircle size={16} />}
-          />
-        </div>
-        <div className="glass-card p-4 animate-slide-in-up" style={{ animationDelay: "50ms" }}>
-          <Stat
-            label="Avg success rate"
-            value={
-              isLoading ? (
-                <Skeleton className="h-7 w-12" />
-              ) : (
-                formatPercent(
-                  candidates.length > 0
-                    ? (candidates.reduce((a, c) => a + c.completed_sessions, 0) /
-                        Math.max(
-                          1,
-                          candidates.reduce((a, c) => a + c.total_sessions, 0)
-                        )) *
-                        100
-                    : 0
-                )
-              )
-            }
-            icon={<CheckCircle2 size={16} />}
-          />
-        </div>
-        <div className="glass-card p-4 animate-slide-in-up" style={{ animationDelay: "100ms" }}>
-          <Stat
-            label="Avg risk score"
-            value={
-              isLoading ? (
-                <Skeleton className="h-7 w-16" />
-              ) : (
-                (() => {
-                  const withRisk = candidates.filter((c) => c.avg_risk_score != null);
-                  if (withRisk.length === 0) return "—";
-                  return (
-                    withRisk.reduce((a, c) => a + c.avg_risk_score, 0) / withRisk.length
-                  ).toFixed(3);
-                })()
-              )
-            }
-            icon={<AlertTriangle size={16} />}
-          />
-        </div>
-        <div className="glass-card p-4 animate-slide-in-up" style={{ animationDelay: "150ms" }}>
-          <Stat
-            label="Total sessions"
-            value={
-              isLoading ? (
-                <Skeleton className="h-7 w-12" />
-              ) : (
-                candidates.reduce((a, c) => a + c.total_sessions, 0)
-              )
-            }
-            icon={<Activity size={16} />}
-          />
-        </div>
-      </div>
+      <StatsCards
+        data={{
+          totalCandidates: candidates.length,
+          pendingReview: candidates.reduce((a, c) => a + c.active_sessions, 0),
+          completed: candidates.reduce((a, c) => a + c.completed_sessions, 0),
+          activeNow: candidates.filter((c) => c.active_sessions > 0).length,
+        }}
+      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-1">

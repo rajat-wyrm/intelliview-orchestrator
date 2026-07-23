@@ -20,7 +20,6 @@ from config import API_TOKEN, WORKER_CONCURRENCY
 
 logger = logging.getLogger(__name__)
 
-
 class WorkerAgent:
     def __init__(
         self,
@@ -33,9 +32,31 @@ class WorkerAgent:
         self.worker_id = worker_id
         self.capacity = capacity
         self.heartbeat_interval = heartbeat_interval
+
+        # Process-local counter used for worker heartbeats.
+        # This is accurate only when running with the 'solo' pool.
         self.active_tasks = 0
+
         self._stop = False
-        self._headers = {"X-API-Token": API_TOKEN, "Content-Type": "application/json"}
+        self._headers = {
+            "X-API-Token": API_TOKEN,
+            "Content-Type": "application/json",
+        }
+
+        # Read the configured Celery worker pool.
+        # Default to 'solo' if not explicitly configured.
+        self.pool = os.getenv("CELERY_POOL", "solo")
+
+        # Fail fast if an unsupported pool is used.
+        # In prefork mode, each worker process has its own
+        # copy of active_tasks, making heartbeat counts inaccurate.
+        if self.pool != "solo":
+            raise RuntimeError(
+                f"Unsupported Celery pool '{self.pool}'. "
+                "This worker only supports the 'solo' pool because "
+                "the active_tasks counter is process-local and is not "
+                "accurate with multiple worker processes."
+            )
 
     def _post(self, path: str, payload: dict, retries: int = 5) -> bool:
         for attempt in range(1, retries + 1):

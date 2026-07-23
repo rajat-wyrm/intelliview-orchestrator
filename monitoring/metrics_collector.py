@@ -16,7 +16,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from orchestrator.redis_client import get_redis_client
+from orchestrator.cache_manager import CacheManager
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ class MetricsCollector:
         """
         Initialize MetricsCollector
         """
-        self.redis_client = get_redis_client()
+        self.redis_client = CacheManager()
         self.metrics_prefix = "metrics:"
         self._system_cache = _TTLCache()
         logger.info("MetricsCollector initialized")
@@ -420,3 +420,20 @@ class MetricsCollector:
         except Exception as e:
             logger.warning(f"Error getting uptime: {e!s}")
             return 0
+    from monitoring.prometheus_metrics import get_session_metrics
+
+    def _get_session_metrics(self):
+      metrics = get_session_metrics()
+
+      total = (
+        metrics["completed"]
+        + metrics["failed"]
+        + metrics["active"]
+      )
+
+      return {
+        "active": metrics["active"],
+        "completed": metrics["completed"],
+        "failed": metrics["failed"],
+        "total": total,
+      }        

@@ -3,17 +3,26 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
+
   - job_name: "intelliview-orchestrator"
     metrics_path: "/metrics"
     static_configs:
-      - targets: ["fastapi:8000"]
-        labels:
-          service: "orchestrator"
+      - targets:
+          - "fastapi:8000"
 
-  - job_name: "redis"
+  - job_name: "celery-worker"
+    metrics_path: "/metrics"
     static_configs:
-      - targets: ["redis:6379"]
+      - targets:
+          - "worker:9101"
+
+  - job_name: "celery-exporter"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets:
+          - "celery-exporter:9540"
 
   - job_name: "prometheus"
     static_configs:
-      - targets: ["localhost:9090"]
+      - targets:
+          - "localhost:9090"

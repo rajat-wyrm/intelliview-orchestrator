@@ -5,12 +5,30 @@ and a `session_failed` signal that lets us mark the DB session as
 FAILED only after Celery has exhausted its retries (rather than on
 every transient exception).
 """
+"""
+# TODO:
+ Separate worker deployment is pending.
+ These queues prepare task routing for future deployment where:
+ - interview queue will be processed by workers with
+   worker_prefetch_multiplier=1 for long-running tasks.
+ - maintenance queue will be processed by dedicated workers with a
+   higher worker_prefetch_multiplier for short-running tasks.
 
 from celery import Celery, signals
+from kombu import Queue
 
+"""
+from celery import Celery, signals
+from kombu import Queue
 from config import REDIS_URL
+from workers.metrics_server import start_worker_metrics
+
+
+
+
 
 celery_app = Celery("interview_tasks", broker=REDIS_URL, backend=REDIS_URL)
+
 
 celery_app.conf.update(
     task_serializer="json",
@@ -19,12 +37,18 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     task_track_started=True,
+    worker_send_task_events=True,
+    task_send_sent_event=True,
     task_time_limit=30 * 60,  # 30 minutes hard limit
     task_soft_time_limit=25 * 60,  # 25 minutes soft limit
     task_acks_late=True,  # re-deliver if worker dies mid-task
     task_reject_on_worker_lost=True,
-    worker_prefetch_multiplier=1,  # fair distribution across workers
+
+    # Long-running interview tasks should reserve only one task at a time
+    worker_prefetch_multiplier=1,
+
     broker_connection_retry_on_startup=True,
+   
     # Periodic beat schedule — scan for due retries every 60 seconds
     beat_schedule={
         "scan-due-retries": {
@@ -49,11 +73,12 @@ def _on_task_failure(task_id, exception, args, kwargs, traceback, einfo, **_extr
     """
     try:
         from orchestrator.session_manager import SessionManager
-
+        from workers.tasks import send_mock_email_alert 
         session_id = args[0] if args else None
         if not session_id:
             return
         SessionManager().mark_session_failed(session_id, f"Celery task exhausted retries: {exception!s}")
+        send_mock_email_alert.delay(session_id)
     except Exception as exc:
         # Don't let a signal handler crash the worker.
         import logging

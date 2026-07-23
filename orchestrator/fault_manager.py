@@ -15,6 +15,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
+from orchestrator.retry_manager import RetryManager
 
 from orchestrator.redis_client import get_redis_client
 
@@ -52,11 +53,16 @@ class FaultManager:
         """
         self.debounce_time = debounce_time
         self.redis_client = get_redis_client()
+        self.retry_manager = RetryManager()
         self.failure_log_prefix = "failure_log:"
         self.recovery_queue_prefix = "recovery_queue:"
         self.dead_letter_queue = "dead_letter_queue"
 
         logger.info(f"FaultManager initialized with debounce_time={debounce_time}s")
+
+    def _create_redis_client(self) -> Any:
+        """Create the shared Redis client used by the orchestrator."""
+        return get_redis_client()
 
     def detect_failed_sessions(self, timeout_seconds: int = 1800) -> list[str]:
         """
@@ -302,6 +308,7 @@ class FaultManager:
                 "session_id": session_id,
                 "moved_at": datetime.now(timezone.utc).isoformat(),
                 "reason": reason,
+                "retry_count": self.retry_manager.get_retry_count(session_id),
             }
 
             if self.redis_client:
@@ -313,6 +320,46 @@ class FaultManager:
         except Exception as e:
             logger.error(f"Error moving to dead letter queue: {e!s}")
             return False
+    
+    def handle_failed_session(self, session_id: str, reason: str,) -> bool:
+        """
+        Handle a failed session.
+
+        1. Log failure.
+        2. Retry if possible.
+        3. Otherwise move to DLQ.
+        """
+
+        logger.warning(
+            "Handling failed session %s",
+            session_id,
+        )
+
+        self.log_failure(
+            session_id=session_id,
+            failure_type=FailureType.TASK_EXCEPTION,
+            error_message=reason,
+        )
+
+        scheduled = self.retry_manager.schedule_retry(session_id)
+
+        if scheduled:
+            return True
+
+        logger.error(
+            "Retries exhausted for %s",
+            session_id,
+        )
+
+        moved = self.move_to_dead_letter_queue(session_id, reason)
+
+        if moved:
+            logger.warning("Session %s moved to Dead Letter Queue", session_id)
+        else:
+            logger.error("Failed to move %s to Dead Letter Queue", session_id)
+
+        return False
+
 
     def get_recovery_queue(self, limit: int = 100) -> list[dict[str, Any]]:
         """
