@@ -9,7 +9,7 @@ import signal
 import sys
 import threading
 
-from celery.signals import task_postrun, task_prerun
+from celery.signals import task_postrun, task_prerun, worker_shutdown
 
 from config import WORKER_CONCURRENCY
 from workers.celery_app import celery_app
@@ -74,10 +74,14 @@ def main() -> int:
     threading.Thread(target=_hb_loop, daemon=True).start()
 
     def _shutdown(*_):
-        logger.info("Shutting down worker")
-        agent.deregister()
+        logger.info("Shutdown signal received")
         stop_event.set()
-        sys.exit(0)
+
+    @worker_shutdown.connect
+    def _on_worker_shutdown(**kwargs):
+        logger.info("Celery worker stopped")
+        agent.deregister()
+
 
     signal.signal(signal.SIGTERM, _shutdown)
     signal.signal(signal.SIGINT, _shutdown)
