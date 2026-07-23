@@ -13,12 +13,14 @@ import signal
 import sys
 import time
 from threading import Thread
+from typing import Optional
 
 import httpx
 
 from config import API_TOKEN, WORKER_CONCURRENCY
 
 logger = logging.getLogger(__name__)
+
 
 class WorkerAgent:
     def __init__(
@@ -32,36 +34,16 @@ class WorkerAgent:
         self.worker_id = worker_id
         self.capacity = capacity
         self.heartbeat_interval = heartbeat_interval
-
-        # Process-local counter used for worker heartbeats.
-        # This is accurate only when running with the 'solo' pool.
         self.active_tasks = 0
-
         self._stop = False
-        self._headers = {
-            "X-API-Token": API_TOKEN,
-            "Content-Type": "application/json",
-        }
+        self._headers = {"X-API-Token": API_TOKEN, "Content-Type": "application/json"}
 
-        # Read the configured Celery worker pool.
-        # Default to 'solo' if not explicitly configured.
-        self.pool = os.getenv("CELERY_POOL", "solo")
-
-        # Fail fast if an unsupported pool is used.
-        # In prefork mode, each worker process has its own
-        # copy of active_tasks, making heartbeat counts inaccurate.
-        if self.pool != "solo":
-            raise RuntimeError(
-                f"Unsupported Celery pool '{self.pool}'. "
-                "This worker only supports the 'solo' pool because "
-                "the active_tasks counter is process-local and is not "
-                "accurate with multiple worker processes."
-            )
-
-    def _post(self, path: str, payload: dict, retries: int = 5) -> bool:
+    def _request(self, method: str, path: str, payload: Optional[dict] = None, retries: int = 5) -> bool:
+        """Shared retry-with-backoff logic for any HTTP call to the orchestrator API."""
         for attempt in range(1, retries + 1):
             try:
-                r = httpx.post(
+                r = httpx.request(
+                    method,
                     f"{self.api_url}{path}",
                     json=payload,
                     headers=self._headers,
@@ -69,11 +51,15 @@ class WorkerAgent:
                 )
                 if r.status_code < 500:
                     return r.status_code < 400
-                logger.warning("API %s returned %s, retrying", path, r.status_code)
+                logger.warning("API %s %s returned %s, retrying (%d/%d)", method, path, r.status_code, attempt, retries)
             except Exception as exc:
-                logger.warning("API %s failed (%s), retrying", path, exc)
-            time.sleep(min(2**attempt, 15))
+                logger.warning("API %s %s failed (%s), retrying (%d/%d)", method, path, exc, attempt, retries)
+            if attempt < retries:
+                time.sleep(min(2**attempt, 15))
         return False
+
+    def _post(self, path: str, payload: dict, retries: int = 5) -> bool:
+        return self._request("POST", path, payload, retries=retries)
 
     def register(self) -> bool:
         ok = self._post("/register-worker", {"worker_id": self.worker_id, "capacity": self.capacity})
@@ -83,15 +69,25 @@ class WorkerAgent:
             logger.error("Failed to register worker %s", self.worker_id)
         return ok
 
-    def deregister(self) -> None:
-        try:
-            httpx.delete(
-                f"{self.api_url}/deregister-worker/{self.worker_id}",
-                headers=self._headers,
-                timeout=5.0,
+    def deregister(self, retries: int = 3) -> bool:
+        """Tell the orchestrator this worker is going away.
+
+        Uses a shorter retry count than register()/heartbeats (this runs during
+        shutdown, so we don't want to hang the process for too long) but still
+        retries instead of giving up after a single attempt — this is the last
+        chance to tell the API we're gone.
+        """
+        ok = self._request("DELETE", f"/deregister-worker/{self.worker_id}", retries=retries)
+        if ok:
+            logger.info("Worker %s deregistered from %s", self.worker_id, self.api_url)
+        else:
+            logger.warning(
+                "Failed to deregister worker %s after %d attempts; "
+                "orchestrator may still think this worker is active",
+                self.worker_id,
+                retries,
             )
-        except Exception as exc:
-            logger.debug("Deregister failed: %s", exc)
+        return ok
 
     def heartbeat_loop(self) -> None:
         while not self._stop:
@@ -101,14 +97,9 @@ class WorkerAgent:
             )
             time.sleep(self.heartbeat_interval)
 
-    def _handle_shutdown(self, signum, frame) -> None:
-        logger.info("Received signal %s, shutting down worker %s", signum, self.worker_id)
-        self._stop = True
-        self.deregister()
-
     def start(self) -> None:
-        signal.signal(signal.SIGTERM, self._handle_shutdown)
-        signal.signal(signal.SIGINT, self._handle_shutdown)
+        signal.signal(signal.SIGTERM, lambda *_: self._stop or self.deregister())
+        signal.signal(signal.SIGINT, lambda *_: self._stop or self.deregister())
         if not self.register():
             sys.exit(1)
         Thread(target=self.heartbeat_loop, daemon=True).start()
@@ -129,8 +120,6 @@ if __name__ == "__main__":
     agent = WorkerAgent(api_url=api_url, worker_id=worker_id)
     agent.start()
 
-    # Block main thread until shutdown signal is received
-    while not agent._stop:
-        time.sleep(1)
-
-    logger.info("Worker agent %s has shut down cleanly", agent.worker_id)
+    # Block main thread
+    while True:
+        time.sleep(60)

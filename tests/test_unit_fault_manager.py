@@ -9,6 +9,7 @@ from orchestrator.fault_manager import FailureType, FaultManager
 def _manager():
     with patch("orchestrator.fault_manager.get_redis_client") as mock_redis:
         client = mock_redis.return_value
+
         client.ping.return_value = True
         client.lpush.return_value = 1
         client.ltrim.return_value = True
@@ -18,6 +19,8 @@ def _manager():
         client.get.return_value = None
         client.set.return_value = True
         client.incr.return_value = 1
+
+        return FaultManager()
         return FaultManager()
 
 

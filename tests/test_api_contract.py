@@ -57,6 +57,7 @@ EXPECTED = {
     ("GET", "/dead-letter-queue"),
     ("GET", "/fault-statistics"),
     ("POST", "/detect-failures"),
+    ("GET", "/interviews/{session_id}/report"),
 }
 
 

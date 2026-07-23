@@ -15,6 +15,7 @@ Integrates:
 import io
 import logging
 import re
+import time
 import time as _time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -35,9 +36,13 @@ from config import (
     get_settings,
 )
 from database.db import engine, get_db
-from database.models import Base, InterviewSession
+from database.models import Base, Candidate, InterviewSession
 from monitoring.dashboard_api import create_dashboard_routes
 from monitoring.metrics_collector import MetricsCollector
+from monitoring.prometheus_metrics import (
+    REQUEST_COUNT,
+    REQUEST_DURATION,
+)
 from monitoring.websocket_manager import ws_manager
 from orchestrator import http_cache
 from orchestrator.candidate_manager import CandidateManager
@@ -111,6 +116,26 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+@app.middleware("http")
+async def prometheus_middleware(request, call_next):
+    start = time.perf_counter()
+
+    response = await call_next(request)
+
+    duration = time.perf_counter() - start
+
+    REQUEST_COUNT.labels(
+        method=request.method,
+        path=request.url.path,
+        status=response.status_code,
+    ).inc()
+
+    REQUEST_DURATION.labels(
+        method=request.method,
+        path=request.url.path,
+    ).observe(duration)
+
+    return response
 
 
 # ========== Request ID + duration middleware ==========
@@ -301,6 +326,63 @@ class SessionStatusResponse(BaseModel):
     updated_at: str | None = None
 
 
+class ReportCandidate(BaseModel):
+    candidate_id: str
+    name: str
+    email: str
+
+
+class ReportInterviewSummary(BaseModel):
+    start_time: str | None = None
+    end_time: str | None = None
+    duration_minutes: float | None = None
+
+
+class ReportQuestion(BaseModel):
+    question_id: str
+    text: str
+    answer: str | None = None
+    score: float | None = None
+    feedback: str | None = None
+
+
+class ReportEvaluation(BaseModel):
+    quality: float | None = None
+    accuracy: float | None = None
+    clarity: float | None = None
+
+
+class ReportLLMFeedback(BaseModel):
+    strengths: list[str] = Field(default_factory=list)
+    improvements: list[str] = Field(default_factory=list)
+    recommendation: str | None = None
+    detailed_feedback: str | None = None
+
+
+class ReportRiskAssessment(BaseModel):
+    score: float | None = None
+    classification: str | None = None
+    factors: list[str] = Field(default_factory=list)
+
+
+class ReportMetadata(BaseModel):
+    token_usage: int | None = None
+    estimated_cost_usd: float | None = None
+
+
+class InterviewReportResponse(BaseModel):
+    """Comprehensive final interview report"""
+
+    session_id: str
+    candidate: ReportCandidate
+    interview_summary: ReportInterviewSummary
+    questions: list[ReportQuestion] = Field(default_factory=list)
+    overall_evaluation: ReportEvaluation
+    llm_feedback: ReportLLMFeedback
+    risk_assessment: ReportRiskAssessment
+    metadata: ReportMetadata
+
+
 class TaskStatusResponse(BaseModel):
     """Response model for Celery task status (used by /task-status/{task_id})."""
 
@@ -381,13 +463,6 @@ class CreateTemplateRequest(BaseModel):
 
 
 @app.get("/health")
-async def health_check():
-    """
-    Health check endpoint
-    Returns system status
-    """
-    return {"status": "system running", "timestamp": datetime.now(timezone.utc).isoformat()}
-
 
 # ========== Deep Health & Probe Endpoints ==========
 
@@ -442,6 +517,11 @@ if ENABLE_PROMETHEUS:
 
     @app.get("/metrics")
     async def prometheus_metrics():
+        REDIS_HEALTH.set(...)
+        POSTGRES_HEALTH.set(...)
+        WORKERS_REGISTERED.set(...)
+        WORKERS_HEALTHY.set(...)
+        WORKERS_UNHEALTHY.set(...)
         """Prometheus metrics endpoint."""
         return _Response(
             content=get_metrics_text(),
@@ -596,6 +676,123 @@ async def get_session_status(
         raise HTTPException(status_code=500, detail=f"Error fetching session: {e!s}")
 
 
+@app.get("/interviews/{session_id}/report", response_model=InterviewReportResponse)
+async def get_interview_report(
+    session_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Get comprehensive final interview report.
+    """
+    try:
+        session_obj = db.execute(
+            select(InterviewSession).where(InterviewSession.session_id == session_id)
+        ).scalar_one_or_none()
+
+        if not session_obj:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        candidate_obj = db.execute(
+            select(Candidate).where(Candidate.candidate_id == session_obj.candidate_id)
+        ).scalar_one_or_none()
+
+        if not candidate_obj:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+
+        # Calculate duration
+        duration_minutes = None
+        if session_obj.start_time and session_obj.end_time:
+            duration_delta = session_obj.end_time - session_obj.start_time
+            duration_minutes = round(duration_delta.total_seconds() / 60.0, 2)
+
+        # Map questions, answers, feedback
+        q_asked = session_obj.questions_asked or []
+        a_provided = session_obj.answers_provided or []
+        f_generated = session_obj.feedback_generated or []
+
+        # Build question lookup
+        q_dict = {q.get("question_id"): q for q in q_asked}
+        for a in a_provided:
+            q_id = a.get("question_id")
+            if q_id in q_dict:
+                q_dict[q_id]["answer"] = a.get("answer_text")
+        for f in f_generated:
+            q_id = f.get("question_id")
+            if q_id in q_dict:
+                q_dict[q_id]["feedback"] = f.get("feedback")
+                q_dict[q_id]["score"] = f.get("score")
+
+        questions_list = []
+        for q_id, q_data in q_dict.items():
+            questions_list.append(
+                ReportQuestion(
+                    question_id=q_id,
+                    text=q_data.get("text", ""),
+                    answer=q_data.get("answer"),
+                    score=q_data.get("score"),
+                    feedback=q_data.get("feedback")
+                )
+            )
+
+        eval_analysis = session_obj.evaluation_analysis or {}
+        llm_feedback = eval_analysis.get("llm_feedback", {})
+
+        # Since evaluation_analysis structure might differ based on other PRs,
+        # we will handle nested or flat structures for strengths/improvements.
+        strengths = eval_analysis.get("strengths", llm_feedback.get("strengths", []))
+        improvements = eval_analysis.get("improvements", llm_feedback.get("improvements", []))
+        recommendation = eval_analysis.get("recommendation", llm_feedback.get("recommendation"))
+        detailed_feedback = eval_analysis.get("detailed_feedback", llm_feedback.get("detailed_feedback"))
+
+        # Determine risk classification
+        risk_score = session_obj.risk_score
+        classification = "LOW"
+        if risk_score is not None:
+            if risk_score > 0.7:
+                classification = "HIGH"
+            elif risk_score > 0.3:
+                classification = "MEDIUM"
+
+        return InterviewReportResponse(
+            session_id=session_id,
+            candidate=ReportCandidate(
+                candidate_id=candidate_obj.candidate_id,
+                name=candidate_obj.name,
+                email=candidate_obj.email
+            ),
+            interview_summary=ReportInterviewSummary(
+                start_time=session_obj.start_time.isoformat() if session_obj.start_time else None,
+                end_time=session_obj.end_time.isoformat() if session_obj.end_time else None,
+                duration_minutes=duration_minutes
+            ),
+            questions=questions_list,
+            overall_evaluation=ReportEvaluation(
+                quality=eval_analysis.get("quality"),
+                accuracy=eval_analysis.get("accuracy"),
+                clarity=eval_analysis.get("clarity")
+            ),
+            llm_feedback=ReportLLMFeedback(
+                strengths=strengths,
+                improvements=improvements,
+                recommendation=recommendation,
+                detailed_feedback=detailed_feedback
+            ),
+            risk_assessment=ReportRiskAssessment(
+                score=risk_score,
+                classification=classification,
+                factors=eval_analysis.get("risk_factors", [])
+            ),
+            metadata=ReportMetadata(
+                token_usage=None,  # Feature #3 not yet merged
+                estimated_cost_usd=None
+            )
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching interview report: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Error fetching report: {e!s}")
+
 @app.get("/session-status/{session_id}/risk-report")
 async def get_session_risk_report(session_id: str, format: str = "json"):
     """
@@ -672,6 +869,7 @@ def _build_risk_report_pdf(report: dict) -> Response:
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=risk_report_{report['session_id']}.pdf"},
     )
+
 
 
 @app.get("/task-status/{task_id}", response_model=TaskStatusResponse)
@@ -1244,6 +1442,8 @@ async def register_worker(request: WorkerRegistrationRequest):
 
         # Log successful registration
         logger.info(f"Worker registered successfully: {request.worker_id}")
+        WORKERS_REGISTERED.inc()
+        WORKERS_HEALTHY.inc()
 
         return {
             "status": "success",
@@ -1276,6 +1476,14 @@ async def worker_heartbeat(request: WorkerHeartbeatRequest):
 
         # Update worker heartbeat in registry
         worker_registry.heartbeat(worker_id=request.worker_id, active_tasks=request.active_tasks)
+        WORKER_HEARTBEAT_AGE_SECONDS.labels(worker_id=request.worker_id).set(0)
+
+        WORKER_ACTIVE_TASKS.labels(worker_id=request.worker_id).set(request.active_tasks)
+
+        worker_status = worker_registry.get_worker(request.worker_id)
+        if worker_status:
+          WORKER_CAPACITY.labels(worker_id=request.worker_id).set(worker_status.get("capacity", 0))
+
 
         # Invalidate the workers + load caches so the next dashboard poll is fresh.
         http_cache.invalidate("workers", "worker-statistics", "load-status")
@@ -1588,6 +1796,7 @@ async def retry_failed_session(session_id: str):
         retry_info = retry_manager.get_retry_info(session_id)
 
         # Schedule retry with exponential backoff
+        # Schedule retry
         retry_scheduled = retry_manager.schedule_retry(session_id)
 
         if not retry_scheduled:
@@ -1596,13 +1805,26 @@ async def retry_failed_session(session_id: str):
                 detail=f"Failed to schedule retry for session {session_id}",
             )
 
-        logger.info(f"Session {session_id} scheduled for retry: {retry_info}")
+        # -----------------------------
+        # Actually requeue the interview
+        # -----------------------------
+        from orchestrator.scheduler import TaskPriority
+
+        scheduler.schedule_task(
+            session_id=session_id,
+            priority=TaskPriority.MEDIUM
+        )
+
+        logger.info(
+            "Session %s requeued successfully after retry scheduling.",
+            session_id,
+        )
 
         return {
             "status": "success",
-            "message": f"Session {session_id} scheduled for retry",
+            "message": f"Session {session_id} scheduled and requeued",
             "session_id": session_id,
-            "retry_info": retry_info,
+            "retry_info": retry_manager.get_retry_info(session_id),
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     except HTTPException:
