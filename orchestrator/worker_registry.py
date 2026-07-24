@@ -10,6 +10,7 @@ Responsibilities:
 """
 
 import logging
+import redis
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Any
@@ -33,7 +34,11 @@ class WorkerRegistry:
     def __init__(self):
         """Initialize worker registry"""
         try:
-            self.redis_client = get_redis_client()
+            try:
+               self.redis_client = redis.from_url("redis://localhost:6379/0")
+               self.redis_client.ping()
+            except Exception:
+               self.redis_client = get_redis_client()
             self.local_workers: dict[str, dict[str, Any]] = {}
             self.lock = Lock()
             self._hydrated = False
