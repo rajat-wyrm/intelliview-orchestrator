@@ -25,7 +25,15 @@ function Badge({ children, variant = "muted", className }) {
 }
 
 function StatusBadgeImpl({ status }) {
-  return <Badge variant={statusColor(status)}>{status.replace(/_/g, " ")}</Badge>;
+  if (!status) {
+    return <Badge variant="muted">—</Badge>;
+  }
+
+  return (
+    <Badge variant={statusColor(status)}>
+      {status.replace(/_/g, " ")}
+    </Badge>
+  );
 }
 
 const Badge_ = memo(Badge);
