@@ -13,7 +13,7 @@ flower==2.0.1
 # === Database / ORM ===
 sqlalchemy==2.0.51
 psycopg2-binary==2.9.12
-
+alembic==1.18.5
 # === Config / validation ===
 pydantic==2.13.4
 pydantic-settings==2.14.2
@@ -25,3 +25,5 @@ prometheus-client==0.21.1
 # --- Dev / test ---
 pytest==8.3.4
 pytest-asyncio==0.25.0
+
+reportlab==4.2.5
