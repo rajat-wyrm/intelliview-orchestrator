@@ -12,6 +12,7 @@ Responsibilities:
 
 import json
 import logging
+import redis
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
@@ -51,7 +52,12 @@ class FaultManager:
             debounce_time: Seconds to wait before treating alert as new (prevent spam)
         """
         self.debounce_time = debounce_time
-        self.redis_client = get_redis_client()
+        try:
+            self.redis_client = redis.from_url("redis://localhost:6379/0")
+            self.redis_client.ping()
+        except Exception:
+            self.redis_client = get_redis_client()
+    
         self.failure_log_prefix = "failure_log:"
         self.recovery_queue_prefix = "recovery_queue:"
         self.dead_letter_queue = "dead_letter_queue"
