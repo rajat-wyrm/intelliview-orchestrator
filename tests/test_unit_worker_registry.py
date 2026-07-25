@@ -6,7 +6,7 @@ from orchestrator.worker_registry import WorkerRegistry
 
 
 def _new_registry():
-    with patch("orchestrator.worker_registry.redis.from_url") as mock_redis:
+    with patch("orchestrator.worker_registry.get_redis_client") as mock_redis:
         mock_redis.return_value.ping.return_value = True
         mock_redis.return_value.hset.return_value = True
         mock_redis.return_value.sadd.return_value = True
