@@ -132,68 +132,39 @@ class LoadBalancer:
         self.strategy = strategy
         logger.info(f"Switched to {strategy.value} strategy")
 
+    ...
+
     def get_best_worker_for_priority(self, priority: str) -> dict[str, Any] | None:
-        """
-        Select worker considering task priority
-
-        Args:
-            priority: Task priority ("low", "medium", "high")
-
-        Returns:
-            dict: Selected worker or None
-        """
         available = self.worker_registry.get_available_workers()
 
         if not available:
             return None
 
-        # For high priority, select least loaded
         if priority == "high":
-            return min(available, key=lambda w: w["active_tasks"])
-
-        # For medium priority, select from least loaded
-        if priority == "medium":
-            # Select a worker that's not overloaded
-            underutilized = [w for w in available if w["active_tasks"] < w["capacity"] * 0.7]
-            if underutilized:
-                return underutilized[0]
-            return available[0]
-
-        # For low priority, select any available
-        return available[-1]  # Select the one with most load (fill it up)
-
-    def is_system_overloaded(self, threshold: float = 0.9) -> bool:
-        """
-        Check if system is overloaded
-
-        Args:
-            threshold: Utilization threshold (0-1)
-
-        Returns:
-            bool: True if system utilization exceeds threshold
-        """
-        stats = self.worker_registry.get_worker_statistics()
-        utilization = stats["capacity_utilization"] / 100  # Convert to 0-1 scale
-
-        is_overloaded = utilization >= threshold
-
-        if is_overloaded:
-            logger.warning(
-                f"System overloaded! Utilization: {stats['capacity_utilization']}% "
-                f"(threshold: {threshold * 100}%)"
+            return min(
+                available,
+                key=lambda w: w["active_tasks"],
             )
 
-        return is_overloaded
+        if priority == "medium":
+            underutilized = [
+                worker
+                for worker in available
+                if worker["active_tasks"] < worker["capacity"] * 0.7
+            ]
 
-    def get_load_status(self) -> dict[str, Any]:
-        """Get current system load status"""
-        stats = self.worker_registry.get_worker_statistics()
-        available_workers = len(self.worker_registry.get_available_workers())
+            if underutilized:
+                return min(
+                    underutilized,
+                    key=lambda w: w["active_tasks"],
+                )
 
-        return {
-            "strategy": self.strategy.value,
-            "worker_stats": stats,
-            "available_workers": available_workers,
-            "system_overloaded": self.is_system_overloaded(),
-            "timestamp": None,
-        }
+            return min(
+                available,
+                key=lambda w: w["active_tasks"],
+            )
+
+        return max(
+            available,
+            key=lambda w: w["active_tasks"],
+        )
