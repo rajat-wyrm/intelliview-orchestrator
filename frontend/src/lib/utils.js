@@ -30,12 +30,28 @@ function formatPercent(n, digits = 1) {
   return `${n.toFixed(digits)}%`;
 }
 function statusColor(status) {
+  if (!status) return "muted";
+
   const s = status.toUpperCase();
-  if (["COMPLETED", "HEALTHY"].includes(s)) return "success";
-  if (["FAILED", "TIMEOUT", "CRITICAL", "UNHEALTHY"].includes(s)) return "danger";
-  if (["CANCELLED", "DEGRADED", "WARNING"].includes(s)) return "warn";
+
+  if (["SAFE", "COMPLETED", "HEALTHY"].includes(s))
+    return "success";
+
+  if (["LOW"].includes(s))
+    return "accent";
+
+  if (["WARNING", "CANCELLED", "DEGRADED"].includes(s))
+    return "warn";
+
+  if (["FLAGGED"].includes(s))
+    return "warn";
+
+  if (["HIGH", "FAILED", "TIMEOUT", "CRITICAL", "UNHEALTHY"].includes(s))
+    return "danger";
+
   return "muted";
 }
+
 function riskColor(score) {
   if (score == null) return "muted";
   if (score >= 0.8) return "danger";

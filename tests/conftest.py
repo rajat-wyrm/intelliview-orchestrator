@@ -28,3 +28,17 @@ os.environ.setdefault("API_TOKEN", "test-token")
 @pytest.fixture(scope="session")
 def api_base_url() -> str:
     return os.getenv("API_BASE_URL", "http://localhost:8000")
+from workers.celery_app import celery_app
+
+
+@pytest.fixture(scope="session")
+def celery_config():
+    return {
+        "broker_url": os.environ["REDIS_URL"],
+        "result_backend": os.environ["REDIS_URL"],
+    }
+
+
+@pytest.fixture(scope="session")
+def celery_app_fixture():
+    return celery_app

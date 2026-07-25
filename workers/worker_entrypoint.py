@@ -9,26 +9,44 @@ import signal
 import sys
 import threading
 
-from celery.signals import task_postrun, task_prerun
-
+from celery.signals import task_postrun, task_prerun, worker_shutdown
 from config import WORKER_CONCURRENCY
 from workers.celery_app import celery_app
 from workers.worker_agent import WorkerAgent
+from workers.metrics_server import start_worker_metrics
 
 logger = logging.getLogger(__name__)
+SUPPORTED_POOL = "solo"
+
 
 
 def _run_celery() -> None:
+    # Validate the configured Celery pool before starting.
+    # The active task counter is process-local, so only the
+    # solo pool is supported.
+    pool = os.getenv("CELERY_POOL", SUPPORTED_POOL)
+
+    if pool != SUPPORTED_POOL:
+        raise RuntimeError(
+            f"Unsupported Celery pool '{pool}'. "
+            f"Only '{SUPPORTED_POOL}' is supported because the "
+            "active task counter is process-local and cannot be "
+            "reported accurately across multiple worker processes."
+        )
+
     argv = [
         "-A",
         "workers.celery_app",
         "worker",
         "--loglevel=info",
-        f"--concurrency={os.getenv('WORKER_CONCURRENCY', WORKER_CONCURRENCY)}",
+        "--pool=solo",
+        "--concurrency=1",
         "--time-limit=1800",
         "--soft-time-limit=1500",
     ]
+
     celery_app.worker_main(argv)
+
 
 
 def main() -> int:
@@ -36,6 +54,7 @@ def main() -> int:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    start_worker_metrics()
 
     api_url = os.getenv("API_URL", "http://fastapi:8000")
     worker_id = os.getenv("WORKER_ID", f"worker-{os.uname().nodename}-{os.getpid()}")
@@ -54,38 +73,18 @@ def main() -> int:
     def _on_postrun(**_):
         agent.decrement_active()
 
-    # Heartbeat thread
-    stop_event = threading.Event()
+     # Start the heartbeat loop managed by WorkerAgent
+    threading.Thread(target=agent.heartbeat_loop, daemon=True).start()
 
-    def _hb_loop():
-        while not stop_event.is_set():
-            try:
-                agent._post(
-                    "/worker/heartbeat",
-                    {
-                        "worker_id": agent.worker_id,
-                        "active_tasks": agent.active_tasks,
-                    },
-                )
-            except Exception as exc:
-                logger.debug("Heartbeat error: %s", exc)
-            stop_event.wait(agent.heartbeat_interval)
-
-    threading.Thread(target=_hb_loop, daemon=True).start()
-
-    def _shutdown(*_):
-        logger.info("Shutting down worker")
-        agent.deregister()
-        stop_event.set()
-        sys.exit(0)
-
-    signal.signal(signal.SIGTERM, _shutdown)
-    signal.signal(signal.SIGINT, _shutdown)
+   @worker_shutdown.connect
+def _on_worker_shutdown(**kwargs):
+    logger.info("Shutting down worker")
+    agent.deregister()
+    stop_event.set()
 
     logger.info("Worker entrypoint ready; starting Celery")
     _run_celery()
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())
