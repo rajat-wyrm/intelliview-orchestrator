@@ -118,10 +118,42 @@ class HealthMonitor:
     # ------------------------------------------------------------------
 
     def readiness_check(self) -> dict[str, Any]:
-        """Return true readiness  all critical dependencies must be up.
+        """Return fast readiness — only a cheap Redis ping is checked.
 
-        Use this for k8s readinessProbe: the service only receives
-        traffic when this returns ready=True.
+        Use this for k8s readinessProbe: it's hit frequently, so we avoid
+        full Postgres/Celery round-trips here. For a full dependency check,
+        use deep_health_check() / GET /health/deep instead.
+        """
+        redis_status = self._deep_check_redis()
+        ready = redis_status["healthy"]
+        return {
+            "ready": ready,
+            "status": HealthStatus.HEALTHY if ready else HealthStatus.UNHEALTHY,
+            "dependencies": {"redis": redis_status},
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    def readiness_check(self) -> dict[str, Any]:
+        """Return fast readiness — only a cheap Redis ping is checked.
+
+        Use this for k8s readinessProbe: it's hit frequently, so we avoid
+        full Postgres/Celery round-trips here. For a full dependency check,
+        use deep_health_check() / GET /health/deep instead.
+        """
+        redis_status = self._deep_check_redis()
+        ready = redis_status["healthy"]
+        return {
+            "ready": ready,
+            "status": HealthStatus.HEALTHY if ready else HealthStatus.UNHEALTHY,
+            "dependencies": {"redis": redis_status},
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    def deep_health_check(self) -> dict[str, Any]:
+        """Return full readiness — all critical dependencies are checked.
+
+        Use this for GET /health/deep: thorough, but does real network
+        round-trips to Redis, Postgres, and the Celery broker.
         """
         deps = self._check_all_dependencies()
         ready = all(d["healthy"] for d in deps.values())
@@ -131,7 +163,6 @@ class HealthMonitor:
             "dependencies": deps,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
-
     # ------------------------------------------------------------------
     # Liveness probe (Kubernetes-style)
     # ------------------------------------------------------------------

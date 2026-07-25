@@ -486,6 +486,16 @@ async def readiness_probe():
         return _JSONResponse(status_code=503, content=result)
     return result
 
+@app.get("/health/deep")
+async def deep_health_probe():
+    """Thorough health check — full deep check of Redis, Postgres, and Celery broker."""
+    result = health_monitor.deep_health_check()
+    if not result["ready"]:
+        from fastapi.responses import JSONResponse as _JSONResponse
+
+        return _JSONResponse(status_code=503, content=result)
+    return result
+
 
 @app.get("/dependencies")
 async def get_dependency_statuses():
