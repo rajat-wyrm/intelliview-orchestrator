@@ -251,6 +251,7 @@ def get_metrics_text() -> bytes:
     """Return current metrics in Prometheus text exposition format."""
     return generate_latest(registry)
 
+
 def get_session_metrics():
     return {
         "created": SESSIONS_CREATED._value.get(),

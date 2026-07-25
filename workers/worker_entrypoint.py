@@ -5,19 +5,18 @@ the Celery worker, with active task count tracked via Celery signals.
 
 import logging
 import os
-import signal
 import sys
 import threading
 
 from celery.signals import task_postrun, task_prerun, worker_shutdown
+
 from config import WORKER_CONCURRENCY
 from workers.celery_app import celery_app
-from workers.worker_agent import WorkerAgent
 from workers.metrics_server import start_worker_metrics
+from workers.worker_agent import WorkerAgent
 
 logger = logging.getLogger(__name__)
 SUPPORTED_POOL = "solo"
-
 
 
 def _run_celery() -> None:
@@ -48,7 +47,6 @@ def _run_celery() -> None:
     celery_app.worker_main(argv)
 
 
-
 def main() -> int:
     logging.basicConfig(
         level=logging.INFO,
@@ -73,18 +71,18 @@ def main() -> int:
     def _on_postrun(**_):
         agent.decrement_active()
 
-     # Start the heartbeat loop managed by WorkerAgent
+    # Start the heartbeat loop managed by WorkerAgent
     threading.Thread(target=agent.heartbeat_loop, daemon=True).start()
 
-   @worker_shutdown.connect
-def _on_worker_shutdown(**kwargs):
-    logger.info("Shutting down worker")
-    agent.deregister()
-    stop_event.set()
+    @worker_shutdown.connect
+    def _on_worker_shutdown(**kwargs):
+        logger.info("Shutting down worker")
+        agent.deregister()
 
     logger.info("Worker entrypoint ready; starting Celery")
     _run_celery()
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())
