@@ -421,4 +421,3 @@ class MetricsCollector:
         except Exception as e:
             logger.warning(f"Error getting uptime: {e!s}")
             return 0
-

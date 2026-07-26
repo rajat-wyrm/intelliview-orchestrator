@@ -44,4 +44,3 @@ def test_process_interview_session_pipeline(
 
     # Verify session status updates (PROCESSING and VIDEO_PROCESSING)
     assert mock_session_manager.update_session_status.call_count == 2
-

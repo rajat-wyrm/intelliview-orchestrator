@@ -115,4 +115,3 @@ def test_fresh_queued_session_dispatches_normally():
     fake_chord.assert_called_once()
     fake_after_parallel.s.assert_called_once_with("session-789")
     assert result["status"] == "processing_parallel"
-

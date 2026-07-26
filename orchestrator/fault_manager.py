@@ -349,7 +349,7 @@ class FaultManager:
 
         # Attempt to schedule retry via retry_manager if available
         scheduled = False
-        if hasattr(self, 'retry_manager') and self.retry_manager:
+        if hasattr(self, "retry_manager") and self.retry_manager:
             try:
                 scheduled = self.retry_manager.schedule_retry(session_id)
             except Exception:
@@ -513,4 +513,3 @@ class FaultManager:
         except Exception as e:
             logger.error(f"Error getting fault stats: {e!s}")
             return {}
-
