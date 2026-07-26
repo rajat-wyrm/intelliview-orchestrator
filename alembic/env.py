@@ -8,7 +8,6 @@ from database.db import Base
 
 # IMPORTANT: Import all models so SQLAlchemy registers them
 import database.models
-
 # Alembic Config object
 config = context.config
 
@@ -60,6 +59,9 @@ def run_migrations_online() -> None:
             context.run_migrations()
 
 
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
 if context.is_offline_mode():
     run_migrations_offline()
 else:

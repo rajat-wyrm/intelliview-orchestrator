@@ -423,3 +423,15 @@ class MetricsCollector:
         except (AttributeError, TypeError, ValueError, RuntimeError):
             logger.exception("Error getting uptime")
             return 0
+
+    def _get_session_metrics(self):
+        metrics = self.get_session_metrics(self.session_tracker)
+
+        total = metrics["completed"] + metrics["failed"] + metrics["active"]
+
+        return {
+            "active": metrics["active"],
+            "completed": metrics["completed"],
+            "failed": metrics["failed"],
+            "total": total,
+        }

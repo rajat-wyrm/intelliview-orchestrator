@@ -1,112 +1,56 @@
-import { useMemo, useState } from "react";
-import SortableHeader from "./SortableHeader";
+"use client";
+import { Badge } from "@/components/Badge";
+import { EmptyState } from "@/components/States";
 
-const candidates = [
-  {
-    id: 1,
-    name: "Alice",
-    score: 95,
-    risk: "Low",
-    date: "2026-07-19",
-  },
-  {
-    id: 2,
-    name: "Bob",
-    score: 80,
-    risk: "High",
-    date: "2026-07-18",
-  },
-  {
-    id: 3,
-    name: "Charlie",
-    score: 95,
-    risk: "Medium",
-    date: "2026-07-17",
-  },
-];
+const statusVariant = {
+  pending: "warn",
+  selected: "success",
+  rejected: "danger",
+};
 
-export default function CandidateTable() {
-  const [sortState, setSortState] = useState({
-    sortBy: null,
-    sortOrder: null,
-  });
-
-  const handleSort = (sortBy, sortOrder) => {
-    setSortState({
-      sortBy,
-      sortOrder,
-    });
-  };
-
-  const sortedCandidates = useMemo(() => {
-    if (!sortState.sortBy || !sortState.sortOrder) {
-      return candidates;
-    }
-
-    return [...candidates].sort((a, b) => {
-      const first = a[sortState.sortBy];
-      const second = b[sortState.sortBy];
-
-      if (first < second) {
-        return sortState.sortOrder === "asc" ? -1 : 1;
-      }
-
-      if (first > second) {
-        return sortState.sortOrder === "asc" ? 1 : -1;
-      }
-
-      return 0;
-    });
-  }, [sortState]);
+function CandidateTable({ candidates }) {
+  if (!candidates || candidates.length === 0) {
+    return (
+      <EmptyState
+        title="No candidates found"
+        description="Try adjusting your filters."
+      />
+    );
+  }
 
   return (
-    <table border="1" cellPadding="10">
-      <thead>
-        <tr>
-          <SortableHeader
-            label="Name"
-            column="name"
-            sortBy={sortState.sortBy}
-            sortOrder={sortState.sortOrder}
-            onSort={handleSort}
-          />
-
-          <SortableHeader
-            label="Score"
-            column="score"
-            sortBy={sortState.sortBy}
-            sortOrder={sortState.sortOrder}
-            onSort={handleSort}
-          />
-
-          <SortableHeader
-            label="Risk"
-            column="risk"
-            sortBy={sortState.sortBy}
-            sortOrder={sortState.sortOrder}
-            onSort={handleSort}
-          />
-
-          <SortableHeader
-            label="Date"
-            column="date"
-            sortBy={sortState.sortBy}
-            sortOrder={sortState.sortOrder}
-            onSort={handleSort}
-          />
-        </tr>
-      </thead>
-
-      <tbody>
-        {sortedCandidates.map((candidate) => (
-          <tr key={candidate.id}>
-            <td>{candidate.name}</td>
-            <td>{candidate.score}</td>
-            <td>{candidate.risk}</td>
-            <td>{candidate.date}</td>
+    <div className="overflow-x-auto rounded-xl border border-border bg-bg-panel">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
+            <th className="px-4 py-3 font-medium">Name</th>
+            <th className="px-4 py-3 font-medium">Domain</th>
+            <th className="px-4 py-3 font-medium">Type</th>
+            <th className="px-4 py-3 font-medium">Status</th>
+            <th className="px-4 py-3 font-medium">Applied Date</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {candidates.map((candidate) => (
+            <tr
+              key={candidate.id}
+              className="border-b border-border last:border-0 hover:bg-bg-card"
+            >
+              <td className="px-4 py-3 text-zinc-100">{candidate.name}</td>
+              <td className="px-4 py-3 text-muted capitalize">{candidate.domain}</td>
+              <td className="px-4 py-3 text-muted capitalize">{candidate.type}</td>
+              <td className="px-4 py-3">
+                <Badge variant={statusVariant[candidate.status] || "muted"}>
+  {candidate.status}
+</Badge> 
+              </td>
+              <td className="px-4 py-3 text-muted">{candidate.appliedDate}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
+
+export default CandidateTable;

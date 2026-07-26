@@ -406,7 +406,6 @@ def _llm_generate_question(session_id: str, topic: str = "systems_design") -> st
             return None
 
         return question
-
     except Exception as exc:
         logger.debug("OpenAI question generation failed: %s", exc)
         return None

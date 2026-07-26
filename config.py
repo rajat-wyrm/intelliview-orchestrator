@@ -1,6 +1,7 @@
-"""
-Configuration for the AI Interview Orchestrator.
+import os
 
+
+"""
 Settings are loaded from environment variables (or a `.env` file in dev)
 via `pydantic-settings`. All values have sensible local defaults but
 should be overridden in production.
@@ -79,22 +80,14 @@ class Settings(BaseSettings):
     @classmethod
     def validate_required_database_fields(cls, value: str) -> str:
         if not value or not value.strip():
-            raise ValueError(
-                "Database configuration values cannot be empty"
-            )
-        return value
-
-
+        raise ValueError("Database configuration values cannot be empty")
+    return value
     @field_validator("postgres_port")
     @classmethod
     def validate_database_port(cls, value: int) -> int:
         if value <= 0 or value > 65535:
-            raise ValueError(
-                "PostgreSQL port must be between 1 and 65535"
-            )
+            raise ValueError("PostgreSQL port must be between 1 and 65535")
         return value
-
-
     @field_validator("database_sslmode")
     @classmethod
     def validate_database_sslmode(cls, value: str) -> str:
@@ -108,9 +101,7 @@ class Settings(BaseSettings):
         }
 
         if value not in allowed_modes:
-            raise ValueError(
-                f"Invalid database SSL mode: {value}"
-            )
+            raise ValueError(f"Invalid database SSL mode: {value}")
 
         return value
 
