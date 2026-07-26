@@ -1,4 +1,3 @@
-
 # IntelliView Orchestrator
 
 > **AI-powered interview orchestration platform with real-time monitoring, multi-provider AI evaluation, and fault-tolerant distributed processing.**
@@ -134,6 +133,7 @@ ruff check . && ruff format --check .
 | Monitoring | Prometheus, Grafana |
 | Deploy | Docker Compose |
 
+<!-- <<<<<<< HEAD -->
 
 ## Authentication
 
@@ -449,4 +449,9 @@ https://github.com/nandithasri2006
 LinkedIn
 
 https://www.linkedin.com/in/nandhitha-maraka-905678293/
+>>>>>>> upstream/main -->
+<!-- =======
+## License
+
+MIT — [Rajat Kumar](https://github.com/rajat-wyrm)
 >>>>>>> upstream/main -->

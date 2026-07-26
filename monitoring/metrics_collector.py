@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from orchestrator.cache_manager import CacheManager
+from orchestrator.session_payload import deserialize_session_payload
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +120,7 @@ class MetricsCollector:
                     try:
                         session_data = self.redis_client.get(key)
                         if session_data:
-                            session = json.loads(session_data)
+                            session = deserialize_session_payload(session_data)
                             status = session.get("status", "unknown")
 
                             if status == "PROCESSING":
@@ -384,7 +385,7 @@ class MetricsCollector:
                     try:
                         session_data = self.redis_client.get(key)
                         if session_data:
-                            session = json.loads(session_data)
+                            session = deserialize_session_payload(session_data)
                             if session.get("status") == "COMPLETED":
                                 end_time = session.get("end_time", "")
                                 if end_time and end_time > one_minute_ago:
@@ -420,15 +421,3 @@ class MetricsCollector:
         except Exception as e:
             logger.warning(f"Error getting uptime: {e!s}")
             return 0
-
-    def _get_session_metrics(self):
-        metrics = self.get_session_metrics(self.session_tracker)
-
-        total = metrics["completed"] + metrics["failed"] + metrics["active"]
-
-        return {
-            "active": metrics["active"],
-            "completed": metrics["completed"],
-            "failed": metrics["failed"],
-            "total": total,
-        }

@@ -11,29 +11,19 @@ Responsibilities:
 """
 
 import asyncio
-import json
 import logging
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
-from redis.exceptions import RedisError
 from sqlalchemy import select
 
 from database.db import SessionLocal
 from database.models import InterviewSession
-from monitoring.prometheus_metrics import (
-    SESSIONS_ACTIVE,
-    SESSIONS_COMPLETED,
-    SESSIONS_FAILED,
-)
 from monitoring.websocket_manager import ws_manager
 from orchestrator.state_sync import StateSynchronizer
 
 logger = logging.getLogger(__name__)
-
-_LUA_SCRIPT_PATH = Path(__file__).parent / "atomic_transition.lua"
 
 
 def _utcnow() -> datetime:
@@ -93,45 +83,6 @@ class SessionManager:
     def __init__(self):
         """Initialize session manager with state synchronizer"""
         self.state_sync = StateSynchronizer()
-
-        # StateSynchronizer.redis_client may be a raw redis.Redis client, a
-        # wrapper around one, or None if the connection failed at startup.
-        # register_script() is a redis-py method; if redis_client is some
-        # custom wrapper that doesn't expose it (or expose the underlying
-        # client), we must not let that crash SessionManager construction —
-        # every caller of SessionManager() would break. Instead we disable
-        # the atomic cache update and log loudly, so this is visible without
-        # taking down the whole service. PostgreSQL remains the source of
-        # truth regardless, so this only affects cache freshness, not
-        # correctness.
-        #
-        # TODO: once redis_client.py's wrapper is confirmed to expose the
-        # raw client (e.g. via a `.client` / `.raw` attribute, or by adding
-        # a passthrough register_script method on the wrapper itself), point
-        # this at that instead of assuming self.state_sync.redis_client IS
-        # the raw client.
-        self._redis = self.state_sync.redis_client.client
-        self._transition_script = None
-        if self._redis is not None:
-            try:
-                self._transition_script = self._redis.register_script(_LUA_SCRIPT_PATH.read_text())
-            except AttributeError:
-                logger.error(
-                    "redis_client does not support register_script() (wrapper type: %s); "
-                    "atomic cache updates are disabled until this is resolved",
-                    type(self._redis).__name__,
-                )
-        else:
-            logger.error("Redis unavailable at startup; atomic cache updates are disabled")
-
-    @staticmethod
-    def _session_key(session_id: str) -> str:
-        """Redis key under which the session's JSON state blob lives.
-
-        Uses StateSynchronizer.SESSION_KEY_PREFIX so this can never drift out
-        of sync with the key format set_session_state/get_session_state use.
-        """
-        return f"{StateSynchronizer.SESSION_KEY_PREFIX}{session_id}"
 
     def create_session(
         self,
@@ -211,21 +162,7 @@ class SessionManager:
         metadata: dict[str, Any] | None = None,
     ) -> bool:
         """
-        Update session status with validation.
-
-        PostgreSQL is the source of truth: the current status is read from
-        the database, validated against VALID_TRANSITIONS, and the new
-        status is committed there first — this decision-making is unchanged
-        from before.
-
-        Only after that commit succeeds do we update the Redis cache, using
-        atomic_transition.lua to apply the already-approved change in a
-        single atomic step. This replaces the previous cache-update pattern
-        (a separate get_session_state() read followed by a separate
-        set_session_state() write), which could race under concurrent
-        updates and let one cache write silently clobber another with stale
-        data. Redis does not decide validity here; it only mirrors what
-        Postgres already committed.
+        Update session status with validation
 
         Args:
             session_id: Session identifier
@@ -235,10 +172,9 @@ class SessionManager:
         Returns:
             bool: True if successful, False otherwise
         """
-        metadata = metadata or {}
-
         session_db = SessionLocal()
         try:
+            # Get current session
             interview = session_db.execute(
                 select(InterviewSession).where(InterviewSession.session_id == session_id)
             ).scalar_one_or_none()
@@ -249,6 +185,7 @@ class SessionManager:
 
             current_status = interview.status
 
+            # Validate state transition
             if not self._is_valid_transition(current_status, new_status):
                 logger.warning(
                     f"Invalid state transition: {current_status} -> {new_status} for session {session_id}"
@@ -256,13 +193,16 @@ class SessionManager:
                 return False
 
             logger.info(f"Updating session {session_id} status: {current_status} -> {new_status}")
+
+            # Update database
             interview.status = new_status
             interview.updated_at = _utcnow()
             session_db.commit()
-
-            self._update_cache_atomic(session_id, new_status, metadata)
-
-            risk_score = interview.risk_score
+            from monitoring.prometheus_metrics import (
+                SESSIONS_ACTIVE,
+                SESSIONS_COMPLETED,
+                SESSIONS_FAILED,
+            )
 
             if new_status == self.COMPLETED:
                 SESSIONS_COMPLETED.inc()
@@ -272,67 +212,28 @@ class SessionManager:
                 SESSIONS_FAILED.inc()
                 SESSIONS_ACTIVE.dec()
 
+            # Update Redis cache
+            session_data = self.state_sync.get_session_state(session_id)
+            if session_data:
+                session_data["status"] = new_status
+                session_data["updated_at"] = _utcnow().isoformat()
+                if metadata:
+                    session_data.update(metadata)
+                self.state_sync.set_session_state(session_id, session_data)
+
             logger.info(f"Session {session_id} status updated to {new_status}")
 
             # Broadcast the transition to dashboard WebSocket clients (non-blocking).
-            self._broadcast_status(session_id, new_status, risk_score, metadata or {})
+            self._broadcast_status(session_id, new_status, interview.risk_score, metadata or {})
 
             return True
+
         except Exception as e:
             logger.error(f"Error updating session status: {e!s}")
             session_db.rollback()
             return False
         finally:
             session_db.close()
-
-        # PostgreSQL commit succeeded — now atomically sync the cache so
-        # concurrent cache writers can't produce a lost update.
-
-        logger.info(f"Session {session_id} status updated to {new_status}")
-
-        # Broadcast the transition to dashboard WebSocket clients (non-blocking).
-        self._broadcast_status(session_id, new_status, risk_score, metadata)
-
-        return True
-
-    def _update_cache_atomic(self, session_id: str, new_status: str, metadata: dict[str, Any]) -> None:
-        """
-        Atomically apply an already-approved status/metadata change to the
-        Redis-cached session state via atomic_transition.lua.
-
-        This is best-effort and deliberately does not affect the return
-        value of the caller: PostgreSQL has already committed by the time
-        this runs, so a cache failure here means a stale or missing cache
-        entry (which get_session() naturally falls back to the database
-        for), not a correctness bug. There is nothing to "revert" here,
-        since Redis never made the authoritative decision in the first
-        place — Postgres did, before this was ever called.
-
-        Args:
-            session_id: Session identifier
-            new_status: The status PostgreSQL already committed
-            metadata: Optional additional data to merge into the cache
-        """
-        if self._transition_script is None:
-            logger.warning(
-                f"Atomic cache update unavailable for {session_id}; "
-                "cache may be stale until the next read falls back to the database"
-            )
-            return
-
-        try:
-            raw_result = self._transition_script(
-                keys=[self._session_key(session_id)],
-                args=[new_status, _utcnow().isoformat(), json.dumps(metadata, default=str)],
-            )
-            result = json.loads(raw_result)
-            if result["status"] != "ok":
-                logger.warning(
-                    f"Cache update for {session_id} returned '{result['status']}'; "
-                    "cache may be stale until the next read falls back to the database"
-                )
-        except RedisError as e:
-            logger.error(f"Redis error updating cache for {session_id}: {e!s}")
 
     def get_session(self, session_id: str) -> dict[str, Any] | None:
         """
@@ -436,13 +337,6 @@ class SessionManager:
             if not interview:
                 return False
 
-            if not self._is_valid_transition(interview.status, self.COMPLETED):
-                logger.warning(
-                    f"Invalid state transition: {interview.status} -> {self.COMPLETED} "
-                    f"for session {session_id}"
-                )
-                return False
-
             interview.status = self.COMPLETED
             interview.risk_score = risk_score
             interview.end_time = _utcnow()
@@ -466,6 +360,18 @@ class SessionManager:
                 duration = (interview.end_time - interview.start_time).total_seconds()
                 SESSION_PROCESSING_DURATION.observe(duration)
 
+            # Update Redis
+            session_data = self.state_sync.get_session_state(session_id)
+            if session_data:
+                session_data["status"] = self.COMPLETED
+                session_data["risk_score"] = risk_score
+                session_data["end_time"] = _utcnow().isoformat()
+                session_data["updated_at"] = _utcnow().isoformat()
+                self.state_sync.set_session_state(session_id, session_data)
+
+            logger.info(f"Session {session_id} marked as completed")
+            return True
+
         except Exception as e:
             logger.error(f"Error marking session completed: {e!s}")
             session_db.rollback()
@@ -473,26 +379,9 @@ class SessionManager:
         finally:
             session_db.close()
 
-        # PostgreSQL commit succeeded — atomically sync status, risk_score,
-        # and end_time into the cache in one merge instead of a separate
-        # get-then-set round trip.
-        self._update_cache_atomic(
-            session_id,
-            self.COMPLETED,
-            {"risk_score": risk_score, "end_time": _utcnow().isoformat()},
-        )
-
-        logger.info(f"Session {session_id} marked as completed")
-        return True
-
     def _is_valid_transition(self, current_status: str, new_status: str) -> bool:
         """
-        Check if state transition is valid against VALID_TRANSITIONS.
-
-        This is the single source of truth for transition validity — used
-        directly by update_session_status()/mark_session_completed() against
-        PostgreSQL's current state, and safe to call standalone (e.g. for
-        UI validation) since it touches neither Redis nor the database.
+        Check if state transition is valid
 
         Args:
             current_status: Current session status

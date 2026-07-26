@@ -60,10 +60,11 @@ class InterviewSession(Base):
 
     session_id = Column(String(255), primary_key=True, index=True, nullable=False)
     candidate_id = Column(String(255), nullable=False, index=True)
-    status = Column(String(50), nullable=False, default="pending")
+    status = Column(String(50), nullable=False, default="pending", index=True)
     assigned_node = Column(String(255), nullable=True)
     start_time = Column(DateTime, nullable=True, default=utcnow)
     end_time = Column(DateTime, nullable=True)
+
     risk_score = Column(Float, nullable=True)
 
     # Analysis results stored as JSON
@@ -75,8 +76,8 @@ class InterviewSession(Base):
     questions_asked = Column(JSON, nullable=True, default=list)
     answers_provided = Column(JSON, nullable=True, default=list)
     feedback_generated = Column(JSON, nullable=True, default=list)
-    overall_score = Column(Float, nullable=True)
-    template_id = Column(String(255), nullable=True)
+    overall_score = Column(Float, nullable=True, index=True)
+    template_id = Column(String(255), nullable=True, index=True)
 
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
@@ -95,8 +96,8 @@ class Question(Base):
     category = Column(String(50), nullable=False, index=True)
     difficulty = Column(String(20), nullable=False, default="medium")
     tags = Column(JSON, nullable=True, default=list)
-    usage_count = Column(Integer, nullable=False, default=0)
-    avg_score = Column(Float, nullable=True)
+    usage_count = Column(Integer, nullable=False, default=0, index=True)
+    avg_score = Column(Float, nullable=True, index=True)
 
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
@@ -119,8 +120,8 @@ class Candidate(Base):
     # Optional demographic information for fairness auditing.
     # This data is NOT passed to the LLM and is only used for compliance analytics.
     demographics = Column(JSON, nullable=True, default=dict)
-    avg_score = Column(Float, nullable=True)
-    total_interviews = Column(Integer, nullable=False, default=0)
+    avg_score = Column(Float, nullable=True, index=True)
+    total_interviews = Column(Integer, nullable=False, default=0, index=True)
 
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
@@ -142,8 +143,8 @@ class InterviewTemplate(Base):
     question_count = Column(Integer, nullable=False, default=10)
     category_distribution = Column(JSON, nullable=True, default=dict)
     difficulty_distribution = Column(JSON, nullable=True, default=dict)
-    usage_count = Column(Integer, nullable=False, default=0)
-    success_rate = Column(Float, nullable=True)
+    usage_count = Column(Integer, nullable=False, default=0, index=True)
+    success_rate = Column(Float, nullable=True, index=True)
 
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)

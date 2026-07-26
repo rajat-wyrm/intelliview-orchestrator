@@ -352,7 +352,7 @@ class HealthMonitor:
 
             if self.redis_client:
                 self.redis_client.set(self.health_status_key, json.dumps(health_status), ex=300)
-                self.redis_client.set(self.last_check_key, datetime.now(timezone.utc).isoformat())
+                self.redis_client.set(self.last_check_key, datetime.now(timezone.utc).isoformat(), ex=300)
 
             logger.info("System health check complete: %s", health_status["overall_status"])
             return health_status
