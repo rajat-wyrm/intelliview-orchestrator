@@ -110,7 +110,7 @@ def chat_completion(
         return None, None
 
     try:
-        resp = openai_client.chat.completions.create(
+        resps, usage = openai_client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature,

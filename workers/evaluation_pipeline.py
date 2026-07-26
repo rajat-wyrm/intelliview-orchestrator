@@ -71,7 +71,7 @@ def _llm_evaluate_answer_quality(session_id: str, question: str, answer: str) ->
 
        
     try:
-        from workers.ai_client import HAS_GEMINI, gemini_generate
+        from workers.ai_client import HAS_GEMINI, ate
 
         if HAS_GEMINI:
             response, usage = gemini_generate(f"{prompt}\n\n{user_msg}", temperature=0.3, max_output_tokens=512)
