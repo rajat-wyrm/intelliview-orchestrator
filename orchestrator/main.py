@@ -12,13 +12,15 @@ Integrates:
 - Task Queue integration with Celery
 """
 
+import io
 import logging
 import re
+import time
 import time as _time
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
@@ -33,9 +35,21 @@ from config import (
     MAX_REQUEST_BODY_BYTES,
 )
 from database.db import engine, get_db
-from database.models import Base, InterviewSession
+from database.models import Base, Candidate, InterviewSession
 from monitoring.dashboard_api import create_dashboard_routes
 from monitoring.metrics_collector import MetricsCollector
+from monitoring.prometheus_metrics import (
+    POSTGRES_HEALTH,
+    REDIS_HEALTH,
+    REQUEST_COUNT,
+    REQUEST_DURATION,
+    WORKER_ACTIVE_TASKS,
+    WORKER_CAPACITY,
+    WORKER_HEARTBEAT_AGE_SECONDS,
+    WORKERS_HEALTHY,
+    WORKERS_REGISTERED,
+    WORKERS_UNHEALTHY,
+)
 from monitoring.websocket_manager import ws_manager
 from orchestrator import http_cache
 from orchestrator.candidate_manager import CandidateManager
@@ -55,10 +69,13 @@ from orchestrator.session_tracker import SessionTracker
 from orchestrator.state_sync import StateSynchronizer
 from orchestrator.time_utils import utcnow
 from orchestrator.worker_registry import WorkerRegistry
+from workers.bias_auditor import BiasAuditor
 
 # Configure logging after imports so startup messages are structured.
 configure_logging()
 logger = logging.getLogger(__name__)
+
+APP_START_TIME = datetime.now(timezone.utc)
 
 
 @asynccontextmanager
@@ -107,6 +124,28 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def prometheus_middleware(request, call_next):
+    start = time.perf_counter()
+
+    response = await call_next(request)
+
+    duration = time.perf_counter() - start
+
+    REQUEST_COUNT.labels(
+        method=request.method,
+        path=request.url.path,
+        status=response.status_code,
+    ).inc()
+
+    REQUEST_DURATION.labels(
+        method=request.method,
+        path=request.url.path,
+    ).observe(duration)
+
+    return response
 
 
 # ========== Request ID + duration middleware ==========
@@ -296,6 +335,63 @@ class SessionStatusResponse(BaseModel):
     updated_at: str | None = None
 
 
+class ReportCandidate(BaseModel):
+    candidate_id: str
+    name: str
+    email: str
+
+
+class ReportInterviewSummary(BaseModel):
+    start_time: str | None = None
+    end_time: str | None = None
+    duration_minutes: float | None = None
+
+
+class ReportQuestion(BaseModel):
+    question_id: str
+    text: str
+    answer: str | None = None
+    score: float | None = None
+    feedback: str | None = None
+
+
+class ReportEvaluation(BaseModel):
+    quality: float | None = None
+    accuracy: float | None = None
+    clarity: float | None = None
+
+
+class ReportLLMFeedback(BaseModel):
+    strengths: list[str] = Field(default_factory=list)
+    improvements: list[str] = Field(default_factory=list)
+    recommendation: str | None = None
+    detailed_feedback: str | None = None
+
+
+class ReportRiskAssessment(BaseModel):
+    score: float | None = None
+    classification: str | None = None
+    factors: list[str] = Field(default_factory=list)
+
+
+class ReportMetadata(BaseModel):
+    token_usage: int | None = None
+    estimated_cost_usd: float | None = None
+
+
+class InterviewReportResponse(BaseModel):
+    """Comprehensive final interview report"""
+
+    session_id: str
+    candidate: ReportCandidate
+    interview_summary: ReportInterviewSummary
+    questions: list[ReportQuestion] = Field(default_factory=list)
+    overall_evaluation: ReportEvaluation
+    llm_feedback: ReportLLMFeedback
+    risk_assessment: ReportRiskAssessment
+    metadata: ReportMetadata
+
+
 class TaskStatusResponse(BaseModel):
     """Response model for Celery task status (used by /task-status/{task_id})."""
 
@@ -376,13 +472,6 @@ class CreateTemplateRequest(BaseModel):
 
 
 @app.get("/health")
-async def health_check():
-    """
-    Health check endpoint
-    Returns system status
-    """
-    return {"status": "system running", "timestamp": utcnow().isoformat()}
-
 
 # ========== Deep Health & Probe Endpoints ==========
 
@@ -410,6 +499,23 @@ async def get_dependency_statuses():
     return health_monitor._check_all_dependencies()
 
 
+@app.get("/admin/fairness-audit", dependencies=[Depends(require_token)])
+async def get_fairness_audit_report():
+    """Return a lightweight fairness audit report for recent scoring patterns.
+
+    This endpoint uses the existing BiasAuditor heuristic for scoring-dispersion
+    review. It is intentionally informational and does not replace a full
+    compliance or fairness assessment framework.
+    """
+    try:
+        auditor = BiasAuditor(db_session=None)
+        evaluations = []
+        return auditor.analyze_scoring_consistency(evaluations, "gender")
+    except Exception as exc:
+        logger.error("Fairness audit endpoint failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Fairness audit unavailable") from exc
+
+
 # ========== Prometheus Metrics Endpoint ==========
 
 
@@ -421,6 +527,18 @@ if ENABLE_PROMETHEUS:
     @app.get("/metrics")
     async def prometheus_metrics():
         """Prometheus metrics endpoint."""
+        # Dynamic check of dependency statuses
+        deps = health_monitor._check_all_dependencies()
+        REDIS_HEALTH.set(1 if deps.get("redis", {}).get("status") == "healthy" else 0)
+        POSTGRES_HEALTH.set(1 if deps.get("postgres", {}).get("status") == "healthy" else 0)
+
+        # Worker status gauges
+        all_workers = worker_registry.get_all_workers()
+        unhealthy = worker_registry.detect_unhealthy_workers()
+        WORKERS_REGISTERED.set(len(all_workers))
+        WORKERS_HEALTHY.set(len(all_workers) - len(unhealthy))
+        WORKERS_UNHEALTHY.set(len(unhealthy))
+
         return _Response(
             content=get_metrics_text(),
             media_type="text/plain; version=0.0.4; charset=utf-8",
@@ -569,9 +687,6 @@ async def get_session_status(
 
     except HTTPException:
         raise
-    except Exception:
-        logger.exception("Error fetching session status")
-        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.get("/task-status/{task_id}", response_model=TaskStatusResponse)
@@ -1144,6 +1259,8 @@ async def register_worker(request: WorkerRegistrationRequest):
 
         # Log successful registration
         logger.info(f"Worker registered successfully: {request.worker_id}")
+        WORKERS_REGISTERED.inc()
+        WORKERS_HEALTHY.inc()
 
         return {
             "status": "success",
@@ -1176,6 +1293,13 @@ async def worker_heartbeat(request: WorkerHeartbeatRequest):
 
         # Update worker heartbeat in registry
         worker_registry.heartbeat(worker_id=request.worker_id, active_tasks=request.active_tasks)
+        WORKER_HEARTBEAT_AGE_SECONDS.labels(worker_id=request.worker_id).set(0)
+
+        WORKER_ACTIVE_TASKS.labels(worker_id=request.worker_id).set(request.active_tasks)
+
+        worker_status = worker_registry.get_worker(request.worker_id)
+        if worker_status:
+            WORKER_CAPACITY.labels(worker_id=request.worker_id).set(worker_status.get("capacity", 0))
 
         # Invalidate the workers + load caches so the next dashboard poll is fresh.
         http_cache.invalidate("workers", "worker-statistics", "load-status")
@@ -1484,10 +1608,8 @@ async def retry_failed_session(session_id: str):
                 detail=f"Session {session_id} has exceeded maximum retry attempts",
             )
 
-        # Get retry info
-        retry_info = retry_manager.get_retry_info(session_id)
-
         # Schedule retry with exponential backoff
+        # Schedule retry
         retry_scheduled = retry_manager.schedule_retry(session_id)
 
         if not retry_scheduled:
@@ -1496,14 +1618,21 @@ async def retry_failed_session(session_id: str):
                 detail=f"Failed to schedule retry for session {session_id}",
             )
 
-        logger.info(f"Session {session_id} scheduled for retry: {retry_info}")
+        # -----------------------------
+        # Actually requeue the interview
+        # -----------------------------
+        scheduler.schedule_task(session_id=session_id, priority=TaskPriority.MEDIUM)
+
+        logger.info(
+            "Session %s requeued successfully after retry scheduling.",
+            session_id,
+        )
 
         return {
             "status": "success",
-            "message": f"Session {session_id} scheduled for retry",
+            "message": f"Session {session_id} scheduled and requeued",
             "session_id": session_id,
-            "retry_info": retry_info,
-            "timestamp": utcnow().isoformat(),
+
         }
     except HTTPException:
         raise

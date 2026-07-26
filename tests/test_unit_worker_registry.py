@@ -1,26 +1,27 @@
 """Unit tests for WorkerRegistry — register, heartbeat, capacity, deregister."""
 
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 from orchestrator.worker_registry import WorkerRegistry
 
 
 def _new_registry():
-    client = MagicMock()
+    with patch("orchestrator.worker_registry.get_redis_client") as mock_get_redis:
+        mock_redis = MagicMock()
 
-    client.ping.return_value = True
-    client.hset.return_value = True
-    client.sadd.return_value = True
-    client.expire.return_value = True
-    client.set.return_value = True
-    client.delete.return_value = 1
-    client.srem.return_value = 1
-    client.hincrby.return_value = 1
-    client.smembers.return_value = set()
-    client.hgetall.return_value = {}
-    client.scan_iter.return_value = iter([])
+        mock_redis.hset.return_value = True
+        mock_redis.sadd.return_value = True
+        mock_redis.expire.return_value = True
+        mock_redis.set.return_value = True
+        mock_redis.delete.return_value = 1
+        mock_redis.srem.return_value = 1
+        mock_redis.hincrby.return_value = 1
+        mock_redis.smembers.return_value = set()
+        mock_redis.hgetall.return_value = {}
 
-    with patch("orchestrator.worker_registry.CacheManager", return_value=client):
+        mock_get_redis.return_value = mock_redis
+
         return WorkerRegistry()
 
 
@@ -87,8 +88,81 @@ def test_worker_statistics_computes_utilization():
     assert stats["capacity_utilization"] == 25.0
 
 
+def test_detect_unhealthy_worker_marks_status():
+    reg = _new_registry()
+
+    reg.register_worker("worker1", capacity=2)
+
+    # Simulate worker stopping by making heartbeat older than timeout
+    reg.get_worker("worker1")["last_heartbeat"] = (
+        datetime.now(timezone.utc) - timedelta(seconds=120)
+    ).isoformat()
+
+    unhealthy = reg.detect_unhealthy_workers()
+
+    assert "worker1" in unhealthy
+    assert reg.get_worker("worker1")["status"] == "unhealthy"
+
+
+def test_detect_unhealthy_worker_keeps_recent_worker_healthy():
+    reg = _new_registry()
+
+    reg.register_worker("worker2", capacity=2)
+
+    unhealthy = reg.detect_unhealthy_workers()
+
+    assert unhealthy == []
+    assert reg.get_worker("worker2")["status"] == "healthy"
+
+
+def test_detect_unhealthy_workers_only_marks_expired_workers():
+    reg = _new_registry()
+
+    reg.register_worker("healthy_worker", capacity=2)
+    reg.register_worker("stale_worker", capacity=2)
+
+    reg.get_worker("stale_worker")["last_heartbeat"] = (
+        datetime.now(timezone.utc) - timedelta(seconds=120)
+    ).isoformat()
+
+    unhealthy = reg.detect_unhealthy_workers()
+
+    assert unhealthy == ["stale_worker"]
+    assert reg.get_worker("healthy_worker")["status"] == "healthy"
+    assert reg.get_worker("stale_worker")["status"] == "unhealthy"
+
+
 def test_deregister_worker_removes_entry():
     reg = _new_registry()
     reg.register_worker("w4", capacity=2)
     assert reg.deregister_worker("w4") is True
     assert reg.get_worker("w4") is None
+
+
+def test_pubsub_sync_message_updates_local_workers():
+    reg = _new_registry()
+    fake_message = {"type": "message", "data": '{"worker_id": "test_sync_worker", "action": "sync"}'}
+    with patch.object(
+        reg.redis_client, "hgetall", return_value={"status": "healthy", "active_tasks": "2", "capacity": "4"}
+    ):
+        reg._handle_pubsub_message(fake_message)
+    assert "test_sync_worker" in reg.local_workers
+    assert reg.local_workers["test_sync_worker"]["active_tasks"] == 2
+
+
+def test_pubsub_deregister_message_removes_worker():
+    reg = _new_registry()
+    reg.local_workers["dead_worker"] = {"worker_id": "dead_worker", "status": "healthy"}
+    fake_message = {"type": "message", "data": '{"worker_id": "dead_worker", "action": "deregister"}'}
+    reg._handle_pubsub_message(fake_message)
+    assert "dead_worker" not in reg.local_workers
+
+
+def test_pubsub_malformed_message_handled_safely():
+    reg = _new_registry()
+    fake_message = {
+        "type": "message",
+        "data": "invalid-json-payload-string",
+    }
+    reg._handle_pubsub_message(fake_message)
+    assert reg.local_workers == {}

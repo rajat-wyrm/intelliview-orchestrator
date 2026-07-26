@@ -58,7 +58,14 @@ class SessionManager:
             FAILED,
             TIMEOUT,
         ],
-        VIDEO_PROCESSING: [AUDIO_PROCESSING, PROCESSING, FAILED, TIMEOUT],
+        VIDEO_PROCESSING: [
+            AUDIO_PROCESSING,
+            PROCESSING,
+            EVALUATING,
+            COMPLETED,
+            FAILED,
+            TIMEOUT,
+        ],
         AUDIO_PROCESSING: [EVALUATING, PROCESSING, FAILED, TIMEOUT],
         EVALUATING: [COMPLETED, PROCESSING, FAILED, TIMEOUT],
         COMPLETED: [],
@@ -109,6 +116,19 @@ class SessionManager:
 
             session_db.add(interview_session)
 
+
+            from monitoring.prometheus_metrics import (
+            SESSIONS_ACTIVE,
+            SESSIONS_CREATED,
+)
+
+            session_db.commit()
+
+            SESSIONS_CREATED.inc()
+
+            SESSIONS_ACTIVE.inc()
+            logger.info("Prometheus session metrics updated")
+
             # Sync to Redis cache
             session_data = {
                 "session_id": session_id,
@@ -119,6 +139,7 @@ class SessionManager:
                 "created_at": _utcnow().isoformat(),
                 "updated_at": _utcnow().isoformat(),
                 "risk_score": None,
+                "max_task_retries": 3,
             }
             self.state_sync.set_session_state(session_id, session_data)
 
@@ -166,6 +187,22 @@ class SessionManager:
             # Update database
             interview.status = new_status
             interview.updated_at = _utcnow()
+
+            session_db.commit()
+
+            from monitoring.prometheus_metrics import (
+    SESSIONS_ACTIVE,
+    SESSIONS_COMPLETED,
+    SESSIONS_FAILED,
+)
+
+            if new_status == self.COMPLETED:
+                SESSIONS_COMPLETED.inc()
+                SESSIONS_ACTIVE.dec()
+
+            elif new_status == self.FAILED:
+                SESSIONS_FAILED.inc()
+                SESSIONS_ACTIVE.dec()
 
             # Update Redis cache
             session_data = self.state_sync.get_session_state(session_id)
