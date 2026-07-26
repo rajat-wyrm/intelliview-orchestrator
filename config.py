@@ -1,7 +1,6 @@
-import os
-
-
 """
+Configuration for the AI Interview Orchestrator.
+
 Settings are loaded from environment variables (or a `.env` file in dev)
 via `pydantic-settings`. All values have sensible local defaults but
 should be overridden in production.

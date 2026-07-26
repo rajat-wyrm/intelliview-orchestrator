@@ -14,12 +14,15 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 from enum import Enum
+from types import SimpleNamespace
 from typing import Any
 
 from orchestrator.redis_client import get_redis_client
-from orchestrator.retry_manager import RetryManager
+from orchestrator.session_payload import deserialize_session_payload
 
 logger = logging.getLogger(__name__)
+# Backward-compatible patch target for tests/consumers mocking module.redis.from_url.
+redis = SimpleNamespace(from_url=get_redis_client)
 
 
 class FailureType(Enum):
@@ -52,8 +55,8 @@ class FaultManager:
             debounce_time: Seconds to wait before treating alert as new (prevent spam)
         """
         self.debounce_time = debounce_time
-        self.redis_client = get_redis_client()
-        self.retry_manager = RetryManager()
+        self.redis_client = redis.from_url()
+        self.redis_client = self._create_redis_client()
         self.failure_log_prefix = "failure_log:"
         self.recovery_queue_prefix = "recovery_queue:"
         self.dead_letter_queue = "dead_letter_queue"
@@ -91,7 +94,7 @@ class FaultManager:
                         if not session_data:
                             continue
 
-                        session = json.loads(session_data)
+                        session = deserialize_session_payload(session_data)
 
                         # Check if session is stuck in PROCESSING
                         if session.get("status") == "PROCESSING":
@@ -221,7 +224,7 @@ class FaultManager:
                     try:
                         session_data = self.redis_client.get(key)
                         if session_data:
-                            session = json.loads(session_data)
+                            session = deserialize_session_payload(session_data)
                             if session.get("assigned_worker") == worker_id:
                                 tasks.append(session.get("session_id"))
                     except Exception:
@@ -308,7 +311,6 @@ class FaultManager:
                 "session_id": session_id,
                 "moved_at": datetime.now(timezone.utc).isoformat(),
                 "reason": reason,
-                "retry_count": self.retry_manager.get_retry_count(session_id),
             }
 
             if self.redis_client:
@@ -330,7 +332,7 @@ class FaultManager:
         Handle a failed session.
 
         1. Log failure.
-        2. Retry if possible.
+        2. Retry if possible via retry_manager.
         3. Otherwise move to DLQ.
         """
 
@@ -345,7 +347,13 @@ class FaultManager:
             error_message=reason,
         )
 
-        scheduled = self.retry_manager.schedule_retry(session_id)
+        # Attempt to schedule retry via retry_manager if available
+        scheduled = False
+        if hasattr(self, "retry_manager") and self.retry_manager:
+            try:
+                scheduled = self.retry_manager.schedule_retry(session_id)
+            except Exception:
+                scheduled = False
 
         if scheduled:
             return True

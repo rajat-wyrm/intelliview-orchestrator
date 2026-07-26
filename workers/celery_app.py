@@ -113,5 +113,16 @@ def _on_task_failure(sender, task_id, exception, args, kwargs, traceback, einfo,
         logging.getLogger(__name__).warning("task_failure handler failed: %s", exc)
 
 
+@celery_app.task(name="workers.tasks.send_mock_email_alert")
+def send_mock_email_alert(session_id: str) -> None:
+    """Mock email alert task — logs the notification.
+
+    In production this would call SendGrid / SES / etc.
+    """
+    import logging
+
+    logging.getLogger(__name__).info("Mock email alert sent for session %s", session_id)
+
+
 if __name__ == "__main__":
     celery_app.start()
