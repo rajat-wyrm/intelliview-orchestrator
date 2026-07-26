@@ -11,6 +11,7 @@ Responsibilities:
 """
 
 import json
+import redit
 import logging
 from datetime import datetime, timedelta, timezone
 from enum import Enum
