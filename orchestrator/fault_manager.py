@@ -51,12 +51,16 @@ class FaultManager:
             debounce_time: Seconds to wait before treating alert as new (prevent spam)
         """
         self.debounce_time = debounce_time
-        self.redis_client = get_redis_client()
+        self.redis_client = self._create_redis_client()
         self.failure_log_prefix = "failure_log:"
         self.recovery_queue_prefix = "recovery_queue:"
         self.dead_letter_queue = "dead_letter_queue"
 
         logger.info(f"FaultManager initialized with debounce_time={debounce_time}s")
+
+    def _create_redis_client(self) -> Any:
+        """Create the shared Redis client used by the orchestrator."""
+        return get_redis_client()
 
     def detect_failed_sessions(self, timeout_seconds: int = 1800) -> list[str]:
         """
@@ -100,8 +104,8 @@ class FaultManager:
                                         f"Session {session.get('session_id')} detected as stuck: "
                                         f"{elapsed}s > {timeout_seconds}s"
                                     )
-                    except Exception as e:
-                        logger.debug(f"Error processing session key {key}: {e!s}")
+                    except (json.JSONDecodeError, TypeError, ValueError, AttributeError) as e:
+                        logger.warning(f"Skipping invalid session data for key {key}: {e!s}")
                         continue
 
                 if cursor == 0:
@@ -109,8 +113,8 @@ class FaultManager:
 
             return failed_sessions
 
-        except Exception as e:
-            logger.error(f"Error detecting failed sessions: {e!s}")
+        except (AttributeError, TypeError, RuntimeError):
+            logger.exception("Error detecting failed sessions")
             return []
 
     def handle_worker_failure(self, worker_id: str, failure_reason: str = "unknown") -> bool:
@@ -155,8 +159,8 @@ class FaultManager:
 
             return True
 
-        except Exception as e:
-            logger.error(f"Error handling worker failure: {e!s}")
+        except (AttributeError, TypeError, RuntimeError):
+            logger.exception("Error handling worker failure")
             return False
 
     def reassign_task(self, session_id: str, original_worker: str | None = None) -> bool:
@@ -195,8 +199,8 @@ class FaultManager:
 
             return True
 
-        except Exception as e:
-            logger.error(f"Error reassigning task {session_id}: {e!s}")
+        except (AttributeError, TypeError, RuntimeError):
+            logger.exception(f"Error reassigning task {session_id}")
             return False
 
     def _get_worker_tasks(self, worker_id: str) -> list[str]:
@@ -218,15 +222,16 @@ class FaultManager:
                             session = json.loads(session_data)
                             if session.get("assigned_worker") == worker_id:
                                 tasks.append(session.get("session_id"))
-                    except Exception:
+                    except (json.JSONDecodeError, TypeError, AttributeError) as e:
+                        logger.warning(f"Skipping invalid session data for key {key}: {e!s}")
                         continue
 
                 if cursor == 0:
                     break
 
             return tasks
-        except Exception as e:
-            logger.error(f"Error getting worker tasks: {e!s}")
+        except (AttributeError, TypeError, RuntimeError):
+            logger.exception("Error getting worker tasks")
             return []
 
     def _increment_reassignment_count(self, session_id: str) -> int:
@@ -240,8 +245,8 @@ class FaultManager:
             self.redis_client.expire(key, 86400)  # 24 hour TTL
 
             return count
-        except Exception as e:
-            logger.warning(f"Error incrementing reassignment count: {e!s}")
+        except (AttributeError, TypeError, RuntimeError):
+            logger.exception("Error incrementing reassignment count")
             return 1
 
     def log_failure(
@@ -282,8 +287,8 @@ class FaultManager:
             logger.info(f"Failure logged: {failure_type.value} - {error_message}")
             return True
 
-        except Exception as e:
-            logger.error(f"Error logging failure: {e!s}")
+        except (AttributeError, TypeError, RuntimeError):
+            logger.exception("Error logging failure")
             return False
 
     def move_to_dead_letter_queue(self, session_id: str, reason: str) -> bool:
@@ -310,8 +315,8 @@ class FaultManager:
 
             return True
 
-        except Exception as e:
-            logger.error(f"Error moving to dead letter queue: {e!s}")
+        except (AttributeError, TypeError, RuntimeError):
+            logger.exception("Error moving to dead letter queue")
             return False
 
     def get_recovery_queue(self, limit: int = 100) -> list[dict[str, Any]]:
@@ -346,7 +351,8 @@ class FaultManager:
                         if data:
                             items.append(json.loads(data))
                             count += 1
-                    except Exception:
+                    except (json.JSONDecodeError, TypeError, AttributeError) as e:
+                        logger.warning(f"Skipping invalid recovery queue item for key {key}: {e!s}")
                         continue
 
                 if cursor == 0:
@@ -354,8 +360,8 @@ class FaultManager:
 
             return items
 
-        except Exception as e:
-            logger.error(f"Error getting recovery queue: {e!s}")
+        except (AttributeError, TypeError, RuntimeError):
+            logger.exception("Error getting recovery queue")
             return []
 
     def get_failure_log(self, limit: int = 100) -> list[dict[str, Any]]:
@@ -388,13 +394,14 @@ class FaultManager:
                         entries.append(json.loads(entry_json))
                         if len(entries) >= limit:
                             return entries[:limit]
-                    except Exception:
+                    except (json.JSONDecodeError, TypeError, AttributeError) as e:
+                        logger.warning(f"Skipping invalid failure log entry: {e!s}")
                         continue
 
             return entries[:limit]
 
-        except Exception as e:
-            logger.error(f"Error getting failure log: {e!s}")
+        except (AttributeError, TypeError, RuntimeError):
+            logger.exception("Error getting failure log")
             return []
 
     def get_dead_letter_queue(self, limit: int = 100) -> list[dict[str, Any]]:
@@ -417,13 +424,14 @@ class FaultManager:
             for entry_json in entries:
                 try:
                     items.append(json.loads(entry_json))
-                except Exception:
+                except (json.JSONDecodeError, TypeError, AttributeError) as e:
+                    logger.warning(f"Skipping invalid dead letter queue entry: {e!s}")
                     continue
 
             return items
 
-        except Exception as e:
-            logger.error(f"Error getting dead letter queue: {e!s}")
+        except (AttributeError, TypeError, RuntimeError):
+            logger.exception("Error getting dead letter queue")
             return []
 
     def get_system_fault_stats(self) -> dict[str, Any]:
@@ -452,6 +460,6 @@ class FaultManager:
                 "last_failures": failure_log[:10],
             }
 
-        except Exception as e:
-            logger.error(f"Error getting fault stats: {e!s}")
+        except (AttributeError, TypeError, RuntimeError):
+            logger.exception("Error getting fault stats")
             return {}

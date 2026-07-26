@@ -10,10 +10,13 @@ Run while the stack is up:
 from __future__ import annotations
 
 import json
+import logging
 import time
 import urllib.error
 import urllib.request
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 API = "http://localhost:8000"
 WEB = "http://localhost:3000"
@@ -275,7 +278,7 @@ def websocket() -> None:
                         m = await asyncio.wait_for(ws.recv(), timeout=8)
                         msgs.append(json.loads(m))
                 except asyncio.TimeoutError:
-                    pass
+                    logger.debug("Timed out waiting for WebSocket messages")
                 check("WS connects", True, "")
                 check("WS receives hello", any(m.get("type") == "hello" for m in msgs), f"{len(msgs)} msgs")
                 check(

@@ -19,7 +19,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from orchestrator.redis_client import get_redis_client
+from orchestrator.cache_manager import CacheManager
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ class HealthMonitor:
         self.heartbeat_timeout = heartbeat_timeout
         self.session_timeout = session_timeout
         self.queue_threshold = queue_threshold
-        self.redis_client = get_redis_client()
+        self.redis_client = CacheManager()
         self.health_status_key = "system:health_status"
         self.last_check_key = "system:last_health_check"
         self._dep_status: dict[str, DependencyStatus] = {}
@@ -335,8 +335,12 @@ class HealthMonitor:
                                 stuck_sessions.append(
                                     {"session_id": session.get("session_id"), "elapsed_seconds": elapsed}
                                 )
-                        except Exception:
-                            pass
+                        except ValueError as e:
+                            logger.warning(
+                            "Invalid start_time for session %s: %s",
+                            session.get("session_id"),
+                            e,
+                            )
 
             status = HealthStatus.HEALTHY
             if len(stuck_sessions) > len(active_sessions) * 0.25:
@@ -446,8 +450,12 @@ class HealthMonitor:
                                     session.get("session_id"),
                                     int(elapsed),
                                 )
-                        except Exception:
-                            pass
+                        except ValueError as e:
+                            logger.warning(
+                            "Invalid start_time for session %s: %s",
+                            session.get("session_id"),
+                            e,
+                            )
 
             return stuck_sessions
 
@@ -464,5 +472,6 @@ class HealthMonitor:
             # field 22 is starttime (clock ticks since boot)
             start_ticks = int(stat.st_mtime)
             return int(time.time() - start_ticks)
-        except Exception:
+        except (OSError, ValueError):
+            logger.exception("Error getting process uptime")
             return 0

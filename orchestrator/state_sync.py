@@ -18,7 +18,7 @@ from typing import Any
 
 from sqlalchemy import select
 
-from orchestrator.redis_client import get_redis_client
+from orchestrator.cache_manager import CacheManager
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class StateSynchronizer:
     def __init__(self):
         """Initialize Redis connection"""
         try:
-            self.redis_client = get_redis_client()
+            self.redis_client = CacheManager()
             logger.info("Connected to Redis for state caching")
         except Exception as e:
             logger.error(f"Error initializing Redis connection: {e!s}")
@@ -70,8 +70,8 @@ class StateSynchronizer:
             logger.debug(f"Cached session state for {session_id}")
             return True
 
-        except Exception as e:
-            logger.error(f"Error setting session state in Redis: {e!s}")
+        except (TypeError, ValueError):
+            logger.exception("Error setting session state in Redis")
             return False
 
     def get_session_state(self, session_id: str) -> dict[str, Any] | None:
@@ -99,8 +99,8 @@ class StateSynchronizer:
             logger.debug(f"Retrieved cached session state for {session_id}")
             return session_data
 
-        except Exception as e:
-            logger.error(f"Error getting session state from Redis: {e!s}")
+        except (json.JSONDecodeError, TypeError, AttributeError) :
+            logger.exception("Error getting session state from Redis")
             return None
 
     def delete_session_state(self, session_id: str) -> bool:
