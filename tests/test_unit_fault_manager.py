@@ -33,8 +33,7 @@ def _manager():
         client.incr.return_value = 1
 
         return FaultManager()
-
-
+    
 def test_log_failure_appends_to_log_key():
     fm = _manager()
     assert fm.log_failure("s1", FailureType.TASK_EXCEPTION, "boom", "w1") is True
