@@ -50,7 +50,9 @@ class WorkerAgent:
                 )
                 if r.status_code < 500:
                     return r.status_code < 400
-                logger.warning("API %s %s returned %s, retrying (%d/%d)", method, path, r.status_code, attempt, retries)
+                logger.warning(
+                    "API %s %s returned %s, retrying (%d/%d)", method, path, r.status_code, attempt, retries
+                )
             except Exception as exc:
                 logger.warning("API %s %s failed (%s), retrying (%d/%d)", method, path, exc, attempt, retries)
             if attempt < retries:

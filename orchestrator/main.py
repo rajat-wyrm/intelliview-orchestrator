@@ -537,39 +537,17 @@ if ENABLE_PROMETHEUS:
     @app.get("/metrics")
     async def prometheus_metrics():
         """Prometheus metrics endpoint."""
-        # Probe Redis health
-        redis_healthy = 0.0
-        try:
-            if health_monitor.redis_client:
-                health_monitor.redis_client.ping()
-                redis_healthy = 1.0
-        except Exception:
-            pass
-        REDIS_HEALTH.set(redis_healthy)
+        # Dynamic check of dependency statuses
+        deps = health_monitor._check_all_dependencies()
+        REDIS_HEALTH.set(1 if deps.get("redis", {}).get("status") == "healthy" else 0)
+        POSTGRES_HEALTH.set(1 if deps.get("postgres", {}).get("status") == "healthy" else 0)
 
-        # Probe Postgres health
-        pg_healthy = 0.0
-        try:
-            from sqlalchemy import text as _sql_text
-
-            with engine.connect() as _conn:
-                _conn.execute(_sql_text("SELECT 1"))
-                pg_healthy = 1.0
-        except Exception:
-            pass
-        POSTGRES_HEALTH.set(pg_healthy)
-
-        # Worker health gauges
-        try:
-            all_w = worker_registry.get_all_workers()
-            registered = len(all_w)
-            unhealthy_ids = worker_registry.detect_unhealthy_workers()
-            healthy = registered - len(unhealthy_ids)
-            WORKERS_REGISTERED.set(registered)
-            WORKERS_HEALTHY.set(healthy)
-            WORKERS_UNHEALTHY.set(len(unhealthy_ids))
-        except Exception:
-            pass
+        # Worker status gauges
+        all_workers = worker_registry.get_all_workers()
+        unhealthy = worker_registry.detect_unhealthy_workers()
+        WORKERS_REGISTERED.set(len(all_workers))
+        WORKERS_HEALTHY.set(len(all_workers) - len(unhealthy))
+        WORKERS_UNHEALTHY.set(len(unhealthy))
 
         return _Response(
             content=get_metrics_text(),

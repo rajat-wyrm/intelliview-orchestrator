@@ -323,6 +323,55 @@ class FaultManager:
             logger.error(f"Error moving to dead letter queue: {e!s}")
             return False
 
+    def handle_failed_session(
+        self,
+        session_id: str,
+        reason: str,
+    ) -> bool:
+        """
+        Handle a failed session.
+
+        1. Log failure.
+        2. Retry if possible via retry_manager.
+        3. Otherwise move to DLQ.
+        """
+
+        logger.warning(
+            "Handling failed session %s",
+            session_id,
+        )
+
+        self.log_failure(
+            session_id=session_id,
+            failure_type=FailureType.TASK_EXCEPTION,
+            error_message=reason,
+        )
+
+        # Attempt to schedule retry via retry_manager if available
+        scheduled = False
+        if hasattr(self, 'retry_manager') and self.retry_manager:
+            try:
+                scheduled = self.retry_manager.schedule_retry(session_id)
+            except Exception:
+                scheduled = False
+
+        if scheduled:
+            return True
+
+        logger.error(
+            "Retries exhausted for %s",
+            session_id,
+        )
+
+        moved = self.move_to_dead_letter_queue(session_id, reason)
+
+        if moved:
+            logger.warning("Session %s moved to Dead Letter Queue", session_id)
+        else:
+            logger.error("Failed to move %s to Dead Letter Queue", session_id)
+
+        return False
+
     def get_recovery_queue(self, limit: int = 100) -> list[dict[str, Any]]:
         """
         Get sessions queued for recovery/retry
@@ -464,3 +513,4 @@ class FaultManager:
         except Exception as e:
             logger.error(f"Error getting fault stats: {e!s}")
             return {}
+

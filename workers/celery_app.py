@@ -2,8 +2,7 @@
 
 Initialises Celery with the Redis broker, sensible reliability defaults,
 and a `session_failed` signal that lets us mark the DB session as
-FAILED only after Celery has exhausted its retries (rather than on
-every transient exception).
+FAILED only after Celery has exhausted its retries.
 """
 
 from celery import Celery, signals
@@ -99,7 +98,13 @@ def _on_task_failure(sender, task_id, exception, args, kwargs, traceback, einfo,
         session_id = _extract_session_id(args, kwargs)
         if not session_id:
             return
-        SessionManager().mark_session_failed(session_id, f"Celery task exhausted retries: {exception!s}")
+        SessionManager().mark_session_failed(
+            session_id,
+            f"Celery task exhausted retries: {exception!s}",
+        )
+
+        from workers.tasks import send_mock_email_alert
+
         send_mock_email_alert.delay(session_id)
     except Exception as exc:
         # Don't let a signal handler crash the worker.

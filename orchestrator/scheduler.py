@@ -136,6 +136,11 @@ class Scheduler:
             bool: True if queued successfully
         """
         try:
+            # Ensure status is marked so workers and API pollers know it is dispatched
+            self.session_manager.update_session_status(
+                session_id, self.session_manager.QUEUED, {"queued_at": datetime.now(timezone.utc).isoformat()}
+            )
+
             if delay_seconds > 0:
                 task = process_interview_session.apply_async(args=[session_id], countdown=delay_seconds)
             else:
@@ -146,6 +151,7 @@ class Scheduler:
 
         except Exception as e:
             logger.error(f"Error queuing task: {e!s}")
+            self.session_manager.mark_session_failed(session_id, f"Queueing error: {e!s}")
             return False
 
     def get_scheduling_status(self) -> dict[str, Any]:
