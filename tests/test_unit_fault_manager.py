@@ -31,7 +31,9 @@ def _manager():
         client.get.return_value = None
         client.set.return_value = True
         client.incr.return_value = 1
+
         return FaultManager()
+        
 
 def test_log_failure_appends_to_log_key():
     fm = _manager()

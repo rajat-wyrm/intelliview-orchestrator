@@ -36,12 +36,14 @@ registry = CollectorRegistry()
 # Request metrics
 # ---------------------------------------------------------------------------
 
+
 REQUEST_COUNT = Counter(
     "intelliview_http_requests_total",
     "Total HTTP requests",
     ["method", "path", "status"],
     registry=registry,
 )
+REDIS_HEALTH = Gauge("redis_health", "Redis connection health status")
 
 REQUEST_DURATION = Histogram(
     "intelliview_http_request_duration_seconds",
@@ -158,7 +160,32 @@ PIPELINE_ERRORS = Counter(
     ["stage", "error_type"],
     registry=registry,
 )
+# ---------------------------------------------------------------------------
+# Celery Metrics
+# ---------------------------------------------------------------------------
 
+
+CELERY_TASKS_PROCESSED_TOTAL = Counter(
+    "intelliview_celery_tasks_processed_total",
+    "Total interview celery tasks processed",
+    ["task"],
+    registry=registry,
+)
+
+CELERY_TASK_RUNTIME = Histogram(
+    "intelliview_celery_task_runtime_seconds",
+    "Runtime of Celery tasks",
+    ["task_name"],
+    buckets=(0.1, 0.5, 1, 2, 5, 10, 30, 60, 120),
+    registry=registry,
+)
+
+CELERY_ACTIVE_TASKS = Gauge(
+    "intelliview_celery_active_tasks",
+    "Currently running Celery tasks",
+    ["task_name"],
+    registry=registry,
+)
 # ---------------------------------------------------------------------------
 # System health metrics
 # ---------------------------------------------------------------------------
@@ -225,3 +252,12 @@ DLQ_SIZE = Gauge(
 def get_metrics_text() -> bytes:
     """Return current metrics in Prometheus text exposition format."""
     return generate_latest(registry)
+
+
+def get_session_metrics():
+    return {
+        "created": SESSIONS_CREATED._value.get(),
+        "completed": SESSIONS_COMPLETED._value.get(),
+        "failed": SESSIONS_FAILED._value.get(),
+        "active": SESSIONS_ACTIVE._value.get(),
+    }

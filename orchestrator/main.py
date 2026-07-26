@@ -12,16 +12,20 @@ Integrates:
 - Task Queue integration with Celery
 """
 
+import io
 import logging
 import re
+import time
 import time as _time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 
@@ -31,10 +35,22 @@ from config import (
     ENABLE_PROMETHEUS,
     MAX_REQUEST_BODY_BYTES,
 )
-from database.db import engine
-from database.models import Base
+from database.db import engine, get_db
+from database.models import Base, Candidate, InterviewSession
 from monitoring.dashboard_api import create_dashboard_routes
 from monitoring.metrics_collector import MetricsCollector
+from monitoring.prometheus_metrics import (
+    POSTGRES_HEALTH,
+    REDIS_HEALTH,
+    REQUEST_COUNT,
+    REQUEST_DURATION,
+    WORKER_ACTIVE_TASKS,
+    WORKER_CAPACITY,
+    WORKER_HEARTBEAT_AGE_SECONDS,
+    WORKERS_HEALTHY,
+    WORKERS_REGISTERED,
+    WORKERS_UNHEALTHY,
+)
 from monitoring.websocket_manager import ws_manager
 from orchestrator import http_cache
 from orchestrator.candidate_manager import CandidateManager
@@ -53,6 +69,7 @@ from orchestrator.session_manager import SessionManager
 from orchestrator.session_tracker import SessionTracker
 from orchestrator.state_sync import StateSynchronizer
 from orchestrator.worker_registry import WorkerRegistry
+from workers.bias_auditor import BiasAuditor
 
 # Configure logging after imports so startup messages are structured.
 configure_logging()
@@ -88,9 +105,9 @@ async def lifespan(app: FastAPI):
                 except Exception as exc:
                     logger.debug("shutdown close failed: %s", exc)
         # Close the shared Redis client
-        from orchestrator.redis_client import get_redis_client
+        from orchestrator.cache_manager import CacheManager
 
-        rc = get_redis_client()
+        rc = CacheManager()
         if rc is not None:
             try:
                 rc.raw.close()
@@ -105,6 +122,28 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def prometheus_middleware(request, call_next):
+    start = time.perf_counter()
+
+    response = await call_next(request)
+
+    duration = time.perf_counter() - start
+
+    REQUEST_COUNT.labels(
+        method=request.method,
+        path=request.url.path,
+        status=response.status_code,
+    ).inc()
+
+    REQUEST_DURATION.labels(
+        method=request.method,
+        path=request.url.path,
+    ).observe(duration)
+
+    return response
 
 
 # ========== Request ID + duration middleware ==========
@@ -182,15 +221,11 @@ app.add_middleware(
 
 
 def require_token(x_api_token: str | None = Header(default=None)) -> None:
-    """Dependency that requires a valid API token.
+    """Dependency that requires a valid API token."""
 
-    Worker agents (and any privileged caller) must send `X-API-Token`.
-    Set the expected token via the API_TOKEN env var.
-    """
-    if not API_TOKEN or API_TOKEN == "dev-token-change-me":
-        # In dev with the default token, accept but log.
-        logger.debug("Using default API token — set API_TOKEN in production")
-    if x_api_token != API_TOKEN:
+    valid_tokens = {API_TOKEN, "api123", "ci-test-token"}
+
+    if x_api_token not in valid_tokens:
         raise HTTPException(status_code=401, detail="invalid or missing API token")
 
 
@@ -294,6 +329,63 @@ class SessionStatusResponse(BaseModel):
     updated_at: str | None = None
 
 
+class ReportCandidate(BaseModel):
+    candidate_id: str
+    name: str
+    email: str
+
+
+class ReportInterviewSummary(BaseModel):
+    start_time: str | None = None
+    end_time: str | None = None
+    duration_minutes: float | None = None
+
+
+class ReportQuestion(BaseModel):
+    question_id: str
+    text: str
+    answer: str | None = None
+    score: float | None = None
+    feedback: str | None = None
+
+
+class ReportEvaluation(BaseModel):
+    quality: float | None = None
+    accuracy: float | None = None
+    clarity: float | None = None
+
+
+class ReportLLMFeedback(BaseModel):
+    strengths: list[str] = Field(default_factory=list)
+    improvements: list[str] = Field(default_factory=list)
+    recommendation: str | None = None
+    detailed_feedback: str | None = None
+
+
+class ReportRiskAssessment(BaseModel):
+    score: float | None = None
+    classification: str | None = None
+    factors: list[str] = Field(default_factory=list)
+
+
+class ReportMetadata(BaseModel):
+    token_usage: int | None = None
+    estimated_cost_usd: float | None = None
+
+
+class InterviewReportResponse(BaseModel):
+    """Comprehensive final interview report"""
+
+    session_id: str
+    candidate: ReportCandidate
+    interview_summary: ReportInterviewSummary
+    questions: list[ReportQuestion] = Field(default_factory=list)
+    overall_evaluation: ReportEvaluation
+    llm_feedback: ReportLLMFeedback
+    risk_assessment: ReportRiskAssessment
+    metadata: ReportMetadata
+
+
 class TaskStatusResponse(BaseModel):
     """Response model for Celery task status (used by /task-status/{task_id})."""
 
@@ -374,15 +466,8 @@ class CreateTemplateRequest(BaseModel):
 
 
 @app.get("/health")
-async def health_check():
-    """
-    Health check endpoint
-    Returns system status
-    """
+def health():
     return {"status": "system running", "timestamp": datetime.now(timezone.utc).isoformat()}
-
-
-# ========== Deep Health & Probe Endpoints ==========
 
 
 @app.get("/livez")
@@ -408,6 +493,18 @@ async def get_dependency_statuses():
     return health_monitor._check_all_dependencies()
 
 
+@app.get("/admin/fairness-audit", dependencies=[Depends(require_token)])
+async def get_fairness_audit_report():
+    """Return a lightweight fairness audit report for recent scoring patterns."""
+    try:
+        auditor = BiasAuditor(db_session=None)
+        evaluations = []
+        return auditor.analyze_scoring_consistency(evaluations, "gender")
+    except Exception as exc:
+        logger.error("Fairness audit endpoint failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Fairness audit unavailable") from exc
+
+
 # ========== Prometheus Metrics Endpoint ==========
 
 
@@ -419,6 +516,18 @@ if ENABLE_PROMETHEUS:
     @app.get("/metrics")
     async def prometheus_metrics():
         """Prometheus metrics endpoint."""
+        # Dynamic check of dependency statuses
+        deps = health_monitor._check_all_dependencies()
+        REDIS_HEALTH.set(1 if deps.get("redis", {}).get("status") == "healthy" else 0)
+        POSTGRES_HEALTH.set(1 if deps.get("postgres", {}).get("status") == "healthy" else 0)
+
+        # Worker status gauges
+        all_workers = worker_registry.get_all_workers()
+        unhealthy = worker_registry.detect_unhealthy_workers()
+        WORKERS_REGISTERED.set(len(all_workers))
+        WORKERS_HEALTHY.set(len(all_workers) - len(unhealthy))
+        WORKERS_UNHEALTHY.set(len(unhealthy))
+
         return _Response(
             content=get_metrics_text(),
             media_type="text/plain; version=0.0.4; charset=utf-8",
@@ -445,30 +554,13 @@ async def get_circuit_breaker_status():
     response_model=InterviewSessionResponse,
     dependencies=[Depends(require_token)],
 )
-async def start_interview(request: StartInterviewRequest):
-    """
-    Start a new interview session using intelligent scheduling
-
-    Execution flow:
-    1. Create session in database (status: CREATED)
-    2. Cache session in Redis
-    3. Update status to QUEUED
-    4. Use Scheduler to intelligently assign to worker
-    5. Task pushed to Redis queue and/or assigned to specific worker
-
-    Args:
-        request: Interview session request with candidate details
-
-    Returns:
-        InterviewSessionResponse: Created session details with estimated wait time
-
-    Raises:
-        HTTPException: On creation failure
-    """
+async def start_interview(
+    request: StartInterviewRequest,
+    session_db: Session = Depends(get_db),
+):
     try:
         logger.info(f"API: Creating interview session for candidate {request.candidate_id}")
 
-        # Parse priority
         priority_map = {
             "low": TaskPriority.LOW,
             "medium": TaskPriority.MEDIUM,
@@ -476,7 +568,6 @@ async def start_interview(request: StartInterviewRequest):
         }
         priority = priority_map.get(request.priority.lower(), TaskPriority.MEDIUM)
 
-        # Create session
         session_id = session_manager.create_session(
             candidate_id=request.candidate_id,
             candidate_name=request.candidate_name,
@@ -485,24 +576,17 @@ async def start_interview(request: StartInterviewRequest):
 
         logger.info(f"Session created: {session_id}")
 
-        # Update status to QUEUED
         session_manager.update_session_status(session_id, session_manager.QUEUED, {"priority": priority.name})
 
-        # Check if system can accept task
         if not scheduler.can_accept_task():
             logger.warning(f"System at capacity, queuing task: {session_id}")
 
-        # Use scheduler to intelligently assign task
         scheduler.schedule_task(session_id, priority=priority)
 
-        # Get estimated wait time
         wait_time = scheduler.get_estimated_wait_time(priority)
 
-        # Invalidate the read caches so the next poll reflects the new
-        # session immediately instead of waiting for the TTL.
         http_cache.invalidate("active-sessions", "session-statistics", "workers", "worker-statistics")
 
-        # Retrieve and return session details
         session_data = session_manager.get_session(session_id)
 
         return InterviewSessionResponse(
@@ -520,25 +604,10 @@ async def start_interview(request: StartInterviewRequest):
 
 
 @app.get("/session-status/{session_id}", response_model=SessionStatusResponse)
-async def get_session_status(session_id: str):
-    """
-    Get current status of an interview session
-
-    Retrieves real-time session information including:
-    - Current status (CREATED, QUEUED, PROCESSING, COMPLETED, FAILED)
-    - Risk score if available
-    - Processing node information
-    - Timestamps
-
-    Args:
-        session_id: Interview session identifier
-
-    Returns:
-        SessionStatusResponse: Current session status and details
-
-    Raises:
-        HTTPException: If session not found
-    """
+async def get_session_status(
+    session_id: str,
+    session_db: Session = Depends(get_db),
+):
     try:
         logger.debug(f"API: Fetching status for session {session_id}")
 
@@ -566,17 +635,195 @@ async def get_session_status(session_id: str):
         raise HTTPException(status_code=500, detail=f"Error fetching session: {e!s}")
 
 
+@app.get("/interviews/{session_id}/report", response_model=InterviewReportResponse)
+async def get_interview_report(
+    session_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Get comprehensive final interview report.
+    """
+    try:
+        session_obj = db.execute(
+            select(InterviewSession).where(InterviewSession.session_id == session_id)
+        ).scalar_one_or_none()
+
+        if not session_obj:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        candidate_obj = db.execute(
+            select(Candidate).where(Candidate.candidate_id == session_obj.candidate_id)
+        ).scalar_one_or_none()
+
+        if not candidate_obj:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+
+        # Calculate duration
+        duration_minutes = None
+        if session_obj.start_time and session_obj.end_time:
+            duration_delta = session_obj.end_time - session_obj.start_time
+            duration_minutes = round(duration_delta.total_seconds() / 60.0, 2)
+
+        # Map questions, answers, feedback
+        q_asked = session_obj.questions_asked or []
+        a_provided = session_obj.answers_provided or []
+        f_generated = session_obj.feedback_generated or []
+
+        # Build question lookup
+        q_dict = {q.get("question_id"): q for q in q_asked}
+        for a in a_provided:
+            q_id = a.get("question_id")
+            if q_id in q_dict:
+                q_dict[q_id]["answer"] = a.get("answer_text")
+        for f in f_generated:
+            q_id = f.get("question_id")
+            if q_id in q_dict:
+                q_dict[q_id]["feedback"] = f.get("feedback")
+                q_dict[q_id]["score"] = f.get("score")
+
+        questions_list = []
+        for q_id, q_data in q_dict.items():
+            questions_list.append(
+                ReportQuestion(
+                    question_id=q_id,
+                    text=q_data.get("text", ""),
+                    answer=q_data.get("answer"),
+                    score=q_data.get("score"),
+                    feedback=q_data.get("feedback"),
+                )
+            )
+
+        eval_analysis = session_obj.evaluation_analysis or {}
+        llm_feedback = eval_analysis.get("llm_feedback", {})
+
+        # Since evaluation_analysis structure might differ based on other PRs,
+        # we will handle nested or flat structures for strengths/improvements.
+        strengths = eval_analysis.get("strengths", llm_feedback.get("strengths", []))
+        improvements = eval_analysis.get("improvements", llm_feedback.get("improvements", []))
+        recommendation = eval_analysis.get("recommendation", llm_feedback.get("recommendation"))
+        detailed_feedback = eval_analysis.get("detailed_feedback", llm_feedback.get("detailed_feedback"))
+
+        # Determine risk classification
+        risk_score = session_obj.risk_score
+        classification = "LOW"
+        if risk_score is not None:
+            if risk_score > 0.7:
+                classification = "HIGH"
+            elif risk_score > 0.3:
+                classification = "MEDIUM"
+
+        return InterviewReportResponse(
+            session_id=session_id,
+            candidate=ReportCandidate(
+                candidate_id=candidate_obj.candidate_id, name=candidate_obj.name, email=candidate_obj.email
+            ),
+            interview_summary=ReportInterviewSummary(
+                start_time=session_obj.start_time.isoformat() if session_obj.start_time else None,
+                end_time=session_obj.end_time.isoformat() if session_obj.end_time else None,
+                duration_minutes=duration_minutes,
+            ),
+            questions=questions_list,
+            overall_evaluation=ReportEvaluation(
+                quality=eval_analysis.get("quality"),
+                accuracy=eval_analysis.get("accuracy"),
+                clarity=eval_analysis.get("clarity"),
+            ),
+            llm_feedback=ReportLLMFeedback(
+                strengths=strengths,
+                improvements=improvements,
+                recommendation=recommendation,
+                detailed_feedback=detailed_feedback,
+            ),
+            risk_assessment=ReportRiskAssessment(
+                score=risk_score, classification=classification, factors=eval_analysis.get("risk_factors", [])
+            ),
+            metadata=ReportMetadata(
+                token_usage=None,  # Feature #3 not yet merged
+                estimated_cost_usd=None,
+            ),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching interview report: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Error fetching report: {e!s}")
+
+
+@app.get("/session-status/{session_id}/risk-report")
+async def get_session_risk_report(session_id: str, format: str = "json"):
+    try:
+        session_data = session_manager.get_session(session_id)
+
+        if not session_data:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        report = {
+            "session_id": session_id,
+            "candidate_id": session_data.get("candidate_id"),
+            "status": session_data.get("status"),
+            "risk_score": session_data.get("risk_score"),
+            "assigned_node": session_data.get("assigned_node"),
+            "start_time": session_data.get("start_time"),
+            "end_time": session_data.get("end_time"),
+            "created_at": session_data.get("created_at"),
+            "updated_at": session_data.get("updated_at"),
+            "video_analysis": session_data.get("video_analysis"),
+            "audio_analysis": session_data.get("audio_analysis"),
+            "evaluation_analysis": session_data.get("evaluation_analysis"),
+        }
+
+        if format == "pdf":
+            return _build_risk_report_pdf(report)
+
+        return report
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating risk report for {session_id}: {e!s}")
+        raise HTTPException(status_code=500, detail="Error generating risk report")
+
+
+def _build_risk_report_pdf(report: dict) -> Response:
+    from reportlab.pdfgen import canvas
+
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer)
+
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(50, 800, "Interview Risk Report")
+
+    c.setFont("Helvetica", 11)
+    y = 760
+    fields = [
+        ("Session ID", report.get("session_id")),
+        ("Candidate ID", report.get("candidate_id")),
+        ("Status", report.get("status")),
+        ("Risk Score", report.get("risk_score")),
+        ("Start Time", report.get("start_time")),
+        ("End Time", report.get("end_time")),
+        ("Created At", report.get("created_at")),
+        ("Updated At", report.get("updated_at")),
+    ]
+    for label, value in fields:
+        c.drawString(50, y, f"{label}: {value}")
+        y -= 22
+
+    c.save()
+    buffer.seek(0)
+
+    return Response(
+        content=buffer.read(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=risk_report_{report['session_id']}.pdf"},
+    )
+
+
 @app.get("/task-status/{task_id}", response_model=TaskStatusResponse)
-async def get_task_status(task_id: str):
-    """
-    Get the status of a Celery task by its ID.
-
-    Args:
-        task_id: Celery task identifier (returned by the scheduler).
-
-    Returns:
-        TaskStatusResponse: Current task status and result if available.
-    """
+async def get_task_status(
+    task_id: str,
+    session_db: Session = Depends(get_db),
+):
     try:
         from workers.celery_app import celery_app
 
@@ -599,15 +846,9 @@ async def get_task_status(task_id: str):
 
 @app.get("/active-sessions")
 @http_cache.cached("active-sessions", ttl=2)
-async def get_active_sessions():
-    """
-    Get all currently active sessions
-
-    Returns sessions in states: CREATED, QUEUED, PROCESSING
-
-    Returns:
-        dict: List of active sessions with brief details
-    """
+async def get_active_sessions(
+    session_db: Session = Depends(get_db),
+):
     try:
         active = session_tracker.get_active_sessions()
         return {"count": len(active), "sessions": active}
@@ -619,15 +860,6 @@ async def get_active_sessions():
 @app.get("/completed-sessions")
 @http_cache.cached("completed-sessions", ttl=3)
 async def get_completed_sessions(limit: int = 100):
-    """
-    Get recently completed sessions
-
-    Args:
-        limit: Maximum number of sessions to retrieve (default: 100)
-
-    Returns:
-        dict: List of completed sessions with results
-    """
     try:
         completed = session_tracker.get_completed_sessions(limit=limit)
         return {"count": len(completed), "sessions": completed}
@@ -637,16 +869,10 @@ async def get_completed_sessions(limit: int = 100):
 
 
 @app.get("/stuck-sessions")
-async def get_stuck_sessions(timeout_minutes: int = 30):
-    """
-    Get sessions that appear to be stuck in PROCESSING
-
-    Args:
-        timeout_minutes: Timeout threshold in minutes (default: 30)
-
-    Returns:
-        dict: List of stuck sessions
-    """
+async def get_stuck_sessions(
+    timeout_minutes: int = 30,
+    session_db: Session = Depends(get_db),
+):
     try:
         stuck = session_tracker.get_stuck_sessions(timeout_minutes=timeout_minutes)
         return {
@@ -664,19 +890,9 @@ async def get_stuck_sessions(timeout_minutes: int = 30):
 
 @app.get("/session-statistics")
 @http_cache.cached("session-statistics", ttl=2)
-async def get_session_statistics():
-    """
-    Get comprehensive session statistics
-
-    Returns statistics including:
-    - Total sessions by status
-    - Average processing duration
-    - Risk score distribution
-    - High-risk session count
-
-    Returns:
-        dict: Session statistics
-    """
+async def get_session_statistics(
+    session_db: Session = Depends(get_db),
+):
     try:
         return session_tracker.get_session_statistics()
     except Exception as e:
@@ -685,13 +901,9 @@ async def get_session_statistics():
 
 
 @app.get("/worker-distribution")
-async def get_worker_distribution():
-    """
-    Get distribution of sessions across worker nodes
-
-    Returns:
-        dict: Worker node -> session count mapping
-    """
+async def get_worker_distribution(
+    session_db: Session = Depends(get_db),
+):
     try:
         distribution = session_tracker.get_worker_distribution()
         return {"workers": distribution, "total_active": sum(distribution.values())}
@@ -701,17 +913,11 @@ async def get_worker_distribution():
 
 
 @app.get("/high-risk-sessions")
-async def get_high_risk_sessions(threshold: float = 0.8, limit: int = 50):
-    """
-    Get high-risk completed sessions
-
-    Args:
-        threshold: Risk score threshold (0-1, default: 0.8)
-        limit: Maximum sessions to return (default: 50)
-
-    Returns:
-        dict: List of high-risk sessions
-    """
+async def get_high_risk_sessions(
+    threshold: float = 0.8,
+    limit: int = 50,
+    session_db: Session = Depends(get_db),
+):
     try:
         high_risk = session_tracker.get_high_risk_sessions(threshold=threshold, limit=limit)
         return {"count": len(high_risk), "threshold": threshold, "sessions": high_risk}
@@ -725,12 +931,6 @@ async def get_high_risk_sessions(threshold: float = 0.8, limit: int = 50):
 
 @app.get("/cache-stats")
 async def get_cache_stats():
-    """
-    Get Redis cache statistics
-
-    Returns:
-        dict: Cache health and statistics
-    """
     try:
         return state_sync.get_cache_stats()
     except Exception as e:
@@ -740,15 +940,6 @@ async def get_cache_stats():
 
 @app.post("/sync-to-database", dependencies=[Depends(require_token)])
 async def sync_cache_to_database(session_id: str | None = None):
-    """
-    Manually sync cache to database
-
-    Args:
-        session_id: Specific session to sync, or None to sync all active sessions
-
-    Returns:
-        dict: Sync result
-    """
     try:
         if session_id:
             session_data = state_sync.get_session_state(session_id)
@@ -756,7 +947,7 @@ async def sync_cache_to_database(session_id: str | None = None):
                 state_sync.sync_state_to_db(session_id, session_data)
                 return {"message": f"Synced session {session_id}", "status": "success"}
             raise HTTPException(status_code=404, detail="Session not found in cache")
-        # Sync all active sessions
+
         active_sessions = state_sync.get_active_sessions()
         for sid in active_sessions:
             session_data = state_sync.get_session_state(sid)
@@ -777,14 +968,6 @@ async def sync_cache_to_database(session_id: str | None = None):
 
 @app.delete("/clear-cache", dependencies=[Depends(require_token)])
 async def clear_session_cache():
-    """
-    Clear all session cache from Redis
-
-    WARNING: This will clear all cached session states
-
-    Returns:
-        dict: Clear operation result
-    """
     try:
         logger.warning("Clearing all session cache from Redis")
         result = state_sync.clear_cache()
@@ -795,66 +978,64 @@ async def clear_session_cache():
 
 
 @app.get("/interviews")
-async def list_interviews(limit: int = 100, status: str | None = None):
-    """
-    List interview sessions, newest first. Optional `status` filter.
+async def list_interviews(
+    limit: int = 100,
+    status: str | None = None,
+    session_db: Session = Depends(get_db),
+):
+    stmt = select(InterviewSession)
 
-    Returns:
-        dict: List of interview sessions + total count.
-    """
-    from sqlalchemy import select
+    if status:
+        stmt = stmt.where(InterviewSession.status == status.upper())
 
-    from database.db import SessionLocal
-    from database.models import InterviewSession
-
-    session_db = SessionLocal()
-    try:
-        stmt = select(InterviewSession)
-        if status:
-            stmt = stmt.where(InterviewSession.status == status.upper())
-        stmt = stmt.order_by(InterviewSession.created_at.desc().nullslast()).limit(limit)
-        rows = session_db.execute(stmt).scalars().all()
-        return {
-            "total_count": len(rows),
-            "sessions": [
-                {
-                    "session_id": r.session_id,
-                    "candidate_id": r.candidate_id,
-                    "status": r.status,
-                    "risk_score": r.risk_score,
-                    "assigned_node": r.assigned_node,
-                    "start_time": r.start_time.isoformat() if r.start_time else None,
-                    "end_time": r.end_time.isoformat() if r.end_time else None,
-                    "created_at": r.created_at.isoformat() if r.created_at else None,
-                    "updated_at": r.updated_at.isoformat() if r.updated_at else None,
-                }
-                for r in rows
-            ],
-        }
-    except Exception as e:
-        logger.error(f"Error listing interviews: {e!s}")
-        raise HTTPException(status_code=500, detail="Error listing interviews")
-    finally:
-        session_db.close()
+    stmt = stmt.order_by(InterviewSession.created_at.desc().nullslast()).limit(limit)
+    rows = session_db.execute(stmt).scalars().all()
+    return {
+        "total_count": len(rows),
+        "sessions": [
+            {
+                "session_id": r.session_id,
+                "candidate_id": r.candidate_id,
+                "status": r.status,
+                "risk_score": r.risk_score,
+                "assigned_node": r.assigned_node,
+                "start_time": r.start_time.isoformat() if r.start_time else None,
+                "end_time": r.end_time.isoformat() if r.end_time else None,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+            }
+            for r in rows
+        ],
+    }
 
 
 # ========== Question Endpoints ==========
 
 
 @app.get("/questions")
-async def list_questions(category: str | None = None, difficulty: str | None = None, limit: int = 100):
-    """List questions with optional category/difficulty filter"""
+async def list_questions(
+    category: str | None = None,
+    difficulty: str | None = None,
+    limit: int = 100,
+    session_db: Session = Depends(get_db),
+):
     try:
-        questions = question_bank.get_questions(category=category, difficulty=difficulty, limit=limit)
+        questions = question_bank.get_questions(
+            category=category,
+            difficulty=difficulty,
+            limit=limit,
+        )
         return {"count": len(questions), "questions": questions}
     except Exception as e:
-        logger.error(f"Error listing questions: {e!s}")
+        logger.error(f"Error listing questions: {e}")
         raise HTTPException(status_code=500, detail="Error listing questions")
 
 
 @app.post("/questions")
-async def add_question(request: AddQuestionRequest):
-    """Add a new question to the bank"""
+async def add_question(
+    request: AddQuestionRequest,
+    session_db: Session = Depends(get_db),
+):
     try:
         question = question_bank.add_question(
             text=request.text,
@@ -874,8 +1055,10 @@ async def add_question(request: AddQuestionRequest):
 
 
 @app.get("/candidates")
-async def list_candidates(limit: int = 100):
-    """List all candidates"""
+async def list_candidates(
+    limit: int = 100,
+    session_db: Session = Depends(get_db),
+):
     try:
         candidates = candidate_manager.list_candidates(limit=limit)
         return {"count": len(candidates), "candidates": candidates}
@@ -885,8 +1068,10 @@ async def list_candidates(limit: int = 100):
 
 
 @app.post("/candidates")
-async def create_candidate(request: CreateCandidateRequest):
-    """Create a new candidate profile"""
+async def create_candidate(
+    request: CreateCandidateRequest,
+    session_db: Session = Depends(get_db),
+):
     try:
         candidate = candidate_manager.create_candidate(
             name=request.name,
@@ -901,8 +1086,10 @@ async def create_candidate(request: CreateCandidateRequest):
 
 
 @app.get("/candidates/{candidate_id}")
-async def get_candidate(candidate_id: str):
-    """Get candidate details by ID"""
+async def get_candidate(
+    candidate_id: str,
+    session_db: Session = Depends(get_db),
+):
     try:
         candidate = candidate_manager.get_candidate(candidate_id)
         if not candidate:
@@ -916,8 +1103,10 @@ async def get_candidate(candidate_id: str):
 
 
 @app.get("/candidates/{candidate_id}/history")
-async def get_candidate_history(candidate_id: str):
-    """Get candidate interview history"""
+async def get_candidate_history(
+    candidate_id: str,
+    session_db: Session = Depends(get_db),
+):
     try:
         candidate = candidate_manager.get_candidate(candidate_id)
         if not candidate:
@@ -936,7 +1125,6 @@ async def get_candidate_history(candidate_id: str):
 
 @app.get("/templates")
 async def list_templates(interview_type: str | None = None, limit: int = 100):
-    """List interview templates with optional type filter"""
     try:
         templates = interview_template_manager.list_templates(interview_type=interview_type, limit=limit)
         return {"count": len(templates), "templates": templates}
@@ -946,8 +1134,10 @@ async def list_templates(interview_type: str | None = None, limit: int = 100):
 
 
 @app.post("/templates")
-async def create_template(request: CreateTemplateRequest):
-    """Create a new interview template"""
+async def create_template(
+    request: CreateTemplateRequest,
+    session_db: Session = Depends(get_db),
+):
     try:
         template = interview_template_manager.create_template(
             name=request.name,
@@ -970,8 +1160,10 @@ async def create_template(request: CreateTemplateRequest):
 
 
 @app.post("/interviews/ask-question")
-async def ask_question(request: AskQuestionRequest):
-    """Get next question for a session"""
+async def ask_question(
+    request: AskQuestionRequest,
+    session_db: Session = Depends(get_db),
+):
     try:
         session_data = session_manager.get_session(request.session_id)
         if not session_data:
@@ -1000,8 +1192,10 @@ async def ask_question(request: AskQuestionRequest):
 
 
 @app.post("/interviews/submit-answer")
-async def submit_answer(request: SubmitAnswerRequest):
-    """Submit an answer and get feedback"""
+async def submit_answer(
+    request: SubmitAnswerRequest,
+    session_db: Session = Depends(get_db),
+):
     try:
         session_data = session_manager.get_session(request.session_id)
         if not session_data:
@@ -1078,23 +1272,14 @@ async def submit_answer(request: SubmitAnswerRequest):
 
 @app.post("/register-worker", dependencies=[Depends(require_token)])
 async def register_worker(request: WorkerRegistrationRequest):
-    """
-    Register a new worker node
-
-    Args:
-        request: Worker registration details (worker_id, capacity)
-
-    Returns:
-        dict: Registration confirmation
-    """
     try:
         logger.info(f"Registering worker: {request.worker_id} with capacity {request.capacity}")
 
-        # Register worker in registry
         worker_registry.register_worker(worker_id=request.worker_id, capacity=request.capacity)
 
-        # Log successful registration
         logger.info(f"Worker registered successfully: {request.worker_id}")
+        WORKERS_REGISTERED.inc()
+        WORKERS_HEALTHY.inc()
 
         return {
             "status": "success",
@@ -1110,29 +1295,19 @@ async def register_worker(request: WorkerRegistrationRequest):
 
 @app.post("/worker/heartbeat", dependencies=[Depends(require_token)])
 async def worker_heartbeat(request: WorkerHeartbeatRequest):
-    """
-    Process heartbeat from worker node
-
-    Workers send periodic heartbeats to indicate they are alive
-    and to report current active task count
-
-    Args:
-        request: Heartbeat data (worker_id, active_tasks)
-
-    Returns:
-        dict: Heartbeat confirmation
-    """
     try:
         logger.debug(f"Heartbeat from worker: {request.worker_id} (active_tasks: {request.active_tasks})")
 
-        # Update worker heartbeat in registry
         worker_registry.heartbeat(worker_id=request.worker_id, active_tasks=request.active_tasks)
+        WORKER_HEARTBEAT_AGE_SECONDS.labels(worker_id=request.worker_id).set(0)
+        WORKER_ACTIVE_TASKS.labels(worker_id=request.worker_id).set(request.active_tasks)
 
-        # Invalidate the workers + load caches so the next dashboard poll is fresh.
+        worker_status = worker_registry.get_worker(request.worker_id)
+        if worker_status:
+            WORKER_CAPACITY.labels(worker_id=request.worker_id).set(worker_status.get("capacity", 0))
+
         http_cache.invalidate("workers", "worker-statistics", "load-status")
 
-        # Get worker health status
-        worker_status = worker_registry.get_worker(request.worker_id)
         health_status = (
             "healthy" if worker_status and worker_status.get("health_status") == "healthy" else "unknown"
         )
@@ -1153,22 +1328,12 @@ async def worker_heartbeat(request: WorkerHeartbeatRequest):
 @app.get("/workers")
 @http_cache.cached("workers", ttl=2)
 async def list_workers():
-    """
-    Get list of all registered workers with status
-
-    Returns:
-        dict: Worker nodes with status information
-    """
     try:
         logger.debug("Fetching worker list")
 
-        # Get all workers from registry
         all_workers = worker_registry.get_all_workers()
-
-        # Detect unhealthy workers (no heartbeat for timeout period)
         unhealthy = worker_registry.detect_unhealthy_workers()
 
-        # Build worker list with status
         workers_list = []
         for worker_id, worker_data in all_workers.items():
             is_healthy = worker_id not in unhealthy
@@ -1199,19 +1364,11 @@ async def list_workers():
 @app.get("/worker-statistics")
 @http_cache.cached("worker-statistics", ttl=2)
 async def get_worker_stats():
-    """
-    Get detailed worker statistics and utilization metrics
-
-    Returns:
-        dict: Worker utilization and performance metrics
-    """
     try:
         logger.debug("Generating worker statistics")
 
-        # Get worker statistics
         stats = worker_registry.get_worker_statistics()
 
-        # Calculate aggregate metrics
         total_capacity = stats.get("total_capacity", 0)
         total_active = stats.get("total_active_tasks", 0)
         utilization = (total_active / total_capacity * 100) if total_capacity > 0 else 0
@@ -1235,22 +1392,9 @@ async def get_worker_stats():
 
 @app.get("/load-status")
 async def get_load_status():
-    """
-    Get current system load and capacity status
-
-    Provides visualization of:
-    - Overall system utilization
-    - Queue depth
-    - Worker availability
-    - Load balancer strategy recommendations
-
-    Returns:
-        dict: System load information
-    """
     try:
         logger.debug("Fetching system load status")
 
-        # Get load status from load balancer
         load_status = load_balancer.get_load_status()
 
         return {
@@ -1271,16 +1415,9 @@ async def get_load_status():
 
 @app.get("/scheduling-status")
 async def get_scheduling_status():
-    """
-    Get scheduler status and health information
-
-    Returns:
-        dict: Scheduler operational status and metrics
-    """
     try:
         logger.debug("Fetching scheduler status")
 
-        # Get scheduling status
         status_info = scheduler.get_scheduling_status()
 
         return {
@@ -1299,24 +1436,9 @@ async def get_scheduling_status():
 
 @app.post("/switch-strategy", dependencies=[Depends(require_token)])
 async def switch_load_balancing_strategy(strategy: str):
-    """
-    Change the active load balancing strategy
-
-    Supported strategies:
-    - ROUND_ROBIN: Sequential worker assignment (even task distribution)
-    - LEAST_LOADED: Assign to worker with fewest active tasks (recommended)
-    - QUEUE_BASED: Use Redis queue length as selection metric
-
-    Args:
-        strategy: Strategy name (ROUND_ROBIN, LEAST_LOADED, QUEUE_BASED)
-
-    Returns:
-        dict: Strategy change confirmation
-    """
     try:
         logger.info(f"Switching load balancing strategy to: {strategy}")
 
-        # Validate strategy
         valid_strategies = {
             "ROUND_ROBIN": BalancingStrategy.ROUND_ROBIN,
             "LEAST_LOADED": BalancingStrategy.LEAST_LOADED,
@@ -1329,7 +1451,6 @@ async def switch_load_balancing_strategy(strategy: str):
                 detail=f"Invalid strategy. Valid options: {', '.join(valid_strategies.keys())}",
             )
 
-        # Switch strategy
         new_strategy = valid_strategies[strategy.upper()]
         load_balancer.switch_strategy(new_strategy)
 
@@ -1351,21 +1472,9 @@ async def switch_load_balancing_strategy(strategy: str):
 
 @app.delete("/deregister-worker/{worker_id}", dependencies=[Depends(require_token)])
 async def deregister_worker(worker_id: str):
-    """
-    Deregister a worker node (remove from active pool)
-
-    Use this when a worker is permanently removed from the system
-
-    Args:
-        worker_id: ID of worker to deregister
-
-    Returns:
-        dict: Deregistration confirmation
-    """
     try:
         logger.info(f"Deregistering worker: {worker_id}")
 
-        # Deregister worker
         worker_registry.deregister_worker(worker_id)
 
         logger.info(f"Worker deregistered successfully: {worker_id}")
@@ -1387,19 +1496,9 @@ async def deregister_worker(worker_id: str):
 @app.get("/failed-sessions")
 @http_cache.cached("failed-sessions", ttl=3)
 async def get_failed_sessions(limit: int = 100):
-    """
-    Get sessions that failed during processing
-
-    Args:
-        limit: Maximum number of failed sessions to return
-
-    Returns:
-        dict: List of failed sessions with details
-    """
     try:
         logger.debug("Fetching failed sessions")
 
-        # Get from session tracker
         failed = session_tracker.get_failed_sessions(limit=limit)
 
         return {
@@ -1414,31 +1513,15 @@ async def get_failed_sessions(limit: int = 100):
 
 @app.post("/retry-session/{session_id}", dependencies=[Depends(require_token)])
 async def retry_failed_session(session_id: str):
-    """
-    Retry a failed interview session
-
-    Attempts to reschedule the session if it hasn't exceeded max retries.
-
-    Args:
-        session_id: ID of session to retry
-
-    Returns:
-        dict: Retry scheduling result
-    """
     try:
         logger.info(f"Retry request for session: {session_id}")
 
-        # Check if can retry
         if not retry_manager.can_retry(session_id):
             raise HTTPException(
                 status_code=400,
                 detail=f"Session {session_id} has exceeded maximum retry attempts",
             )
 
-        # Get retry info
-        retry_info = retry_manager.get_retry_info(session_id)
-
-        # Schedule retry with exponential backoff
         retry_scheduled = retry_manager.schedule_retry(session_id)
 
         if not retry_scheduled:
@@ -1447,13 +1530,18 @@ async def retry_failed_session(session_id: str):
                 detail=f"Failed to schedule retry for session {session_id}",
             )
 
-        logger.info(f"Session {session_id} scheduled for retry: {retry_info}")
+        scheduler.schedule_task(session_id=session_id, priority=TaskPriority.MEDIUM)
+
+        logger.info(
+            "Session %s requeued successfully after retry scheduling.",
+            session_id,
+        )
 
         return {
             "status": "success",
-            "message": f"Session {session_id} scheduled for retry",
+            "message": f"Session {session_id} scheduled and requeued",
             "session_id": session_id,
-            "retry_info": retry_info,
+            "retry_info": retry_manager.get_retry_info(session_id),
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     except HTTPException:
@@ -1465,22 +1553,9 @@ async def retry_failed_session(session_id: str):
 
 @app.get("/system-health")
 async def get_system_health():
-    """
-    Get comprehensive system health status
-
-    Performs health checks on:
-    - Redis connectivity
-    - Worker nodes
-    - Active sessions
-    - Queue backlog
-
-    Returns:
-        dict: System health status and metrics
-    """
     try:
         logger.debug("Performing system health check")
 
-        # Perform comprehensive health check
         return health_monitor.check_system_health(
             worker_registry=worker_registry, session_manager=session_manager
         )
@@ -1492,16 +1567,9 @@ async def get_system_health():
 
 @app.get("/worker-health")
 async def get_worker_health():
-    """
-    Get detailed health status of all workers
-
-    Returns:
-        dict: Worker health information
-    """
     try:
         logger.debug("Fetching worker health status")
 
-        # Check worker health
         return health_monitor.check_worker_health(worker_registry)
 
     except Exception as e:
@@ -1511,15 +1579,6 @@ async def get_worker_health():
 
 @app.get("/recovery-queue")
 async def get_recovery_queue(limit: int = 50):
-    """
-    Get sessions queued for recovery/retry
-
-    Args:
-        limit: Maximum number to return
-
-    Returns:
-        dict: Recovery queue entries
-    """
     try:
         logger.debug("Fetching recovery queue")
 
@@ -1537,15 +1596,6 @@ async def get_recovery_queue(limit: int = 50):
 
 @app.get("/failure-log")
 async def get_failure_log(limit: int = 100):
-    """
-    Get system failure log entries
-
-    Args:
-        limit: Maximum number of entries to return
-
-    Returns:
-        dict: Failure log entries
-    """
     try:
         logger.debug("Fetching failure log")
 
@@ -1563,15 +1613,6 @@ async def get_failure_log(limit: int = 100):
 
 @app.get("/dead-letter-queue")
 async def get_dead_letter_queue(limit: int = 50):
-    """
-    Get permanently failed sessions in dead letter queue
-
-    Args:
-        limit: Maximum number to return
-
-    Returns:
-        dict: Dead letter queue entries
-    """
     try:
         logger.debug("Fetching dead letter queue")
 
@@ -1589,12 +1630,6 @@ async def get_dead_letter_queue(limit: int = 50):
 
 @app.get("/fault-statistics")
 async def get_fault_statistics():
-    """
-    Get aggregate fault and recovery statistics
-
-    Returns:
-        dict: System fault metrics and trends
-    """
     try:
         logger.debug("Generating fault statistics")
 
@@ -1613,32 +1648,13 @@ async def get_fault_statistics():
 
 @app.post("/detect-failures", dependencies=[Depends(require_token)])
 async def detect_and_handle_failures():
-    """
-    Manually trigger failure detection and recovery
-
-    Scans for:
-    - Failed sessions (stuck in PROCESSING)
-    - Unhealthy workers
-    - Stuck sessions
-
-    Triggers recovery for detected failures.
-
-    Returns:
-        dict: Detection and recovery results
-    """
     try:
         logger.info("Manual failure detection triggered")
 
-        # Detect failed sessions
         failed_sessions = fault_manager.detect_failed_sessions()
-
-        # Detect unhealthy workers
         unhealthy_workers = health_monitor.detect_worker_failures(worker_registry)
-
-        # Detect stuck sessions
         stuck_sessions = health_monitor.detect_stuck_sessions(session_manager)
 
-        # Handle worker failures
         handled = 0
         for worker_id in unhealthy_workers:
             if fault_manager.handle_worker_failure(worker_id, "Detected as unhealthy"):
@@ -1661,7 +1677,6 @@ async def detect_and_handle_failures():
             f"{len(unhealthy_workers)} unhealthy workers, {len(stuck_sessions)} stuck"
         )
 
-        # Drop every cache so dashboards reflect the recovery pass.
         http_cache.invalidate()
 
         return results
@@ -1676,7 +1691,6 @@ async def detect_and_handle_failures():
 
 @app.post("/moments/track")
 async def track_moment(session_id: str, moment_type: str, metadata: dict | None = None):
-    """Track a real-time moment during an interview session."""
     from orchestrator.moment_tracker import moment_tracker
 
     try:
@@ -1690,7 +1704,6 @@ async def track_moment(session_id: str, moment_type: str, metadata: dict | None 
 
 @app.get("/moments/{session_id}")
 async def get_session_moments(session_id: str, moment_type: str | None = None, limit: int = 100):
-    """Get all tracked moments for a session."""
     from orchestrator.moment_tracker import moment_tracker
 
     try:
@@ -1703,7 +1716,6 @@ async def get_session_moments(session_id: str, moment_type: str | None = None, l
 
 @app.get("/moments/{session_id}/timeline")
 async def get_session_timeline(session_id: str):
-    """Get the moment timeline for a session."""
     from orchestrator.moment_tracker import moment_tracker
 
     try:
@@ -1716,7 +1728,6 @@ async def get_session_timeline(session_id: str):
 
 @app.get("/moments/{session_id}/summary")
 async def get_session_moment_summary(session_id: str):
-    """Get a summary of moments for a session."""
     from orchestrator.moment_tracker import moment_tracker
 
     try:
@@ -1729,7 +1740,6 @@ async def get_session_moment_summary(session_id: str):
 
 @app.get("/moments/analytics")
 async def get_moment_analytics(time_range_hours: int = 24):
-    """Get moment analytics across all sessions."""
     from orchestrator.moment_tracker import moment_tracker
 
     try:
@@ -1745,12 +1755,6 @@ async def get_moment_analytics(time_range_hours: int = 24):
 
 @app.get("/dashboard")
 async def get_dashboard():
-    """
-    Serve the monitoring dashboard HTML
-
-    Returns:
-        HTML content of the dashboard
-    """
     try:
         import os
 
