@@ -35,7 +35,7 @@ def _new_registry():
         mock_get_redis.return_value = mock_redis
 
         return WorkerRegistry()
-    
+
 def test_register_worker_records_capacity():
     reg = _new_registry()
     assert reg.register_worker("w1", capacity=4) is True
