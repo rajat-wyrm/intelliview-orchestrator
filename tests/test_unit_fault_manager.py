@@ -20,13 +20,8 @@ from orchestrator.fault_manager import FailureType, FaultManager
 #         client.incr.return_value = 1
 #         return FaultManager()
 def _manager():
-<<<<<<< HEAD
-    with patch("orchestrator.fault_manager.get_redis_client") as mock_get_redis:
-        client = mock_get_redis.return_value
-=======
     with patch("orchestrator.fault_manager.get_redis_client") as mock_get_redis_client:
         client = mock_get_redis_client.return_value
->>>>>>> upstream/main
         client.ping.return_value = True
         client.lpush.return_value = 1
         client.ltrim.return_value = True
