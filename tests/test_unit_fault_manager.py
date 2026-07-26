@@ -18,6 +18,7 @@ def _manager():
         client.lrange.return_value = []
         client.get.return_value = None
         client.set.return_value = True
+        client.setex.return_value = True
         client.incr.return_value = 1
 
         return FaultManager()

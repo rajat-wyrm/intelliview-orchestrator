@@ -87,6 +87,13 @@ async def lifespan(app: FastAPI):
     close the shared Redis client, and notify clients.
     """
     Base.metadata.create_all(bind=engine)
+    # Seed default risk configurations
+    from database.db import SessionLocal
+    from workers.risk_engine import seed_default_configs
+
+    with SessionLocal() as db:
+        seed_default_configs(db)
+
     if API_TOKEN == "dev-token-change-me":
         logger.warning(
             "API_TOKEN is the built-in dev default — set a strong token "

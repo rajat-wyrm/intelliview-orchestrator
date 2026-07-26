@@ -10,18 +10,20 @@ def _new_registry():
     with patch("orchestrator.worker_registry.get_redis_client") as mock_get_redis:
         mock_redis = MagicMock()
 
+        mock_redis.ping.return_value = True
         mock_redis.hset.return_value = True
         mock_redis.sadd.return_value = True
         mock_redis.expire.return_value = True
         mock_redis.set.return_value = True
+        mock_redis.setex.return_value = True
         mock_redis.delete.return_value = 1
         mock_redis.srem.return_value = 1
         mock_redis.hincrby.return_value = 1
         mock_redis.smembers.return_value = set()
         mock_redis.hgetall.return_value = {}
+        mock_redis.scan_iter.return_value = iter([])
 
         mock_get_redis.return_value = mock_redis
-
         return WorkerRegistry()
 
 

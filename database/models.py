@@ -150,3 +150,22 @@ class InterviewTemplate(Base):
 
     def __repr__(self):
         return f"<InterviewTemplate(template_id='{self.template_id}', name='{self.name}', type='{self.interview_type}')>"
+
+
+class RiskConfiguration(Base):
+    """
+    RiskConfiguration ORM Model
+    Stores risk configurations such as weights, thresholds, and parameters
+    """
+
+    __tablename__ = "risk_configurations"
+
+    key = Column(String(255), primary_key=True, index=True, nullable=False)
+    value = Column(JSON, nullable=False)
+    description = Column(String(500), nullable=True)
+
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<RiskConfiguration(key='{self.key}', value={self.value})>"

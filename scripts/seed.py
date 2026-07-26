@@ -63,9 +63,17 @@ def seed_sessions(reset: bool = False) -> None:
         Base.metadata.create_all(bind=engine)
 
         if reset:
+            from database.models import RiskConfiguration
+
             deleted = db.query(InterviewSession).delete()
+            deleted_configs = db.query(RiskConfiguration).delete()
             db.commit()
             print(f"  - deleted {deleted} existing sessions")
+            print(f"  - deleted {deleted_configs} existing risk configurations")
+
+        from workers.risk_engine import seed_default_configs
+
+        seed_default_configs(db)
 
         existing_ids = {row.session_id for row in db.query(InterviewSession.session_id).all()}
         if existing_ids:
