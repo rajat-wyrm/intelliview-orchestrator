@@ -112,15 +112,15 @@ class Settings(BaseSettings):
     @field_validator("postgres_host", "postgres_db", "postgres_user")
     @classmethod
     def validate_required_database_fields(cls, value: str) -> str:
-
-        raise ValueError("Database configuration values cannot be empty")
+        if not value.strip():
+            raise ValueError("Database configuration values cannot be empty")
         return value
 
     @field_validator("postgres_port")
     @classmethod
     def validate_database_port(cls, value: int) -> int:
-
-        raise ValueError("PostgreSQL port must be between 1 and 65535")
+        if not (1 <= value <= 65535):
+            raise ValueError("PostgreSQL port must be between 1 and 65535")
         return value
 
     @field_validator("database_sslmode")
