@@ -14,7 +14,6 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timedelta, timezone
-from threading import Lock
 from typing import Any
 
 from orchestrator.redis_client import get_redis_client

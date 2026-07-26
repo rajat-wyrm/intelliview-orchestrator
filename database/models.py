@@ -1,5 +1,4 @@
 
-from datetime import datetime, timezone
 
 from sqlalchemy import (
     JSON,
@@ -14,11 +13,6 @@ from sqlalchemy.sql import func  # noqa: F401 (re-exported for ORM consumers)
 
 from database.db import Base
 from orchestrator.time_utils import utcnow
-
-
-def utcnow() -> datetime:
-    """Return a timezone-aware UTC datetime."""
-    return datetime.now(timezone.utc)
 
 
 class InterviewSession(Base):

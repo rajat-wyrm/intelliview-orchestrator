@@ -12,15 +12,15 @@ Integrates:
 - Task Queue integration with Celery
 """
 
-import io
 import logging
 import re
 import time
 import time as _time
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Response
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
@@ -35,7 +35,7 @@ from config import (
     MAX_REQUEST_BODY_BYTES,
 )
 from database.db import engine, get_db
-from database.models import Base, Candidate, InterviewSession
+from database.models import Base, InterviewSession
 from monitoring.dashboard_api import create_dashboard_routes
 from monitoring.metrics_collector import MetricsCollector
 from monitoring.prometheus_metrics import (

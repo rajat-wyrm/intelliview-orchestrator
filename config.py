@@ -10,7 +10,6 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-
 class Settings(BaseSettings):
     """Application configuration."""
 
@@ -127,14 +126,16 @@ class Settings(BaseSettings):
     @field_validator("database_sslmode")
     @classmethod
     def validate_database_sslmode(cls, value: str) -> str:
-        allowed = {
-            "disable",
-            "allow",
-            "prefer",
-            "require",
-            "verify-ca",
-            "verify-full",
-        }
+        if value not in {
+        "disable",
+        "allow",
+        "prefer",
+        "require",
+        "verify-ca",
+        "verify-full",
+        }:
+            raise ValueError("Invalid database_sslmode")
+        return value
 
 
 
