@@ -1,6 +1,8 @@
+from sqlalchemy import Column, DateTime, Integer, String
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import Column, Integer, String, DateTime
+
 Base = declarative_base()
+
 
 class EmailEvent(Base):
     __tablename__ = "email_events"
