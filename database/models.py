@@ -86,10 +86,10 @@ class InterviewSession(Base):
     feedback_generated = Column(JSON, nullable=True, default=list)
     overall_score = Column(Float, nullable=True)
     template_id = Column(
-    String(255),
-    ForeignKey("interview_templates.template_id"),
-    nullable=True,
-)
+        String(255),
+        ForeignKey("interview_templates.template_id"),
+        nullable=True,
+    )
 
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
@@ -103,8 +103,6 @@ class InterviewSession(Base):
         "InterviewTemplate",
         back_populates="interview_sessions",
     )
-
-
 
     def __repr__(self):
         return (
@@ -159,15 +157,12 @@ class Candidate(Base):
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
     interview_sessions = relationship(
-    "InterviewSession",
-    back_populates="template",
-)
+        "InterviewSession",
+        back_populates="template",
+    )
 
     def __repr__(self):
-        return (
-            f"<Candidate(candidate_id='{self.candidate_id}', "
-            f"name='{self.name}')>"
-        )
+        return f"<Candidate(candidate_id='{self.candidate_id}', name='{self.name}')>"
 
 
 class InterviewTemplate(Base):
@@ -200,4 +195,3 @@ class InterviewTemplate(Base):
             f"name='{self.name}', "
             f"type='{self.interview_type}')>"
         )
-
