@@ -74,7 +74,7 @@ def _llm_evaluate_answer_quality(session_id: str, question: str, answer: str) ->
         from workers.ai_client import HAS_GEMINI, gemini_generate
 
         if HAS_GEMINI:
-            response = gemini_generate(f"{prompt}\n\n{user_msg}", temperature=0.3, max_output_tokens=512)
+            response, usage = gemini_generate(f"{prompt}\n\n{user_msg}", temperature=0.3, max_output_tokens=512)
             if response:
                 parsed = json.loads(response)
                 return {
@@ -91,7 +91,7 @@ def _llm_evaluate_answer_quality(session_id: str, question: str, answer: str) ->
         from workers.ai_client import HAS_GROK, grok_completion
 
         if HAS_GROK:
-            response = grok_completion(
+            response,usage = grok_completion(
                 [{"role": "system", "content": prompt}, {"role": "user", "content": user_msg}],
                 temperature=0.3,
                 max_tokens=512,
@@ -103,6 +103,7 @@ def _llm_evaluate_answer_quality(session_id: str, question: str, answer: str) ->
                     "incorrect_concepts_count": parsed.get("incorrect_concepts_count", 0),
                     "knowledge_gaps": parsed.get("knowledge_gaps", []),
                     "provider": "grok",
+                    "llm_usage": usage,
                 }
     except Exception as exc:
         logger.debug("Grok accuracy evaluation failed: %s", exc)

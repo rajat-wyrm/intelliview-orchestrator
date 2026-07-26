@@ -143,22 +143,22 @@ def gemini_generate(
     *,
     temperature: float = 0.7,
     max_output_tokens: int = 1024,
-) -> str | None:
+) ->  tuple[str | None, dict[str, Any] | None]:
     """Generate text using Gemini; returns the text or None."""
     if not HAS_GEMINI:
         return None
     try:
-        response = gemini_model.generate_content(
+        response,usage = gemini_model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
                 temperature=temperature,
                 max_output_tokens=max_output_tokens,
             ),
         )
-        return response.text
+        return response.text, None
     except Exception as exc:
         logger.warning("Gemini generation failed: %s", exc)
-        return None
+        return None, None
 
 
 def gemini_chat(
@@ -194,21 +194,21 @@ def grok_completion(
     model: str = "grok-2-1212",
     temperature: float = 0.7,
     max_tokens: int = 1024,
-) -> str | None:
+) -> tuple[str | None, dict[str, Any] | None]:
     """Send a chat completion request to Grok; returns the assistant text or None."""
     if not HAS_GROK:
         return None
     try:
-        resp = grok_client.chat.completions.create(
+        resp, usage = grok_client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        return resp.choices[0].message.content
+        return resp.choices[0].message.content,None
     except Exception as exc:
         logger.warning("Grok completion failed: %s", exc)
-        return None
+        return None,None
 
 
 # ---------------------------------------------------------------------------
