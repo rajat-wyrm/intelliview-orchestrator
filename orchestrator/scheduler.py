@@ -73,19 +73,19 @@ class Scheduler:
             bool: True if scheduling successful
         """
         try:
-            logger.info(f"Scheduling task for session {session_id} (priority: {priority.name})")
+            logger.info("Scheduling task for session %s (priority: %s)", session_id, priority.name)
 
             # Verify session exists
             session_data = self.session_manager.get_session(session_id)
             if not session_data:
-                logger.error(f"Session {session_id} not found")
+                logger.error("Session %s not found", session_id)
                 return False
 
             # Select worker
             worker = self.load_balancer.get_best_worker_for_priority(priority.name.lower())
 
             if not worker:
-                logger.warning(f"No worker available for session {session_id} - queueing task")
+                logger.warning("No worker available for session %s - queueing task", session_id)
                 # Queue task directly to Redis, it will be picked up by any available worker
                 return self._queue_task(session_id, delay_seconds)
 

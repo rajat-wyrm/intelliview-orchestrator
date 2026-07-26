@@ -30,7 +30,7 @@ class WorkerRegistry:
     WORKER_HEARTBEAT_KEY = "worker:heartbeat:"
     HEARTBEAT_TIMEOUT = 60  # seconds
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize worker registry"""
         try:
             self.redis_client = CacheManager()
@@ -39,8 +39,8 @@ class WorkerRegistry:
             self._hydrated = False
             self._hydrate_from_redis()
             logger.info("Worker Registry initialized")
-        except Exception as e:
-            logger.error(f"Error initializing Worker Registry: {e!s}")
+        except Exception:
+            logger.exception("Error initializing Worker Registry")
             self.redis_client = None
 
     def _hydrate_from_redis(self) -> None:
@@ -118,7 +118,7 @@ class WorkerRegistry:
                 self.redis_client.sadd(self.WORKER_SET_KEY, worker_id)
                 self.redis_client.expire(key, int(timedelta(hours=24).total_seconds()))
 
-            logger.info(f"Registered worker: {worker_id} with capacity {capacity}")
+            logger.info("Registered worker: %s with capacity %s", worker_id, capacity)
             return True
 
         except Exception as e:
@@ -151,7 +151,7 @@ class WorkerRegistry:
                 self.redis_client.hset(key, "status", status)
                 self.redis_client.hset(key, "updated_at", datetime.now(timezone.utc).isoformat())
 
-            logger.info(f"Updated worker {worker_id} status to {status}")
+            logger.info("Updated worker %s status to %s", worker_id, status)
             return True
 
         except Exception as e:
@@ -354,7 +354,7 @@ class WorkerRegistry:
                 self.redis_client.delete(key)
                 self.redis_client.srem(self.WORKER_SET_KEY, worker_id)
 
-            logger.info(f"Deregistered worker: {worker_id}")
+            logger.info("Deregistered worker: %s", worker_id)
             return True
         except Exception as e:
             logger.error(f"Error deregistering worker: {e!s}")

@@ -65,9 +65,7 @@ class InterviewTemplateManager:
 
             db.add(template)
 
-        logger.info(
-            f"Created template {template_id}: {name} ({interview_type})"
-        )
+        logger.info(f"Created template {template_id}: {name} ({interview_type})")
 
         return {
             "template_id": template_id,
@@ -88,9 +86,7 @@ class InterviewTemplateManager:
 
         with get_db_session() as db:
             template = db.execute(
-                select(InterviewTemplate).where(
-                    InterviewTemplate.template_id == template_id
-                )
+                select(InterviewTemplate).where(InterviewTemplate.template_id == template_id)
             ).scalar_one_or_none()
 
             if not template:
@@ -107,11 +103,7 @@ class InterviewTemplateManager:
                 "difficulty_distribution": template.difficulty_distribution or {},
                 "usage_count": template.usage_count,
                 "success_rate": template.success_rate,
-                "created_at": (
-                    template.created_at.isoformat()
-                    if template.created_at
-                    else None
-                ),
+                "created_at": (template.created_at.isoformat() if template.created_at else None),
             }
 
     def list_templates(
@@ -125,14 +117,9 @@ class InterviewTemplateManager:
             stmt = select(InterviewTemplate)
 
             if interview_type:
-                stmt = stmt.where(
-                    InterviewTemplate.interview_type
-                    == interview_type.strip().lower()
-                )
+                stmt = stmt.where(InterviewTemplate.interview_type == interview_type.strip().lower())
 
-            stmt = stmt.order_by(
-                InterviewTemplate.created_at.desc()
-            ).limit(limit)
+            stmt = stmt.order_by(InterviewTemplate.created_at.desc()).limit(limit)
 
             rows = db.execute(stmt).scalars().all()
 
@@ -148,11 +135,7 @@ class InterviewTemplateManager:
                     "difficulty_distribution": t.difficulty_distribution or {},
                     "usage_count": t.usage_count,
                     "success_rate": t.success_rate,
-                    "created_at": (
-                        t.created_at.isoformat()
-                        if t.created_at
-                        else None
-                    ),
+                    "created_at": (t.created_at.isoformat() if t.created_at else None),
                 }
                 for t in rows
             ]
@@ -166,9 +149,7 @@ class InterviewTemplateManager:
 
         with get_db_session() as db:
             template = db.execute(
-                select(InterviewTemplate).where(
-                    InterviewTemplate.template_id == template_id
-                )
+                select(InterviewTemplate).where(InterviewTemplate.template_id == template_id)
             ).scalar_one_or_none()
 
             if not template:
@@ -182,10 +163,7 @@ class InterviewTemplateManager:
                 template.success_rate = 1.0 if success else 0.0
             else:
                 template.success_rate = (
-                    (
-                        template.success_rate * (count - 1)
-                    )
-                    + (1.0 if success else 0.0)
+                    (template.success_rate * (count - 1)) + (1.0 if success else 0.0)
                 ) / count
 
             template.updated_at = utcnow()

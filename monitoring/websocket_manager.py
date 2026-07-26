@@ -15,16 +15,17 @@ Broadcast helpers are invoked from:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import WebSocket
 
+from orchestrator.time_utils import utcnow
+
 logger = logging.getLogger(__name__)
 
 
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
+def _now():
+    return utcnow()
 
 
 class WebSocketManager:

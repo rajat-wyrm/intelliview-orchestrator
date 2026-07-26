@@ -1,21 +1,18 @@
 """
-SQLAlchemy ORM Models for AI Interview Orchestrator
-Defines database models using declarative base
+SQLAlchemy ORM Models for AI Interview Orchestrator.
+
+Defines database models using declarative base.
 """
 
-from datetime import datetime
-
 from sqlalchemy import JSON, Column, DateTime, Float, Integer, String
-from sqlalchemy.sql import func  # noqa: F401  (re-exported for ORM consumers)
+from sqlalchemy.sql import func  # noqa: F401
 
 from database.db import Base
+from orchestrator.time_utils import utcnow
 
 
 class InterviewSession(Base):
-    """
-    InterviewSession ORM Model
-    Represents an interview session with candidate and processing details
-    """
+    """Interview session ORM model."""
 
     __tablename__ = "interview_sessions"
 
@@ -23,31 +20,36 @@ class InterviewSession(Base):
     candidate_id = Column(String(255), nullable=False, index=True)
     status = Column(String(50), nullable=False, default="pending")
     assigned_node = Column(String(255), nullable=True)
-    start_time = Column(DateTime, nullable=True, default=datetime.utcnow)
+    start_time = Column(DateTime, nullable=True, default=utcnow)
     end_time = Column(DateTime, nullable=True)
     risk_score = Column(Float, nullable=True)
 
-    # Analysis results stored as JSON
+    # Analysis results
     video_analysis = Column(JSON, nullable=True)
     audio_analysis = Column(JSON, nullable=True)
     evaluation_analysis = Column(JSON, nullable=True)
 
-    # Interview Q&A tracking
+    # Interview tracking
     questions_asked = Column(JSON, nullable=True, default=list)
     answers_provided = Column(JSON, nullable=True, default=list)
     feedback_generated = Column(JSON, nullable=True, default=list)
     overall_score = Column(Float, nullable=True)
     template_id = Column(String(255), nullable=True)
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
-    def __repr__(self):
-        return f"<InterviewSession(session_id='{self.session_id}', candidate_id='{self.candidate_id}', status='{self.status}', risk_score={self.risk_score})>"
+    def __repr__(self) -> str:
+        return (
+            f"<InterviewSession(session_id='{self.session_id}', "
+            f"candidate_id='{self.candidate_id}', "
+            f"status='{self.status}', "
+            f"risk_score={self.risk_score})>"
+        )
 
 
 class Question(Base):
-    """Interview question bank entry"""
+    """Interview question bank entry."""
 
     __tablename__ = "questions"
 
@@ -59,15 +61,19 @@ class Question(Base):
     usage_count = Column(Integer, nullable=False, default=0)
     avg_score = Column(Float, nullable=True)
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
-    def __repr__(self):
-        return f"<Question(question_id='{self.question_id}', category='{self.category}', difficulty='{self.difficulty}')>"
+    def __repr__(self) -> str:
+        return (
+            f"<Question(question_id='{self.question_id}', "
+            f"category='{self.category}', "
+            f"difficulty='{self.difficulty}')>"
+        )
 
 
 class Candidate(Base):
-    """Candidate profile"""
+    """Candidate profile."""
 
     __tablename__ = "candidates"
 
@@ -80,15 +86,15 @@ class Candidate(Base):
     avg_score = Column(Float, nullable=True)
     total_interviews = Column(Integer, nullable=False, default=0)
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Candidate(candidate_id='{self.candidate_id}', name='{self.name}')>"
 
 
 class InterviewTemplate(Base):
-    """Interview template definition"""
+    """Interview template definition."""
 
     __tablename__ = "interview_templates"
 
@@ -103,8 +109,12 @@ class InterviewTemplate(Base):
     usage_count = Column(Integer, nullable=False, default=0)
     success_rate = Column(Float, nullable=True)
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
-    def __repr__(self):
-        return f"<InterviewTemplate(template_id='{self.template_id}', name='{self.name}', type='{self.interview_type}')>"
+    def __repr__(self) -> str:
+        return (
+            f"<InterviewTemplate(template_id='{self.template_id}', "
+            f"name='{self.name}', "
+            f"type='{self.interview_type}')>"
+        )

@@ -6,8 +6,9 @@ as a context-manager (or close it manually) and prefer the type-hinted
 """
 
 from __future__ import annotations
-from contextlib import contextmanager
+
 import logging
+from contextlib import contextmanager
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -31,14 +32,9 @@ if DATABASE_SSLMODE and DATABASE_SSLMODE != "disable":
     logger.info("Database SSL enabled: mode=%s", DATABASE_SSLMODE)
 engine = create_engine(DATABASE_URL, **_engine_kwargs)
 
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
-)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-<<<<<<< HEAD
-# ADD THIS FUNCTION HERE
+
 @contextmanager
 def get_db_session():
     """
@@ -51,21 +47,17 @@ def get_db_session():
     - closes the session
     """
     db = SessionLocal()
-
     try:
         yield db
         db.commit()
-
     except Exception:
         db.rollback()
         logger.exception("Database session failed")
         raise
-
     finally:
         db.close()
 
-Base = declarative_base()
-=======
+
 Base = declarative_base()
 
 
@@ -79,4 +71,3 @@ def get_db():
         yield db
     finally:
         db.close()
->>>>>>> upstream/main

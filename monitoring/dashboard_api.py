@@ -16,12 +16,12 @@ Endpoints:
 
 import asyncio
 import logging
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from config import API_TOKEN
 from orchestrator import http_cache
+from orchestrator.time_utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -78,14 +78,14 @@ def create_dashboard_routes(
                 "status": "success",
                 "metrics": system_metrics,
                 "health_check": health_check,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
         except Exception as e:
-            logger.error(f"Error fetching system metrics: {e!s}")
+            logger.exception("Error fetching system metrics")
             return {
                 "status": "error",
                 "error": str(e),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
 
     # ========== Worker Metrics Endpoint ==========
@@ -107,14 +107,14 @@ def create_dashboard_routes(
             return {
                 "status": "success",
                 "metrics": worker_metrics,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
         except Exception as e:
-            logger.error(f"Error fetching worker metrics: {e!s}")
+            logger.exception("Error fetching worker metrics")
             return {
                 "status": "error",
                 "error": str(e),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
 
     # ========== Session Metrics Endpoint ==========
@@ -136,14 +136,14 @@ def create_dashboard_routes(
             return {
                 "status": "success",
                 "metrics": session_metrics,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
         except Exception as e:
-            logger.error(f"Error fetching session metrics: {e!s}")
+            logger.exception("Error fetching session metrics")
             return {
                 "status": "error",
                 "error": str(e),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
 
     # ========== Queue Metrics Endpoint ==========
@@ -165,14 +165,14 @@ def create_dashboard_routes(
             return {
                 "status": "success",
                 "metrics": queue_metrics,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
         except Exception as e:
-            logger.error(f"Error fetching queue metrics: {e!s}")
+            logger.exception("Error fetching queue metrics")
             return {
                 "status": "error",
                 "error": str(e),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
 
     # ========== Failure Metrics Endpoint ==========
@@ -194,14 +194,14 @@ def create_dashboard_routes(
             return {
                 "status": "success",
                 "metrics": failure_metrics,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
         except Exception as e:
-            logger.error(f"Error fetching failure metrics: {e!s}")
+            logger.exception("Error fetching failure metrics")
             return {
                 "status": "error",
                 "error": str(e),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
 
     # ========== Retry Metrics Endpoint ==========
@@ -223,14 +223,14 @@ def create_dashboard_routes(
             return {
                 "status": "success",
                 "metrics": retry_metrics,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
         except Exception as e:
-            logger.error(f"Error fetching retry metrics: {e!s}")
+            logger.exception("Error fetching retry metrics")
             return {
                 "status": "error",
                 "error": str(e),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
 
     # ========== Performance Metrics Endpoint ==========
@@ -252,14 +252,14 @@ def create_dashboard_routes(
             return {
                 "status": "success",
                 "metrics": performance_metrics,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
         except Exception as e:
-            logger.error(f"Error fetching performance metrics: {e!s}")
+            logger.exception("Error fetching performance metrics")
             return {
                 "status": "error",
                 "error": str(e),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
 
     # ========== Dashboard Summary Endpoint ==========
@@ -296,14 +296,14 @@ def create_dashboard_routes(
                     "performance": performance,
                     "connections": ws_manager.get_connection_stats(),
                 },
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
         except Exception as e:
-            logger.error(f"Error generating dashboard summary: {e!s}")
+            logger.exception("Error generating dashboard summary")
             return {
                 "status": "error",
                 "error": str(e),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
 
     # ========== WebSocket Real-Time Metrics Endpoint ==========
@@ -328,7 +328,7 @@ def create_dashboard_routes(
         # Send a hello immediately so the client knows the connection is live.
         await ws_manager.send_to_connection(
             websocket,
-            {"type": "hello", "timestamp": datetime.now(timezone.utc).isoformat()},
+            {"type": "hello", "timestamp": utcnow().isoformat()},
         )
 
         try:
@@ -339,9 +339,7 @@ def create_dashboard_routes(
 
                     # Echo received message (for ping/pong)
                     if data:
-                        await websocket.send_json(
-                            {"type": "pong", "timestamp": datetime.now(timezone.utc).isoformat()}
-                        )
+                        await websocket.send_json({"type": "pong", "timestamp": utcnow().isoformat()})
                 except asyncio.TimeoutError:
                     # Send periodic metrics so dashboards see live updates.
                     try:
@@ -355,17 +353,17 @@ def create_dashboard_routes(
                             {
                                 "type": "metrics",
                                 "data": metrics,
-                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                                "timestamp": utcnow().isoformat(),
                             },
                         )
-                    except Exception as e:
-                        logger.error(f"Error sending metrics: {e!s}")
+                    except Exception:
+                        logger.exception("Error sending metrics")
                         break
         except WebSocketDisconnect:
             await ws_manager.disconnect(websocket)
             logger.info("WebSocket client disconnected")
-        except Exception as e:
-            logger.error(f"WebSocket error: {e!s}")
+        except Exception:
+            logger.exception("WebSocket error")
             await ws_manager.disconnect(websocket)
 
     return router

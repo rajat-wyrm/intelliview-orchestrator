@@ -16,7 +16,6 @@ import logging
 import re
 import time as _time
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -54,6 +53,7 @@ from orchestrator.scheduler import Scheduler, TaskPriority
 from orchestrator.session_manager import SessionManager
 from orchestrator.session_tracker import SessionTracker
 from orchestrator.state_sync import StateSynchronizer
+from orchestrator.time_utils import utcnow
 from orchestrator.worker_registry import WorkerRegistry
 
 # Configure logging after imports so startup messages are structured.
@@ -381,7 +381,7 @@ async def health_check():
     Health check endpoint
     Returns system status
     """
-    return {"status": "system running", "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {"status": "system running", "timestamp": utcnow().isoformat()}
 
 
 # ========== Deep Health & Probe Endpoints ==========
@@ -435,7 +435,7 @@ async def get_circuit_breaker_status():
         "failure_count": circuit_breaker._failure_count,
         "failure_threshold": circuit_breaker.failure_threshold,
         "cooldown_seconds": circuit_breaker.cooldown_seconds,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": utcnow().isoformat(),
     }
 
 
@@ -519,9 +519,9 @@ async def start_interview(
             estimated_wait_time=wait_time if wait_time >= 0 else None,
         )
 
-    except Exception as e:
-        logger.error(f"Error starting interview session: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error starting interview: {e!s}")
+    except Exception:
+        logger.exception("Error starting interview session")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.get("/session-status/{session_id}", response_model=SessionStatusResponse)
@@ -569,12 +569,9 @@ async def get_session_status(
 
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Error fetching session status: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error fetching session: {e!s}")
-
-
-session_db: Session = (Depends(get_db),)
+    except Exception:
+        logger.exception("Error fetching session status")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.get("/task-status/{task_id}", response_model=TaskStatusResponse)
@@ -603,9 +600,9 @@ async def get_task_status(
             "result": result.result if status == "SUCCESS" else None,
         }
         return TaskStatusResponse(**payload)
-    except Exception as e:
-        logger.error(f"Error fetching task status for {task_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error fetching task status: {e}")
+    except Exception:
+        logger.exception("Error fetching task status for {task_id}")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 # ========== Session Tracking Endpoints ==========
@@ -627,8 +624,8 @@ async def get_active_sessions(
     try:
         active = session_tracker.get_active_sessions()
         return {"count": len(active), "sessions": active}
-    except Exception as e:
-        logger.error(f"Error fetching active sessions: {e!s}")
+    except Exception:
+        logger.exception("Error fetching active sessions")
         raise HTTPException(status_code=500, detail="Error fetching active sessions")
 
 
@@ -647,8 +644,8 @@ async def get_completed_sessions(limit: int = 100):
     try:
         completed = session_tracker.get_completed_sessions(limit=limit)
         return {"count": len(completed), "sessions": completed}
-    except Exception as e:
-        logger.error(f"Error fetching completed sessions: {e!s}")
+    except Exception:
+        logger.exception("Error fetching completed sessions")
         raise HTTPException(status_code=500, detail="Error fetching completed sessions")
 
 
@@ -673,8 +670,8 @@ async def get_stuck_sessions(
             "timeout_minutes": timeout_minutes,
             "sessions": stuck,
         }
-    except Exception as e:
-        logger.error(f"Error fetching stuck sessions: {e!s}")
+    except Exception:
+        logger.exception("Error fetching stuck sessions")
         raise HTTPException(status_code=500, detail="Error fetching stuck sessions")
 
 
@@ -700,8 +697,8 @@ async def get_session_statistics(
     """
     try:
         return session_tracker.get_session_statistics()
-    except Exception as e:
-        logger.error(f"Error generating statistics: {e!s}")
+    except Exception:
+        logger.exception("Error generating statistics")
         raise HTTPException(status_code=500, detail="Error generating statistics")
 
 
@@ -718,8 +715,8 @@ async def get_worker_distribution(
     try:
         distribution = session_tracker.get_worker_distribution()
         return {"workers": distribution, "total_active": sum(distribution.values())}
-    except Exception as e:
-        logger.error(f"Error fetching worker distribution: {e!s}")
+    except Exception:
+        logger.exception("Error fetching worker distribution")
         raise HTTPException(status_code=500, detail="Error fetching worker distribution")
 
 
@@ -742,8 +739,8 @@ async def get_high_risk_sessions(
     try:
         high_risk = session_tracker.get_high_risk_sessions(threshold=threshold, limit=limit)
         return {"count": len(high_risk), "threshold": threshold, "sessions": high_risk}
-    except Exception as e:
-        logger.error(f"Error fetching high-risk sessions: {e!s}")
+    except Exception:
+        logger.exception("Error fetching high-risk sessions")
         raise HTTPException(status_code=500, detail="Error fetching high-risk sessions")
 
 
@@ -760,8 +757,8 @@ async def get_cache_stats():
     """
     try:
         return state_sync.get_cache_stats()
-    except Exception as e:
-        logger.error(f"Error fetching cache stats: {e!s}")
+    except Exception:
+        logger.exception("Error fetching cache stats")
         raise HTTPException(status_code=500, detail="Error fetching cache stats")
 
 
@@ -797,8 +794,8 @@ async def sync_cache_to_database(session_id: str | None = None):
         }
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Error syncing to database: {e!s}")
+    except Exception:
+        logger.exception("Error syncing to database")
         raise HTTPException(status_code=500, detail="Error syncing to database")
 
 
@@ -816,8 +813,8 @@ async def clear_session_cache():
         logger.warning("Clearing all session cache from Redis")
         result = state_sync.clear_cache()
         return {"message": "Cache cleared", "status": "success" if result else "failed"}
-    except Exception as e:
-        logger.error(f"Error clearing cache: {e!s}")
+    except Exception:
+        logger.exception("Error clearing cache")
         raise HTTPException(status_code=500, detail="Error clearing cache")
 
 
@@ -831,12 +828,7 @@ async def list_interviews(
     List interview sessions, newest first.
     """
 
-<<<<<<< HEAD
-    from database.db import get_db_session
-    from database.models import InterviewSession
-=======
     stmt = select(InterviewSession)
->>>>>>> upstream/main
 
     if status:
         stmt = stmt.where(InterviewSession.status == status.upper())
@@ -880,8 +872,8 @@ async def list_questions(
             limit=limit,
         )
         return {"count": len(questions), "questions": questions}
-    except Exception as e:
-        logger.error(f"Error listing questions: {e}")
+    except Exception:
+        logger.exception("Error listing questions")
         raise HTTPException(status_code=500, detail="Error listing questions")
 
 
@@ -901,8 +893,8 @@ async def add_question(
         return question
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error adding question: {e!s}")
+    except Exception:
+        logger.exception("Error adding question")
         raise HTTPException(status_code=500, detail="Error adding question")
 
 
@@ -918,8 +910,8 @@ async def list_candidates(
     try:
         candidates = candidate_manager.list_candidates(limit=limit)
         return {"count": len(candidates), "candidates": candidates}
-    except Exception as e:
-        logger.error(f"Error listing candidates: {e!s}")
+    except Exception:
+        logger.exception("Error listing candidates")
         raise HTTPException(status_code=500, detail="Error listing candidates")
 
 
@@ -937,8 +929,8 @@ async def create_candidate(
             skills=request.skills,
         )
         return candidate
-    except Exception as e:
-        logger.error(f"Error creating candidate: {e!s}")
+    except Exception:
+        logger.exception("Error creating candidate")
         raise HTTPException(status_code=500, detail="Error creating candidate")
 
 
@@ -955,8 +947,8 @@ async def get_candidate(
         return candidate
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Error fetching candidate: {e!s}")
+    except Exception:
+        logger.exception("Error fetching candidate")
         raise HTTPException(status_code=500, detail="Error fetching candidate")
 
 
@@ -974,8 +966,8 @@ async def get_candidate_history(
         return {"candidate_id": candidate_id, "history": history}
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Error fetching candidate history: {e!s}")
+    except Exception:
+        logger.exception("Error fetching candidate history")
         raise HTTPException(status_code=500, detail="Error fetching candidate history")
 
 
@@ -988,8 +980,8 @@ async def list_templates(interview_type: str | None = None, limit: int = 100):
     try:
         templates = interview_template_manager.list_templates(interview_type=interview_type, limit=limit)
         return {"count": len(templates), "templates": templates}
-    except Exception as e:
-        logger.error(f"Error listing templates: {e!s}")
+    except Exception:
+        logger.exception("Error listing templates")
         raise HTTPException(status_code=500, detail="Error listing templates")
 
 
@@ -1012,8 +1004,8 @@ async def create_template(
         return template
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error creating template: {e!s}")
+    except Exception:
+        logger.exception("Error creating template")
         raise HTTPException(status_code=500, detail="Error creating template")
 
 
@@ -1048,8 +1040,8 @@ async def ask_question(
         )
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Error getting question: {e!s}")
+    except Exception:
+        logger.exception("Error getting question")
         raise HTTPException(status_code=500, detail="Error getting question")
 
 
@@ -1125,8 +1117,8 @@ async def submit_answer(
         )
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Error submitting answer: {e!s}")
+    except Exception:
+        logger.exception("Error submitting answer")
         raise HTTPException(status_code=500, detail="Error submitting answer")
 
 
@@ -1158,11 +1150,11 @@ async def register_worker(request: WorkerRegistrationRequest):
             "message": f"Worker {request.worker_id} registered",
             "worker_id": request.worker_id,
             "capacity": request.capacity,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
-    except Exception as e:
-        logger.error(f"Error registering worker: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error registering worker: {e!s}")
+    except Exception:
+        logger.exception("Error registering worker")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.post("/worker/heartbeat", dependencies=[Depends(require_token)])
@@ -1200,11 +1192,11 @@ async def worker_heartbeat(request: WorkerHeartbeatRequest):
             "worker_id": request.worker_id,
             "health": health_status,
             "active_tasks": request.active_tasks,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
-    except Exception as e:
-        logger.error(f"Error processing heartbeat: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error processing heartbeat: {e!s}")
+    except Exception:
+        logger.exception("Error processing heartbeat")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.get("/workers")
@@ -1246,11 +1238,11 @@ async def list_workers():
             "healthy_workers": len(all_workers) - len(unhealthy),
             "unhealthy_workers": len(unhealthy),
             "workers": workers_list,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
-    except Exception as e:
-        logger.error(f"Error fetching worker list: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error fetching worker list: {e!s}")
+    except Exception:
+        logger.exception("Error fetching worker list")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.get("/worker-statistics")
@@ -1283,11 +1275,11 @@ async def get_worker_stats():
             "max_worker_load": stats.get("max_active_tasks", 0),
             "idle_workers": stats.get("idle_workers", 0),
             "worker_details": stats.get("workers", []),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
-    except Exception as e:
-        logger.error(f"Error generating worker statistics: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error generating worker statistics: {e!s}")
+    except Exception:
+        logger.exception("Error generating worker statistics")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.get("/load-status")
@@ -1319,11 +1311,11 @@ async def get_load_status():
             "system_at_capacity": load_status.get("system_at_capacity", False),
             "system_overloaded": load_status.get("system_overloaded", False),
             "recommended_strategy": load_status.get("recommended_strategy", "LEAST_LOADED"),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
-    except Exception as e:
-        logger.error(f"Error fetching load status: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error fetching load status: {e!s}")
+    except Exception:
+        logger.exception("Error fetching load status")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.get("/scheduling-status")
@@ -1347,11 +1339,11 @@ async def get_scheduling_status():
             "available_workers": status_info.get("available_workers", 0),
             "can_accept_tasks": scheduler.can_accept_task(),
             "recommendation": status_info.get("recommendation"),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
-    except Exception as e:
-        logger.error(f"Error fetching scheduling status: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error fetching scheduling status: {e!s}")
+    except Exception:
+        logger.exception("Error fetching scheduling status")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.post("/switch-strategy", dependencies=[Depends(require_token)])
@@ -1397,13 +1389,13 @@ async def switch_load_balancing_strategy(strategy: str):
             "message": f"Strategy switched to {strategy}",
             "previous_strategy": load_balancer.strategy.name,
             "new_strategy": strategy,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Error switching strategy: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error switching strategy: {e!s}")
+    except Exception:
+        logger.exception("Error switching strategy")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.delete("/deregister-worker/{worker_id}", dependencies=[Depends(require_token)])
@@ -1431,11 +1423,11 @@ async def deregister_worker(worker_id: str):
             "status": "success",
             "message": f"Worker {worker_id} deregistered",
             "worker_id": worker_id,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
-    except Exception as e:
-        logger.error(f"Error deregistering worker: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error deregistering worker: {e!s}")
+    except Exception:
+        logger.exception("Error deregistering worker")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 # ========== Fault Tolerance & Recovery Endpoints ==========
@@ -1462,11 +1454,11 @@ async def get_failed_sessions(limit: int = 100):
         return {
             "count": len(failed),
             "failed_sessions": failed,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
-    except Exception as e:
-        logger.error(f"Error fetching failed sessions: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error fetching failed sessions: {e!s}")
+    except Exception:
+        logger.exception("Error fetching failed sessions")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.post("/retry-session/{session_id}", dependencies=[Depends(require_token)])
@@ -1511,13 +1503,13 @@ async def retry_failed_session(session_id: str):
             "message": f"Session {session_id} scheduled for retry",
             "session_id": session_id,
             "retry_info": retry_info,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Error retrying session: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error retrying session: {e!s}")
+    except Exception:
+        logger.exception("Error retrying session")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.get("/system-health")
@@ -1542,9 +1534,9 @@ async def get_system_health():
             worker_registry=worker_registry, session_manager=session_manager
         )
 
-    except Exception as e:
-        logger.error(f"Error checking system health: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error checking system health: {e!s}")
+    except Exception:
+        logger.exception("Error checking system health")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.get("/worker-health")
@@ -1561,9 +1553,9 @@ async def get_worker_health():
         # Check worker health
         return health_monitor.check_worker_health(worker_registry)
 
-    except Exception as e:
-        logger.error(f"Error fetching worker health: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error fetching worker health: {e!s}")
+    except Exception:
+        logger.exception("Error fetching worker health")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.get("/recovery-queue")
@@ -1585,11 +1577,11 @@ async def get_recovery_queue(limit: int = 50):
         return {
             "count": len(recovery_queue),
             "recovery_queue": recovery_queue,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
-    except Exception as e:
-        logger.error(f"Error fetching recovery queue: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error fetching recovery queue: {e!s}")
+    except Exception:
+        logger.exception("Error fetching recovery queue")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.get("/failure-log")
@@ -1611,11 +1603,11 @@ async def get_failure_log(limit: int = 100):
         return {
             "count": len(failures),
             "failures": failures,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
-    except Exception as e:
-        logger.error(f"Error fetching failure log: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error fetching failure log: {e!s}")
+    except Exception:
+        logger.exception("Error fetching failure log")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.get("/dead-letter-queue")
@@ -1637,11 +1629,11 @@ async def get_dead_letter_queue(limit: int = 50):
         return {
             "count": len(dlq),
             "dead_letter_queue": dlq,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
-    except Exception as e:
-        logger.error(f"Error fetching dead letter queue: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error fetching dead letter queue: {e!s}")
+    except Exception:
+        logger.exception("Error fetching dead letter queue")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.get("/fault-statistics")
@@ -1661,11 +1653,11 @@ async def get_fault_statistics():
         return {
             "fault_statistics": fault_stats,
             "retry_statistics": retry_stats,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
-    except Exception as e:
-        logger.error(f"Error generating fault statistics: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error generating fault statistics: {e!s}")
+    except Exception:
+        logger.exception("Error generating fault statistics")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.post("/detect-failures", dependencies=[Depends(require_token)])
@@ -1710,7 +1702,7 @@ async def detect_and_handle_failures():
             "workers_handled": handled,
             "stuck_sessions_detected": len(stuck_sessions),
             "stuck_sessions": stuck_sessions,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
 
         logger.info(
@@ -1723,9 +1715,9 @@ async def detect_and_handle_failures():
 
         return results
 
-    except Exception as e:
-        logger.error(f"Error during failure detection: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error during failure detection: {e!s}")
+    except Exception:
+        logger.exception("Error during failure detection")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 # ========== Moment Tracking Endpoints ==========
@@ -1740,9 +1732,9 @@ async def track_moment(session_id: str, moment_type: str, metadata: dict | None 
         moment = moment_tracker.track_moment(session_id, moment_type, metadata)
         http_cache.invalidate(f"moments:{session_id}")
         return {"status": "success", "moment": moment}
-    except Exception as e:
-        logger.error(f"Error tracking moment: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error tracking moment: {e!s}")
+    except Exception:
+        logger.exception("Error tracking moment")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.get("/moments/{session_id}")
@@ -1753,9 +1745,9 @@ async def get_session_moments(session_id: str, moment_type: str | None = None, l
     try:
         moments = moment_tracker.get_session_moments(session_id, moment_type, limit)
         return {"session_id": session_id, "count": len(moments), "moments": moments}
-    except Exception as e:
-        logger.error(f"Error fetching moments: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error fetching moments: {e!s}")
+    except Exception:
+        logger.exception("Error fetching moments")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.get("/moments/{session_id}/timeline")
@@ -1766,9 +1758,9 @@ async def get_session_timeline(session_id: str):
     try:
         timeline = moment_tracker.get_timeline(session_id)
         return {"session_id": session_id, "count": len(timeline), "timeline": timeline}
-    except Exception as e:
-        logger.error(f"Error fetching timeline: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error fetching timeline: {e!s}")
+    except Exception:
+        logger.exception("Error fetching timeline")
+        raise HTTPException(status_code=500, detail="Error starting interview")
 
 
 @app.get("/moments/{session_id}/summary")
@@ -1779,9 +1771,9 @@ async def get_session_moment_summary(session_id: str):
     try:
         summary = moment_tracker.get_session_summary(session_id)
         return summary
-    except Exception as e:
-        logger.error(f"Error fetching moment summary: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error fetching moment summary: {e!s}")
+    except Exception:
+        logger.exception("Error fetching moment summary")
+        raise HTTPException(status_code=500, detail="Error fetching moment summary")
 
 
 @app.get("/moments/analytics")
@@ -1792,9 +1784,9 @@ async def get_moment_analytics(time_range_hours: int = 24):
     try:
         analytics = moment_tracker.get_analytics(time_range_hours)
         return analytics
-    except Exception as e:
-        logger.error(f"Error fetching moment analytics: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error fetching moment analytics: {e!s}")
+    except Exception:
+        logger.exception("Error fetching moment analytics")
+        raise HTTPException(status_code=500, detail="Error fetching moment analytics")
 
 
 # ========== Dashboard HTML Endpoint ==========
@@ -1823,9 +1815,9 @@ async def get_dashboard():
         raise HTTPException(status_code=404, detail="Dashboard HTML not found")
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Error serving dashboard: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error serving dashboard: {e!s}")
+    except Exception:
+        logger.exception("Error serving dashboard")
+        raise HTTPException(status_code=500, detail="Error serving dashboard")
 
 
 if __name__ == "__main__":

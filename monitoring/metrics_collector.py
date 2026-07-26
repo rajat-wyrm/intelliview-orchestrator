@@ -13,10 +13,11 @@ Responsibilities:
 import json
 import logging
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any
 
 from orchestrator.cache_manager import CacheManager
+from orchestrator.time_utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ class MetricsCollector:
     - Failure and retry patterns
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """
         Initialize MetricsCollector
         """
@@ -87,7 +88,7 @@ class MetricsCollector:
                 health_status = "degraded"
 
             payload = {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
                 "system_health": health_status,
                 "session_metrics": session_metrics,
                 "worker_metrics": worker_metrics,
@@ -96,8 +97,8 @@ class MetricsCollector:
             }
             self._system_cache.set("metrics", payload)
             return payload
-        except Exception as e:
-            logger.error(f"Error collecting system metrics: {e!s}")
+        except Exception:
+            logger.exception("Error collecting system metrics")
             return {}
 
     def _get_session_metrics(self) -> dict[str, Any]:
@@ -149,8 +150,8 @@ class MetricsCollector:
                 else 0,
             }
 
-        except Exception as e:
-            logger.error(f"Error getting session metrics: {e!s}")
+        except Exception:
+            logger.exception("Error getting session metrics")
             return {}
 
     def _get_worker_metrics(self) -> dict[str, Any]:
@@ -199,8 +200,8 @@ class MetricsCollector:
                 "health_percent": (healthy_workers / total_workers * 100) if total_workers > 0 else 0,
             }
 
-        except Exception as e:
-            logger.error(f"Error getting worker metrics: {e!s}")
+        except Exception:
+            logger.exception("Error getting worker metrics")
             return {}
 
     def _get_queue_metrics(self) -> dict[str, Any]:
@@ -218,8 +219,8 @@ class MetricsCollector:
                 "backlog_percent": (queue_length / 1000 * 100) if queue_length > 0 else 0,
             }
 
-        except Exception as e:
-            logger.error(f"Error getting queue metrics: {e!s}")
+        except Exception:
+            logger.exception("Error getting queue metrics")
             return {}
 
     def get_worker_metrics(self, worker_registry) -> dict[str, Any]:
@@ -254,11 +255,11 @@ class MetricsCollector:
             return {
                 "total_workers": len(workers_list),
                 "workers": workers_list,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
 
-        except Exception as e:
-            logger.error(f"Error getting worker metrics: {e!s}")
+        except Exception:
+            logger.exception("Error getting worker metrics")
             return {}
 
     def get_session_metrics(self, session_tracker) -> dict[str, Any]:
@@ -283,11 +284,11 @@ class MetricsCollector:
                 "max_risk_score": session_stats.get("max_risk_score", 0),
                 "avg_risk_score": session_stats.get("avg_risk_score", 0),
                 "high_risk_count": session_stats.get("high_risk_count", 0),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
 
-        except Exception as e:
-            logger.error(f"Error getting session metrics: {e!s}")
+        except Exception:
+            logger.exception("Error getting session metrics")
             return {}
 
     def get_failure_metrics(self, fault_manager) -> dict[str, Any]:
@@ -309,11 +310,11 @@ class MetricsCollector:
                 "recovery_queue_size": fault_stats.get("recovery_queue_size", 0),
                 "dead_letter_queue_size": fault_stats.get("dead_letter_queue_size", 0),
                 "last_failures": fault_stats.get("last_failures", [])[:5],
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
 
-        except Exception as e:
-            logger.error(f"Error getting failure metrics: {e!s}")
+        except Exception:
+            logger.exception("Error getting failure metrics")
             return {}
 
     def get_retry_metrics(self, retry_manager) -> dict[str, Any]:
@@ -334,11 +335,11 @@ class MetricsCollector:
                 "retry_strategy": retry_stats.get("retry_strategy", "unknown"),
                 "max_retries": retry_stats.get("max_retries", 0),
                 "recent_retries": retry_stats.get("scheduled_retries", [])[:5],
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
 
-        except Exception as e:
-            logger.error(f"Error getting retry metrics: {e!s}")
+        except Exception:
+            logger.exception("Error getting retry metrics")
             return {}
 
     def get_performance_metrics(self, session_tracker) -> dict[str, Any]:
@@ -359,11 +360,11 @@ class MetricsCollector:
                 "total_sessions": stats.get("active_count", 0) + stats.get("completed_count", 0),
                 "throughput_per_minute": self._calculate_throughput(),
                 "peak_concurrent_sessions": stats.get("peak_concurrent", 0),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
 
-        except Exception as e:
-            logger.error(f"Error getting performance metrics: {e!s}")
+        except Exception:
+            logger.exception("Error getting performance metrics")
             return {}
 
     def _calculate_throughput(self) -> float:
@@ -373,7 +374,7 @@ class MetricsCollector:
                 return 0.0
 
             # Get completed sessions from last minute
-            one_minute_ago = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+            one_minute_ago = (utcnow() - timedelta(minutes=1)).isoformat()
 
             count = 0
             cursor = 0
@@ -397,8 +398,8 @@ class MetricsCollector:
 
             return float(count)
 
-        except Exception as e:
-            logger.warning(f"Error calculating throughput: {e!s}")
+        except Exception:
+            logger.exception("Error calculating throughput")
             return 0.0
 
     def _get_uptime(self) -> int:
@@ -412,11 +413,11 @@ class MetricsCollector:
 
             if start_time_str:
                 start_time = datetime.fromisoformat(start_time_str)
-                uptime = (datetime.now(timezone.utc) - start_time).total_seconds()
+                uptime = (utcnow() - start_time).total_seconds()
                 return int(uptime)
 
             return 0
 
-        except Exception as e:
-            logger.warning(f"Error getting uptime: {e!s}")
+        except Exception:
+            logger.exception("Error getting uptime")
             return 0

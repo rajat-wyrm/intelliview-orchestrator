@@ -66,8 +66,10 @@ class RetryManager:
         self.retry_scheduled_key = "retry_scheduled:"
 
         logger.info(
-            f"RetryManager initialized: max_retries={max_retries}, "
-            f"strategy={strategy.value}, base_delay={base_delay}s"
+            "RetryManager initialized: max_retries=%s, strategy=%s, base_delay=%ss",
+            max_retries,
+            strategy.value,
+            base_delay,
         )
 
     def can_retry(self, session_id: str) -> bool:

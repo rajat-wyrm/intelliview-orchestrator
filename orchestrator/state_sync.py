@@ -13,12 +13,12 @@ Every important update:
 
 import json
 import logging
-from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
 
 from orchestrator.cache_manager import CacheManager
+from orchestrator.time_utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -33,13 +33,13 @@ class StateSynchronizer:
     ACTIVE_SESSIONS_KEY = "active_sessions"
     SESSION_TTL = 86400  # 24 hours
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Redis connection"""
         try:
             self.redis_client = CacheManager()
             logger.info("Connected to Redis for state caching")
-        except Exception as e:
-            logger.error(f"Error initializing Redis connection: {e!s}")
+        except Exception:
+            logger.exception("Error initializing Redis connection")
             self.redis_client = None
 
     def set_session_state(
@@ -50,10 +50,8 @@ class StateSynchronizer:
         """
         Store session state in Redis cache
         """
-        if not self.redis_client:
-            logger.warning(
-                f"Redis not available, skipping cache for session {session_id}"
-            )
+        if self.redis_client is None:
+            logger.warning(f"Redis not available, skipping cache for session {session_id}")
             return False
 
         try:
@@ -75,9 +73,7 @@ class StateSynchronizer:
             return True
 
         except Exception as e:
-            logger.error(
-                f"Error setting session state in Redis: {e!s}"
-            )
+            logger.error(f"Error setting session state in Redis: {e!s}")
             return False
 
     def get_session_state(
@@ -87,7 +83,7 @@ class StateSynchronizer:
         """
         Retrieve session state from Redis cache
         """
-        if not self.redis_client:
+        if self.redis_client is None:
             return None
 
         try:
@@ -95,23 +91,17 @@ class StateSynchronizer:
             value = self.redis_client.get(key)
 
             if not value:
-                logger.debug(
-                    f"Session {session_id} not found in cache"
-                )
+                logger.debug(f"Session {session_id} not found in cache")
                 return None
 
             session_data = json.loads(value)
 
-            logger.debug(
-                f"Retrieved cached session state for {session_id}"
-            )
+            logger.debug(f"Retrieved cached session state for {session_id}")
 
             return session_data
 
         except Exception as e:
-            logger.error(
-                f"Error getting session state from Redis: {e!s}"
-            )
+            logger.error(f"Error getting session state from Redis: {e!s}")
             return None
 
     def delete_session_state(
@@ -121,7 +111,7 @@ class StateSynchronizer:
         """
         Delete session state from Redis cache
         """
-        if not self.redis_client:
+        if self.redis_client is None:
             return False
 
         try:
@@ -133,40 +123,30 @@ class StateSynchronizer:
                 session_id,
             )
 
-            logger.debug(
-                f"Deleted cached session state for {session_id}"
-            )
+            logger.debug(f"Deleted cached session state for {session_id}")
 
             return True
 
         except Exception as e:
-            logger.error(
-                f"Error deleting session state from Redis: {e!s}"
-            )
+            logger.error(f"Error deleting session state from Redis: {e!s}")
             return False
 
     def get_active_sessions(self) -> list:
         """
         Get all active session IDs from cache
         """
-        if not self.redis_client:
+        if self.redis_client is None:
             return []
 
         try:
-            active_sessions = self.redis_client.smembers(
-                self.ACTIVE_SESSIONS_KEY
-            )
+            active_sessions = self.redis_client.smembers(self.ACTIVE_SESSIONS_KEY)
 
-            logger.debug(
-                f"Retrieved {len(active_sessions)} active sessions from cache"
-            )
+            logger.debug(f"Retrieved {len(active_sessions)} active sessions from cache")
 
             return list(active_sessions)
 
         except Exception as e:
-            logger.error(
-                f"Error getting active sessions: {e!s}"
-            )
+            logger.error(f"Error getting active sessions: {e!s}")
             return []
 
     def sync_state_to_db(
@@ -182,104 +162,72 @@ class StateSynchronizer:
             from database.models import InterviewSession
 
             with get_db_session() as session_db:
-
                 interview = session_db.execute(
-                    select(InterviewSession).where(
-                        InterviewSession.session_id == session_id
-                    )
+                    select(InterviewSession).where(InterviewSession.session_id == session_id)
                 ).scalar_one_or_none()
 
                 if not interview:
-                    logger.warning(
-                        f"Session {session_id} not found in database"
-                    )
+                    logger.warning(f"Session {session_id} not found in database")
                     return False
 
                 if "status" in session_data:
                     interview.status = session_data["status"]
 
-                if (
-                    "risk_score" in session_data
-                    and session_data["risk_score"] is not None
-                ):
+                if "risk_score" in session_data and session_data["risk_score"] is not None:
                     interview.risk_score = session_data["risk_score"]
 
                 if "video_analysis" in session_data:
-                    interview.video_analysis = session_data[
-                        "video_analysis"
-                    ]
+                    interview.video_analysis = session_data["video_analysis"]
 
                 if "audio_analysis" in session_data:
-                    interview.audio_analysis = session_data[
-                        "audio_analysis"
-                    ]
+                    interview.audio_analysis = session_data["audio_analysis"]
 
                 if "evaluation_analysis" in session_data:
-                    interview.evaluation_analysis = session_data[
-                        "evaluation_analysis"
-                    ]
+                    interview.evaluation_analysis = session_data["evaluation_analysis"]
 
-                interview.updated_at = datetime.now(
-                    timezone.utc
-                )
+                interview.updated_at = utcnow()
 
-                logger.info(
-                    f"Synced session {session_id} state to database"
-                )
+                logger.info(f"Synced session {session_id} state to database")
 
                 return True
 
         except Exception as e:
-            logger.error(
-                f"Error in sync_state_to_db: {e!s}"
-            )
+            logger.error(f"Error in sync_state_to_db: {e!s}")
             return False
 
     def clear_cache(self) -> bool:
         """
         Clear all session cache from Redis
         """
-        if not self.redis_client:
+        if self.redis_client is None:
             return False
 
         try:
-            active_sessions = self.redis_client.smembers(
-                self.ACTIVE_SESSIONS_KEY
-            )
+            active_sessions = self.redis_client.smembers(self.ACTIVE_SESSIONS_KEY)
 
             for session_id in active_sessions:
                 key = f"{self.SESSION_KEY_PREFIX}{session_id}"
                 self.redis_client.delete(key)
 
-            self.redis_client.delete(
-                self.ACTIVE_SESSIONS_KEY
-            )
+            self.redis_client.delete(self.ACTIVE_SESSIONS_KEY)
 
-            logger.info(
-                f"Cleared cache for {len(active_sessions)} sessions"
-            )
+            logger.info(f"Cleared cache for {len(active_sessions)} sessions")
 
             return True
 
         except Exception as e:
-            logger.error(
-                f"Error clearing cache: {e!s}"
-            )
+            logger.error(f"Error clearing cache: {e!s}")
             return False
 
     def get_cache_stats(self) -> dict[str, Any]:
         """
         Get cache statistics
         """
-        if not self.redis_client:
-            return {
-                "status": "Redis not available"
-            }
+        if self.redis_client is None:
+            return {"status": "Redis not available"}
 
         try:
-            active_sessions = self.redis_client.smembers(
-                self.ACTIVE_SESSIONS_KEY
-            )
+            active_sessions = self.redis_client.smembers(self.ACTIVE_SESSIONS_KEY)
 
             info = self.redis_client.info()
 
@@ -297,9 +245,7 @@ class StateSynchronizer:
             }
 
         except Exception as e:
-            logger.error(
-                f"Error getting cache stats: {e!s}"
-            )
+            logger.error(f"Error getting cache stats: {e!s}")
 
             return {
                 "status": "error",

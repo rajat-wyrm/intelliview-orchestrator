@@ -1,26 +1,17 @@
 """
 Configuration for the AI Interview Orchestrator.
 
-Settings are loaded from environment variables (or a `.env` file in dev)
-via `pydantic-settings`. All values have sensible local defaults but
-should be overridden in production.
+Settings are loaded from environment variables or a `.env` file.
 """
 
 from functools import lru_cache
-from typing import List
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class _CsvList(list):
-    """Marker type that prevents pydantic-settings from JSON-parsing."""
-
-    pass
-
-
 class Settings(BaseSettings):
-    """Application configuration loaded from the environment."""
+    """Application configuration."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -29,7 +20,10 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    # --- Service discovery ---
+    # ------------------------------------------------------------------
+    # Service Discovery
+    # ------------------------------------------------------------------
+
     redis_url: str = "redis://localhost:6379/0"
 
     postgres_host: str = "localhost"
@@ -38,68 +32,100 @@ class Settings(BaseSettings):
     postgres_user: str = "postgres"
     postgres_password: str = "postgres"
 
-    # --- Worker / Celery ---
+    # ------------------------------------------------------------------
+    # Worker
+    # ------------------------------------------------------------------
+
     worker_concurrency: int = 4
     max_retries: int = 3
     worker_id: str = "worker-1"
 
-    # --- API / Security ---
+    # ------------------------------------------------------------------
+    # API
+    # ------------------------------------------------------------------
+
     api_token: str = "dev-token-change-me"
-    cors_allow_origins_raw: str = Field(default="*", alias="cors_allow_origins")
 
-    # --- Request validation ---
-    max_request_body_bytes: int = 1048576  # 1 MB
+    cors_allow_origins_raw: str = Field(
+        default="*",
+        alias="cors_allow_origins",
+    )
 
-    # --- Audit logging ---
+    max_request_body_bytes: int = 1_048_576
+
     audit_log_file: str = ""
 
-    # --- Prometheus ---
+    # ------------------------------------------------------------------
+    # Monitoring
+    # ------------------------------------------------------------------
+
     enable_prometheus: bool = True
 
-    # --- AI Provider Keys ---
+    # ------------------------------------------------------------------
+    # AI Providers
+    # ------------------------------------------------------------------
+
     gemini_api_key: str = ""
     grok_api_key: str = ""
 
-    # --- Screen Lock ---
+    # ------------------------------------------------------------------
+    # Screen Lock
+    # ------------------------------------------------------------------
+
     screen_lock_timeout: int = 300
     screen_lock_pin: str = "1234"
 
-    # --- Real-time Tracking ---
+    # ------------------------------------------------------------------
+    # Real-time
+    # ------------------------------------------------------------------
+
     realtime_enabled: bool = True
     realtime_tick_interval: int = 1
     moment_tracking_enabled: bool = True
 
-    # --- Celery ---
+    # ------------------------------------------------------------------
+    # Celery
+    # ------------------------------------------------------------------
+
     celery_broker_url: str = ""
     celery_result_backend: str = ""
 
-    # --- Database SSL ---
+    # ------------------------------------------------------------------
+    # Database
+    # ------------------------------------------------------------------
+
     database_sslmode: str = "disable"
+
+    # ------------------------------------------------------------------
+    # Feature Flags
+    # ------------------------------------------------------------------
+
+    enable_celery_broker: bool = True
+    json_logging: bool = True
+    auto_seed_demo_data: bool = False
+
+    # ------------------------------------------------------------------
+    # Validators
+    # ------------------------------------------------------------------
 
     @field_validator("postgres_host", "postgres_db", "postgres_user")
     @classmethod
     def validate_required_database_fields(cls, value: str) -> str:
-        if not value or not value.strip():
-            raise ValueError(
-                "Database configuration values cannot be empty"
-            )
+        if not value.strip():
+            raise ValueError("Database configuration values cannot be empty")
         return value
-
 
     @field_validator("postgres_port")
     @classmethod
     def validate_database_port(cls, value: int) -> int:
-        if value <= 0 or value > 65535:
-            raise ValueError(
-                "PostgreSQL port must be between 1 and 65535"
-            )
+        if not 1 <= value <= 65535:
+            raise ValueError("PostgreSQL port must be between 1 and 65535")
         return value
-
 
     @field_validator("database_sslmode")
     @classmethod
     def validate_database_sslmode(cls, value: str) -> str:
-        allowed_modes = {
+        allowed = {
             "disable",
             "allow",
             "prefer",
@@ -108,50 +134,53 @@ class Settings(BaseSettings):
             "verify-full",
         }
 
-        if value not in allowed_modes:
-            raise ValueError(
-                f"Invalid database SSL mode: {value}"
-            )
+        if value not in allowed:
+            raise ValueError(f"Invalid database SSL mode: {value}")
 
         return value
 
-    # --- Feature flags ---
-    enable_celery_broker: bool = True
-    json_logging: bool = True
-    auto_seed_demo_data: bool = False
+    # ------------------------------------------------------------------
+    # Derived Properties
+    # ------------------------------------------------------------------
 
-    # --- Derived ---
     @property
     def database_url(self) -> str:
-        base = (
+        url = (
             f"postgresql://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
-        if self.database_sslmode and self.database_sslmode != "disable":
-            return f"{base}?sslmode={self.database_sslmode}"
-        return base
+
+        if self.database_sslmode != "disable":
+            url += f"?sslmode={self.database_sslmode}"
+
+        return url
 
     @property
     def is_default_token(self) -> bool:
         return self.api_token == "dev-token-change-me"
 
     @property
-    def cors_allow_origins(self) -> List[str]:
-        raw = (self.cors_allow_origins_raw or "").strip()
-        if not raw or raw == "*":
+    def cors_allow_origins(self) -> list[str]:
+        raw = self.cors_allow_origins_raw.strip()
+
+        if raw in ("", "*"):
             return ["*"]
-        return [v.strip() for v in raw.split(",") if v.strip()]
+
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Cached settings accessor (per-process)."""
+    """Return cached application settings."""
     return Settings()
 
 
-# Module-level aliases for backwards compatibility with imports like
-# `from config import REDIS_URL`. New code should use `get_settings()`.
 settings = get_settings()
+
+# ----------------------------------------------------------------------
+# Backward-compatible module constants
+# ----------------------------------------------------------------------
+
 REDIS_URL = settings.redis_url
 DATABASE_URL = settings.database_url
 WORKER_CONCURRENCY = settings.worker_concurrency
