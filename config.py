@@ -145,6 +145,17 @@ class Settings(BaseSettings):
     def is_default_token(self) -> bool:
         return self.api_token == "dev-token-change-me"
 
+    @property
+    def resolved_database_url(self) -> str:
+        """Return the database URL, building it from PostgreSQL settings if needed."""
+        if self.database_url:
+            return self.database_url
+
+        return (
+            f"postgresql://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
