@@ -472,7 +472,6 @@ class CreateTemplateRequest(BaseModel):
 
 
 @app.get("/health")
-
 # ========== Deep Health & Probe Endpoints ==========
 
 
@@ -1632,7 +1631,6 @@ async def retry_failed_session(session_id: str):
             "status": "success",
             "message": f"Session {session_id} scheduled and requeued",
             "session_id": session_id,
-
         }
     except HTTPException:
         raise

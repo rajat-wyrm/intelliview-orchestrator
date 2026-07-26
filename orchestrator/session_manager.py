@@ -116,11 +116,10 @@ class SessionManager:
 
             session_db.add(interview_session)
 
-
             from monitoring.prometheus_metrics import (
-            SESSIONS_ACTIVE,
-            SESSIONS_CREATED,
-)
+                SESSIONS_ACTIVE,
+                SESSIONS_CREATED,
+            )
 
             session_db.commit()
 
@@ -191,10 +190,10 @@ class SessionManager:
             session_db.commit()
 
             from monitoring.prometheus_metrics import (
-    SESSIONS_ACTIVE,
-    SESSIONS_COMPLETED,
-    SESSIONS_FAILED,
-)
+                SESSIONS_ACTIVE,
+                SESSIONS_COMPLETED,
+                SESSIONS_FAILED,
+            )
 
             if new_status == self.COMPLETED:
                 SESSIONS_COMPLETED.inc()

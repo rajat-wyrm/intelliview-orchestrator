@@ -32,10 +32,6 @@ class WorkerRegistry:
     WORKER_HEARTBEAT_KEY = "worker:heartbeat:"
     HEARTBEAT_TIMEOUT = 60  # seconds
 
-
-
-
-
     def _create_redis_client(self) -> Any:
         """Create the shared Redis client used by the orchestrator."""
         return get_redis_client()
@@ -222,7 +218,6 @@ class WorkerRegistry:
                 self.redis_client.sadd(self.WORKER_SET_KEY, worker_id)
                 self.redis_client.expire(key, int(timedelta(hours=24).total_seconds()))
 
-
             return True
 
         except Exception as e:
@@ -254,7 +249,6 @@ class WorkerRegistry:
                 key = f"{self.WORKER_KEY_PREFIX}{worker_id}"
                 self.redis_client.hset(key, "status", status)
                 self.redis_client.hset(key, "updated_at", datetime.now(timezone.utc).isoformat())
-
 
             return True
 
@@ -480,7 +474,6 @@ class WorkerRegistry:
                 key = f"{self.WORKER_KEY_PREFIX}{worker_id}"
                 self.redis_client.delete(key)
                 self.redis_client.srem(self.WORKER_SET_KEY, worker_id)
-
 
             return True
         except Exception as e:

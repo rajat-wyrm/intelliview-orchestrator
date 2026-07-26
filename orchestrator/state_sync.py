@@ -10,6 +10,7 @@ Every important update:
 1. Update Redis (fast cache)
 2. Sync to PostgreSQL (persistent)
 """
+
 import logging
 from typing import Any
 
@@ -92,8 +93,6 @@ class StateSynchronizer:
             if not value:
                 logger.debug(f"Session {session_id} not found in cache")
                 return None
-
-
 
         except Exception as e:
             logger.error(f"Error getting session state from Redis: {e!s}")

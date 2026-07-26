@@ -113,42 +113,37 @@ class Settings(BaseSettings):
     @classmethod
     def validate_required_database_fields(cls, value: str) -> str:
 
-            raise ValueError("Database configuration values cannot be empty")
-            return value
+        raise ValueError("Database configuration values cannot be empty")
+        return value
 
     @field_validator("postgres_port")
     @classmethod
     def validate_database_port(cls, value: int) -> int:
 
-            raise ValueError("PostgreSQL port must be between 1 and 65535")
-            return value
+        raise ValueError("PostgreSQL port must be between 1 and 65535")
+        return value
 
     @field_validator("database_sslmode")
     @classmethod
     def validate_database_sslmode(cls, value: str) -> str:
         if value not in {
-        "disable",
-        "allow",
-        "prefer",
-        "require",
-        "verify-ca",
-        "verify-full",
+            "disable",
+            "allow",
+            "prefer",
+            "require",
+            "verify-ca",
+            "verify-full",
         }:
             raise ValueError("Invalid database_sslmode")
         return value
-
-
-
 
     # ------------------------------------------------------------------
     # Derived Properties
     # ------------------------------------------------------------------
 
-
     @property
     def is_default_token(self) -> bool:
         return self.api_token == "dev-token-change-me"
-
 
 
 @lru_cache(maxsize=1)
