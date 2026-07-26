@@ -8,7 +8,7 @@ Responsibilities:
 - Maintain worker health status
 - Provide worker availability queries
 """
-
+import redis
 import logging
 from datetime import datetime, timedelta, timezone
 from threading import Lock
