@@ -1,7 +1,12 @@
 """Unit tests for StateSynchronizer."""
 
 import json
+<<<<<<< HEAD
 from unittest.mock import patch
+=======
+from unittest.mock import  MagicMock ,patch
+
+>>>>>>> 9869eb6 (Updated unit tests for state sync)
 from orchestrator.state_sync import StateSynchronizer
 
 
