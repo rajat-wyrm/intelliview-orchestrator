@@ -72,6 +72,7 @@ class Scheduler:
         Returns:
             bool: True if scheduling successful
         """
+        logger.info("===== schedule_task() called for session %s =====", session_id)
         try:
             logger.info(f"Scheduling task for session {session_id} (priority: {priority.name})")
 
@@ -101,12 +102,16 @@ class Scheduler:
             # worker counter so the registry doesn't permanently over-report
             # load for this worker.
             try:
+                logger.info("===== About to dispatch Celery task =====")
                 if delay_seconds > 0:
                     task = process_interview_session.apply_async(args=[session_id], countdown=delay_seconds)
-                    logger.info(f"Task queued with {delay_seconds}s delay: {task.id}")
+                    # logger.info(f"Task queued with {delay_seconds}s delay: {task.id}")
                 else:
                     task = process_interview_session.delay(session_id)
-                    logger.info(f"Task enqueued immediately: {task.id}")
+                    # logger.info(f"Task enqueued immediately: {task.id}")
+
+                logger.info("===== Celery Task ID: %s =====", task.id)
+
             except Exception as dispatch_err:
                 logger.error(f"Failed to enqueue task for session {session_id}: {dispatch_err}")
                 self.worker_registry.decrement_active_tasks(worker["worker_id"])
@@ -131,6 +136,11 @@ class Scheduler:
             bool: True if queued successfully
         """
         try:
+            # Ensure status is marked so workers and API pollers know it is dispatched
+            self.session_manager.update_session_status(
+                session_id, self.session_manager.QUEUED, {"queued_at": datetime.now(timezone.utc).isoformat()}
+            )
+
             if delay_seconds > 0:
                 task = process_interview_session.apply_async(args=[session_id], countdown=delay_seconds)
             else:
@@ -141,6 +151,7 @@ class Scheduler:
 
         except Exception as e:
             logger.error(f"Error queuing task: {e!s}")
+            self.session_manager.mark_session_failed(session_id, f"Queueing error: {e!s}")
             return False
 
     def get_scheduling_status(self) -> dict[str, Any]:

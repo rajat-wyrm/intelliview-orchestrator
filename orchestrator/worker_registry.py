@@ -49,10 +49,17 @@ class WorkerRegistry:
 
             # Start background listener for real-time synchronization
             if self.redis_client:
-                task = asyncio.create_task(self._start_pubsub_listener())
-                self.background_tasks.add(task)
-                task.add_done_callback(self.background_tasks.discard)
-                logger.info("Worker Registry initialized with Pub/Sub Sync")
+                try:
+                    loop = asyncio.get_running_loop()
+
+                    task = loop.create_task(self._start_pubsub_listener())
+                    self.background_tasks.add(task)
+                    task.add_done_callback(self.background_tasks.discard)
+                    logger.info("Worker Registry initialized with Pub/Sub Sync")
+
+                except RuntimeError:
+                    logger.info("No running event loop. Pub/Sub listener skipped.")
+
             else:
                 logger.warning("Worker Registry initialized WITHOUT Redis connection")
         except Exception as e:

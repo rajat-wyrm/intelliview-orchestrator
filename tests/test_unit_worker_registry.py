@@ -1,34 +1,27 @@
-"""Unit tests for WorkerRegistry — register, heartbeat, capacity, deregister, pubsub listener."""
+"""Unit tests for WorkerRegistry — register, heartbeat, capacity, deregister."""
 
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 from orchestrator.worker_registry import WorkerRegistry
 
 
 def _new_registry():
-    client = MagicMock()
+    with patch("orchestrator.worker_registry.get_redis_client") as mock_get_redis:
+        mock_redis = MagicMock()
 
-    client.ping.return_value = True
-    client.hset.return_value = True
-    client.sadd.return_value = True
-    client.expire.return_value = True
-    client.set.return_value = True
-    client.setex.return_value = True
-    client.delete.return_value = 1
-    client.srem.return_value = 1
-    client.hincrby.return_value = 1
-    client.smembers.return_value = set()
-    client.hgetall.return_value = {}
-    client.scan_iter.return_value = iter([])
+        mock_redis.hset.return_value = True
+        mock_redis.sadd.return_value = True
+        mock_redis.expire.return_value = True
+        mock_redis.set.return_value = True
+        mock_redis.delete.return_value = 1
+        mock_redis.srem.return_value = 1
+        mock_redis.hincrby.return_value = 1
+        mock_redis.smembers.return_value = set()
+        mock_redis.hgetall.return_value = {}
 
-    client._client = MagicMock()
-    client._client.pubsub.return_value = MagicMock()
-    client._client.publish.return_value = True
+        mock_get_redis.return_value = mock_redis
 
-    with (
-        patch("orchestrator.worker_registry.get_redis_client", return_value=client),
-        patch("orchestrator.worker_registry.asyncio.create_task"),
-    ):
         return WorkerRegistry()
 
 
@@ -93,6 +86,50 @@ def test_worker_statistics_computes_utilization():
     assert stats["total_capacity"] == 8
     assert stats["total_active_tasks"] == 2
     assert stats["capacity_utilization"] == 25.0
+
+
+def test_detect_unhealthy_worker_marks_status():
+    reg = _new_registry()
+
+    reg.register_worker("worker1", capacity=2)
+
+    # Simulate worker stopping by making heartbeat older than timeout
+    reg.get_worker("worker1")["last_heartbeat"] = (
+        datetime.now(timezone.utc) - timedelta(seconds=120)
+    ).isoformat()
+
+    unhealthy = reg.detect_unhealthy_workers()
+
+    assert "worker1" in unhealthy
+    assert reg.get_worker("worker1")["status"] == "unhealthy"
+
+
+def test_detect_unhealthy_worker_keeps_recent_worker_healthy():
+    reg = _new_registry()
+
+    reg.register_worker("worker2", capacity=2)
+
+    unhealthy = reg.detect_unhealthy_workers()
+
+    assert unhealthy == []
+    assert reg.get_worker("worker2")["status"] == "healthy"
+
+
+def test_detect_unhealthy_workers_only_marks_expired_workers():
+    reg = _new_registry()
+
+    reg.register_worker("healthy_worker", capacity=2)
+    reg.register_worker("stale_worker", capacity=2)
+
+    reg.get_worker("stale_worker")["last_heartbeat"] = (
+        datetime.now(timezone.utc) - timedelta(seconds=120)
+    ).isoformat()
+
+    unhealthy = reg.detect_unhealthy_workers()
+
+    assert unhealthy == ["stale_worker"]
+    assert reg.get_worker("healthy_worker")["status"] == "healthy"
+    assert reg.get_worker("stale_worker")["status"] == "unhealthy"
 
 
 def test_deregister_worker_removes_entry():

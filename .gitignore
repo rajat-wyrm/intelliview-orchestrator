@@ -1,20 +1,5 @@
+venv/
 __pycache__/
 *.pyc
-*.pyo
+delivery.db
 .env
-.venv/
-venv/
-.pytest_cache/
-.coverage
-htmlcov/
-*.egg-info/
-.idea/
-.vscode/
-
-# Frontend
-frontend/node_modules/
-frontend/.next/
-frontend/out/
-frontend/.env.local
-frontend/*.tsbuildinfo
-
