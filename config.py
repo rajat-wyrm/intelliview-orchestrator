@@ -156,6 +156,14 @@ class Settings(BaseSettings):
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
+    @property
+    def cors_allow_origins(self) -> list[str]:
+        """Return CORS origins as a list."""
+        if not self.cors_allow_origins_raw:
+            return []
+
+        return [origin.strip() for origin in self.cors_allow_origins_raw.split(",") if origin.strip()]
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
