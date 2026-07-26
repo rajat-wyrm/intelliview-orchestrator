@@ -15,9 +15,12 @@ from orchestrator.redis_client import get_redis_client
 class CacheManager:
     """Unified cache abstraction over the shared Redis client."""
 
-    _instance: "CacheManager | None" = None
+ class CacheManager:
+    """Unified cache abstraction over the shared Redis client."""
 
-    def __new__(cls) -> "CacheManager":
+    _instance: CacheManager | None = None
+
+    def __new__(cls) -> CacheManager:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._client = get_redis_client()

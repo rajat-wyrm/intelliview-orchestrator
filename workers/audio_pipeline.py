@@ -14,39 +14,106 @@ HIGH/CRITICAL thresholds fire correctly without GPU dependencies.
 """
 
 import logging
+import os
 import time
-from typing import Any
+from typing import Any, TypedDict
+
+from workers._stubs import _seeded_unit
 
 logger = logging.getLogger(__name__)
-
-
-from workers._stubs import _seeded_unit  # noqa: E402
+AUDIO_TEMP_DIR = os.getenv("AUDIO_TEMP_DIR", "/tmp")
 
 # ---------------------------------------------------------------------------
 # Real detection helpers (Whisper / pyannote / OpenAI) with fallback to stubs
 # ---------------------------------------------------------------------------
+class TranscriptionResult(TypedDict):
+    text: str
+    confidence: float
+    language: str
+    duration_seconds: float
+    timestamp: float | None
+
+
+class BackgroundVoiceResult(TypedDict):
+    background_voices_detected: bool
+    voice_count: int
+    confidence: float
+    speaker_segments: list[dict[str, Any]]
+    timestamps: list[dict[str, Any]]
+
+
+class SuspiciousPatternResult(TypedDict):
+    suspicious_pattern_detected: bool
+    pattern_type: str | None
+    confidence: float
+    details: dict[str, Any]
+
+
+class AudioAnalysisResult(TypedDict):
+    session_id: str
+    transcription: TranscriptionResult
+    background_voices: BackgroundVoiceResult
+    suspicious_conversation: SuspiciousPatternResult
+    risk_score: float
 
 
 def _real_transcribe(session_id: str) -> dict[str, Any] | None:
     """Transcribe audio using local Whisper model."""
     try:
+        import numpy as np
+
         from workers.ai_client import transcribe_audio_file
 
-        audio_path = f"/tmp/interview_{session_id}.wav"
-        result = transcribe_audio_file(audio_path)
-        if result is None:
+        audio_path = f"{AUDIO_TEMP_DIR}/interview_{session_id}.wav"
+        if not os.path.exists(audio_path):
+            logger.warning("Audio file not found: %s", audio_path)
             return None
+        result = transcribe_audio_file(audio_path)
+        segments = result.get("segments", [])
+        if segments:
+            avg_logprob = np.mean([s.get("avg_logprob", -1.0) for s in segments])
+
+            confidence = round(
+                max(0.0, min(1.0, 1.0 + avg_logprob)),
+                3,
+            )
+        else:
+            confidence = 0.0
+
+        logger.info(
+            "avg_logprob=%s, confidence=%s",
+            avg_logprob,
+            confidence,
+        )
+
         return {
-            "text": result["text"],
-            "confidence": 0.9,
+            "text": result.get("text", ""),
+            "confidence": confidence,
             "language": result.get("language", "en"),
-            "duration_seconds": sum(s.get("end", 0) - s.get("start", 0) for s in result.get("segments", []))
-            or 120.0,
-            "timestamp": time.time(),
-        }
-    except Exception as exc:
-        logger.debug("Real transcription unavailable: %s", exc)
+ "duration_seconds": (
+    sum(s.get("end", 0) - s.get("start", 0) for s in segments) or 120.0
+),
+"timestamp": time.time(),
+
+    except ImportError:
+        logger.info("Whisper not installed, using stub fallback")
         return None
+
+    except FileNotFoundError:
+        logger.warning(
+            "Audio file not found for session %s",
+            session_id,
+        )
+        return None
+
+    except Exception as exc:
+        logger.warning(
+            "Real transcription failed for session %s: %s",
+            session_id,
+            exc,
+            exc_info=True,
+        )
+    return None
 
 
 def _real_detect_background_voices(session_id: str) -> dict[str, Any] | None:
@@ -54,7 +121,10 @@ def _real_detect_background_voices(session_id: str) -> dict[str, Any] | None:
     try:
         from workers.ai_client import detect_speaker_segments
 
-        audio_path = f"/tmp/interview_{session_id}.wav"
+        audio_path = f"{AUDIO_TEMP_DIR}/interview_{session_id}.wav"
+        if not os.path.exists(audio_path):
+            logger.warning("Audio file not found: %s", audio_path)
+            return None
         segments = detect_speaker_segments(audio_path)
         if segments is None:
             return None
@@ -65,10 +135,33 @@ def _real_detect_background_voices(session_id: str) -> dict[str, Any] | None:
             "voice_count": voice_count,
             "confidence": 0.85,
             "speaker_segments": segments,
-            "timestamps": [],
+            "timestamps": [
+                {
+                    "speaker": s["speaker_id"],
+                    "start": s["start"],
+                    "end": s["end"],
+                }
+                for s in segments
+            ],
         }
+    except ImportError:
+        logger.info("pyannote not installed, using stub fallback")
+        return None
+
+    except FileNotFoundError:
+        logger.warning(
+            "Audio file not found for session %s",
+            session_id,
+        )
+        return None
+
     except Exception as exc:
-        logger.debug("Real background voice detection unavailable: %s", exc)
+        logger.warning(
+            "Real background voice detection failed for session %s: %s",
+            session_id,
+            exc,
+            exc_info=True,
+        )
         return None
 
 
@@ -117,8 +210,24 @@ def _real_detect_suspicious(session_id: str) -> dict[str, Any] | None:
             }
         except (json.JSONDecodeError, KeyError):
             return None
+    except ImportError:
+        logger.info("LLM client not installed, using stub fallback")
+        return None
+
+    except FileNotFoundError:
+        logger.warning(
+            "Audio file not found for session %s",
+            session_id,
+        )
+        return None
+
     except Exception as exc:
-        logger.debug("Real suspicious pattern detection unavailable: %s", exc)
+        logger.warning(
+            "Real suspicious pattern detection failed for session %s: %s",
+            session_id,
+            exc,
+            exc_info=True,
+        )
         return None
 
 

@@ -7,7 +7,8 @@ from orchestrator.fault_manager import FailureType, FaultManager
 
 
 def _manager():
-    client = MagicMock()
+ with patch("orchestrator.fault_manager.get_redis_client") as mock_redis:
+    client = mock_redis.return_value
 
     client.ping.return_value = True
     client.lpush.return_value = 1
@@ -19,8 +20,7 @@ def _manager():
     client.set.return_value = True
     client.incr.return_value = 1
 
-    with patch("orchestrator.fault_manager.CacheManager", return_value=client):
-        return FaultManager()
+    return FaultManager()
 
 
 def test_log_failure_appends_to_log_key():

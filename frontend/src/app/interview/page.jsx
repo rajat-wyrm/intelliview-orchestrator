@@ -22,7 +22,8 @@ import { endpoints } from "@/lib/api";
 import { useAppStore } from "@/lib/store";
 import { toast } from "@/lib/toast";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { useMomentTracking, MomentTimeline } from "@/hooks/useMomentTracking";
+import { useMomentTracking } from "@/hooks/useMomentTracking";
+import  RiskTimeline  from "@/components/RiskTimeline";
 import { cn, riskColor } from "@/lib/utils";
 
 export default function InterviewPage() {
@@ -380,13 +381,26 @@ export default function InterviewPage() {
             </div>
           </Card>
 
-          {moments.length > 0 && (
-            <Card title="Moment Timeline">
-              <MomentTimeline moments={moments} />
-            </Card>
-          )}
+          <Card
+  title="Risk Timeline"
+  description={
+    isLive
+      ? "Real-time interview events and risk history."
+      : "Timeline will appear after the interview starts."
+  }
+>
+  {isLive ? (
+    <RiskTimeline moments={moments} />
+  ) : (
+    <div className="flex h-32 items-center justify-center text-center text-sm text-muted">
+      Interview not started
+    </div>
+  )}
+</Card>
+          
         </div>
       </div>
     </div>
   );
 }
+
