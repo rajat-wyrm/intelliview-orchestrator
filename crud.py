@@ -1,8 +1,8 @@
-from sqlalchemy.orm import Session
+
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
-from models import EmailEvent
-from datetime import datetime
+from sqlalchemy.orm import Session
+
 from models import EmailEvent
 
 VALID_EVENTS = [

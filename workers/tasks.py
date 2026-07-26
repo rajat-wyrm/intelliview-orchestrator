@@ -23,8 +23,6 @@ from sqlalchemy import select
 
 from database.db import SessionLocal
 from database.models import InterviewSession
-from orchestrator.cache_manager import CacheManager
-
 from monitoring.prometheus_metrics import (
     CELERY_ACTIVE_TASKS,
     CELERY_TASK_RUNTIME,

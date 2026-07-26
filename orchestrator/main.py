@@ -678,18 +678,9 @@ async def get_session_status(
         raise HTTPException(status_code=500, detail=f"Error fetching session: {e!s}")
 
 
-session_db: Session = Depends(get_db),
-)
 
-@app.get("/task-status/{task_id}", response_model=TaskStatusResponse)
-async def get_task_status(
-    task_id: str,
-    session_db: Session = Depends(get_db),
-):
-    """
-    Get current status of a background task.
-    """
-    
+
+
 @app.get("/interviews/{session_id}/report", response_model=InterviewReportResponse)
 async def get_interview_report(
     session_id: str,
@@ -917,7 +908,10 @@ async def get_active_sessions(
         return {"count": len(active), "sessions": active}
     except Exception as e:
         logger.error(f"Error fetching active sessions: {e!s}")
-        raise HTTPException(status_code=500, detail="Error fetching active sessions")
+        raise HTTPException(
+            status_code=500,
+            detail="Error fetching active sessions"
+        )
 
 
 @app.get("/completed-sessions")

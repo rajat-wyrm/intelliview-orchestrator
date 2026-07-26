@@ -1,38 +1,38 @@
-from fastapi import FastAPI, HTTPException, Depends, Header
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
 from datetime import datetime
-from typing import Optional
+
+from fastapi import Depends, FastAPI, Header, HTTPException
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from config import WEBHOOK_SECRET
+from crud import (
+        VALID_EVENTS,
+        count_events,
+        create_event,
+        event_exists,
+        get_events,
+)
 from database import engine, get_db
 from models import Base
-from datetime import datetime
-from pydantic import BaseModel, EmailStr
-from schemas import Webhook, EventResponse
+from schemas import EventResponse, Webhook
+
 
 class Config:
         from_attributes = True
-from crud import (
-    create_event,
-    event_exists,
-    count_events,
-    get_events,
-    VALID_EVENTS,
-)
-from config import WEBHOOK_SECRET
+
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Delivery Analytics API")
 
 
-from typing import Optional, List
 
 @app.get(
     "/events",
-    response_model=List[EventResponse]
+    response_model=list[EventResponse]
 )
 def list_events(
-    event: Optional[str] = None,
+    event: str | None = None,
     page: int = 1,
     limit: int = 10,
     x_webhook_secret: str = Header(..., alias="X-Webhook-Secret"),
@@ -101,8 +101,8 @@ def receive_webhook(
 
 @app.get("/analytics")
 def analytics(
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
     db: Session = Depends(get_db)
 ):
 
