@@ -123,7 +123,7 @@ def _real_transcribe(session_id: str) -> dict[str, Any] | None:
             "text": result.get("text", ""),
             "confidence": confidence,
             "language": result.get("language", "en"),
-            "duration_seconds": _get_audio_duration(audio_path, result.get("segments", []))
+            "duration_seconds": _get_audio_duration(audio_path, result.get("segments", [])),
             "timestamp": time.time(),
         }
 
