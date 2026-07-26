@@ -44,7 +44,7 @@ function HRDashboard() {
 
   useEffect(() => {
     document.title = "HR Dashboard";
-  }, []);
+  }, [fetchDashboardData]);
 
   useEffect(() => {
     fetchDashboardData();
