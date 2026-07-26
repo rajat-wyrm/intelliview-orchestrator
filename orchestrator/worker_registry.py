@@ -12,6 +12,7 @@ Responsibilities:
 
 import asyncio
 import json
+import redis
 import logging
 from datetime import datetime, timedelta, timezone
 from threading import Lock
