@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 SUPPORTED_POOL = "solo"
 
-
 agent = None
 
 

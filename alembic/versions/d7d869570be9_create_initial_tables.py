@@ -120,3 +120,4 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_candidates_candidate_id"), table_name="candidates")
     op.drop_table("candidates")
     # ### end Alembic commands ###
+
