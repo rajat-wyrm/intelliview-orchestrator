@@ -5,7 +5,15 @@ Defines database models using declarative base
 
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Column, DateTime, Float, Integer, String
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Float,
+    Integer,
+    String,
+)
 from sqlalchemy.sql import func  # noqa: F401  (re-exported for ORM consumers)
 
 from database.db import Base
@@ -23,6 +31,32 @@ class InterviewSession(Base):
     """
 
     __tablename__ = "interview_sessions"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ("
+            "'pending',"
+            "'CREATED',"
+            "'QUEUED',"
+            "'VIDEO_PROCESSING',"
+            "'AUDIO_PROCESSING',"
+            "'EVALUATING',"
+            "'PROCESSING',"
+            "'COMPLETED',"
+            "'FAILED',"
+            "'TIMEOUT',"
+            "'CANCELLED'"
+            ")",
+            name="ck_interview_status",
+        ),
+        CheckConstraint(
+            "risk_score IS NULL OR risk_score >= 0",
+            name="ck_risk_score_non_negative",
+        ),
+        CheckConstraint(
+            "overall_score IS NULL OR overall_score >= 0",
+            name="ck_overall_score_non_negative",
+        ),
+    )
 
     session_id = Column(String(255), primary_key=True, index=True, nullable=False)
     candidate_id = Column(String(255), nullable=False, index=True)
