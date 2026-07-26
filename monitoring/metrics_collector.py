@@ -96,8 +96,8 @@ class MetricsCollector:
             }
             self._system_cache.set("metrics", payload)
             return payload
-        except Exception as e:
-            logger.error(f"Error collecting system metrics: {e!s}")
+        except (AttributeError, RuntimeError, TypeError) :
+            logger.exception("Error collecting system metrics")
             return {}
 
     def _get_session_metrics(self) -> dict[str, Any]:
@@ -128,7 +128,8 @@ class MetricsCollector:
                                 completed_count += 1
                             elif status == "FAILED":
                                 failed_count += 1
-                    except Exception:
+                    except (json.JSONDecodeError, TypeError, AttributeError) as e:
+                        logger.warning(f"Skipping invalid session data for key {key}: {e!s}")
                         continue
 
                 if cursor == 0:
@@ -149,8 +150,8 @@ class MetricsCollector:
                 else 0,
             }
 
-        except Exception as e:
-            logger.error(f"Error getting session metrics: {e!s}")
+        except (AttributeError, TypeError, RuntimeError):
+            logger.exception("Error getting session metrics")
             return {}
 
     def _get_worker_metrics(self) -> dict[str, Any]:
@@ -180,7 +181,8 @@ class MetricsCollector:
 
                             total_capacity += worker.get("capacity", 0)
                             active_tasks += worker.get("active_tasks", 0)
-                    except Exception:
+                    except (json.JSONDecodeError, TypeError, AttributeError) as e:
+                        logger.warning(f"Skipping invalid worker data for key {key}: {e!s}")
                         continue
 
                 if cursor == 0:
@@ -199,8 +201,8 @@ class MetricsCollector:
                 "health_percent": (healthy_workers / total_workers * 100) if total_workers > 0 else 0,
             }
 
-        except Exception as e:
-            logger.error(f"Error getting worker metrics: {e!s}")
+        except (AttributeError, TypeError, RuntimeError):
+            logger.exception("Error getting worker metrics")
             return {}
 
     def _get_queue_metrics(self) -> dict[str, Any]:
@@ -218,8 +220,8 @@ class MetricsCollector:
                 "backlog_percent": (queue_length / 1000 * 100) if queue_length > 0 else 0,
             }
 
-        except Exception as e:
-            logger.error(f"Error getting queue metrics: {e!s}")
+        except (AttributeError, RuntimeError, TypeError):
+            logger.exception("Error getting queue metrics")
             return {}
 
     def get_worker_metrics(self, worker_registry) -> dict[str, Any]:
@@ -257,8 +259,8 @@ class MetricsCollector:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
-        except Exception as e:
-            logger.error(f"Error getting worker metrics: {e!s}")
+        except (AttributeError, TypeError, RuntimeError):
+            logger.exception("Error getting worker metrics")
             return {}
 
     def get_session_metrics(self, session_tracker) -> dict[str, Any]:
@@ -286,8 +288,8 @@ class MetricsCollector:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
-        except Exception as e:
-            logger.error(f"Error getting session metrics: {e!s}")
+        except (AttributeError, TypeError, RuntimeError):
+            logger.exception("Error getting session metrics")
             return {}
 
     def get_failure_metrics(self, fault_manager) -> dict[str, Any]:
@@ -312,8 +314,8 @@ class MetricsCollector:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
-        except Exception as e:
-            logger.error(f"Error getting failure metrics: {e!s}")
+        except (AttributeError, TypeError, RuntimeError):
+            logger.exception("Error getting failure metrics")
             return {}
 
     def get_retry_metrics(self, retry_manager) -> dict[str, Any]:
@@ -337,8 +339,8 @@ class MetricsCollector:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
-        except Exception as e:
-            logger.error(f"Error getting retry metrics: {e!s}")
+        except (AttributeError, TypeError, RuntimeError):
+            logger.exception("Error getting retry metrics")
             return {}
 
     def get_performance_metrics(self, session_tracker) -> dict[str, Any]:
@@ -362,8 +364,8 @@ class MetricsCollector:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
-        except Exception as e:
-            logger.error(f"Error getting performance metrics: {e!s}")
+        except (AttributeError, TypeError, RuntimeError):
+            logger.exception("Error getting performance metrics")
             return {}
 
     def _calculate_throughput(self) -> float:
@@ -389,7 +391,8 @@ class MetricsCollector:
                                 end_time = session.get("end_time", "")
                                 if end_time and end_time > one_minute_ago:
                                     count += 1
-                    except Exception:
+                    except (json.JSONDecodeError, TypeError, AttributeError) as e:
+                        logger.warning(f"Skipping invalid session data for key {key}: {e!s}")
                         continue
 
                 if cursor == 0:
@@ -397,8 +400,8 @@ class MetricsCollector:
 
             return float(count)
 
-        except Exception as e:
-            logger.warning(f"Error calculating throughput: {e!s}")
+        except (AttributeError, TypeError, RuntimeError):
+            logger.exception("Error calculating throughput")
             return 0.0
 
     def _get_uptime(self) -> int:
@@ -417,8 +420,8 @@ class MetricsCollector:
 
             return 0
 
-        except Exception as e:
-            logger.warning(f"Error getting uptime: {e!s}")
+        except (AttributeError, TypeError, ValueError, RuntimeError):
+            logger.exception("Error getting uptime")
             return 0
 
     def _get_session_metrics(self):

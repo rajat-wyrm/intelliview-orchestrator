@@ -9,12 +9,13 @@ should be overridden in production.
 
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class _CsvList(list):
     """Marker type that prevents pydantic-settings from JSON-parsing."""
+
 
 
 class Settings(BaseSettings):
@@ -79,16 +80,14 @@ class Settings(BaseSettings):
     @classmethod
     def validate_required_database_fields(cls, value: str) -> str:
         if not value or not value.strip():
-            raise ValueError("Database configuration values cannot be empty")
-        return value
-
+        raise ValueError("Database configuration values cannot be empty")
+    return value
     @field_validator("postgres_port")
     @classmethod
     def validate_database_port(cls, value: int) -> int:
         if value <= 0 or value > 65535:
             raise ValueError("PostgreSQL port must be between 1 and 65535")
         return value
-
     @field_validator("database_sslmode")
     @classmethod
     def validate_database_sslmode(cls, value: str) -> str:

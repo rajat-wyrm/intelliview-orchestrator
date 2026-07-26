@@ -111,8 +111,8 @@ async def lifespan(app: FastAPI):
         if rc is not None:
             try:
                 rc.raw.close()
-            except Exception:
-                pass
+            except AttributeError as e:
+                logger.warning("Failed to close Redis client: %s", e)
 
 
 # Initialize FastAPI application
@@ -495,7 +495,13 @@ async def get_dependency_statuses():
 
 @app.get("/admin/fairness-audit", dependencies=[Depends(require_token)])
 async def get_fairness_audit_report():
-    """Return a lightweight fairness audit report for recent scoring patterns."""
+    """Return a lightweight fairness audit report for recent scoring patterns.
+
+    This endpoint uses the existing BiasAuditor heuristic for scoring-dispersion
+    review. It is intentionally informational and does not replace a full
+    compliance or fairness assessment framework.
+
+    """
     try:
         auditor = BiasAuditor(db_session=None)
         evaluations = []
@@ -558,6 +564,25 @@ async def start_interview(
     request: StartInterviewRequest,
     session_db: Session = Depends(get_db),
 ):
+    """
+    Start a new interview session using intelligent scheduling
+
+    Execution flow:
+    1. Create session in database (status: CREATED)
+    2. Cache session in Redis
+    3. Update status to QUEUED
+    4. Use Scheduler to intelligently assign to worker
+    5. Task pushed to Redis queue and/or assigned to specific worker
+
+    Args:
+        request: Interview session request with candidate details
+
+    Returns:
+        InterviewSessionResponse: Created session details with estimated wait time
+
+    Raises:
+        HTTPException: On creation failure
+    """
     try:
         logger.info(f"API: Creating interview session for candidate {request.candidate_id}")
 
@@ -608,6 +633,24 @@ async def get_session_status(
     session_id: str,
     session_db: Session = Depends(get_db),
 ):
+    """
+    Get current status of an interview session
+
+    Retrieves real-time session information including:
+    - Current status (CREATED, QUEUED, PROCESSING, COMPLETED, FAILED)
+    - Risk score if available
+    - Processing node information
+    - Timestamps
+
+    Args:
+        session_id: Interview session identifier
+
+    Returns:
+        SessionStatusResponse: Current session status and details
+
+    Raises:
+        HTTPException: If session not found
+    """
     try:
         logger.debug(f"API: Fetching status for session {session_id}")
 
@@ -635,6 +678,18 @@ async def get_session_status(
         raise HTTPException(status_code=500, detail=f"Error fetching session: {e!s}")
 
 
+session_db: Session = Depends(get_db),
+)
+
+@app.get("/task-status/{task_id}", response_model=TaskStatusResponse)
+async def get_task_status(
+    task_id: str,
+    session_db: Session = Depends(get_db),
+):
+    """
+    Get current status of a background task.
+    """
+    
 @app.get("/interviews/{session_id}/report", response_model=InterviewReportResponse)
 async def get_interview_report(
     session_id: str,
@@ -849,6 +904,14 @@ async def get_task_status(
 async def get_active_sessions(
     session_db: Session = Depends(get_db),
 ):
+    """
+    Get all currently active sessions
+
+    Returns sessions in states: CREATED, QUEUED, PROCESSING
+
+    Returns:
+        dict: List of active sessions with brief details
+    """
     try:
         active = session_tracker.get_active_sessions()
         return {"count": len(active), "sessions": active}
@@ -873,6 +936,15 @@ async def get_stuck_sessions(
     timeout_minutes: int = 30,
     session_db: Session = Depends(get_db),
 ):
+    """
+    Get sessions that appear to be stuck in PROCESSING
+
+    Args:
+        timeout_minutes: Timeout threshold in minutes (default: 30)
+
+    Returns:
+        dict: List of stuck sessions
+    """
     try:
         stuck = session_tracker.get_stuck_sessions(timeout_minutes=timeout_minutes)
         return {
@@ -893,6 +965,18 @@ async def get_stuck_sessions(
 async def get_session_statistics(
     session_db: Session = Depends(get_db),
 ):
+    """
+    Get comprehensive session statistics
+
+    Returns statistics including:
+    - Total sessions by status
+    - Average processing duration
+    - Risk score distribution
+    - High-risk session count
+
+    Returns:
+        dict: Session statistics
+    """
     try:
         return session_tracker.get_session_statistics()
     except Exception as e:
@@ -904,6 +988,12 @@ async def get_session_statistics(
 async def get_worker_distribution(
     session_db: Session = Depends(get_db),
 ):
+    """
+    Get distribution of sessions across worker nodes
+
+    Returns:
+        dict: Worker node -> session count mapping
+    """
     try:
         distribution = session_tracker.get_worker_distribution()
         return {"workers": distribution, "total_active": sum(distribution.values())}
@@ -918,6 +1008,16 @@ async def get_high_risk_sessions(
     limit: int = 50,
     session_db: Session = Depends(get_db),
 ):
+    """
+    Get high-risk completed sessions
+
+    Args:
+        threshold: Risk score threshold (0-1, default: 0.8)
+        limit: Maximum sessions to return (default: 50)
+
+    Returns:
+        dict: List of high-risk sessions
+    """
     try:
         high_risk = session_tracker.get_high_risk_sessions(threshold=threshold, limit=limit)
         return {"count": len(high_risk), "threshold": threshold, "sessions": high_risk}
@@ -983,6 +1083,9 @@ async def list_interviews(
     status: str | None = None,
     session_db: Session = Depends(get_db),
 ):
+    """
+    List interview sessions, newest first.
+    """
     stmt = select(InterviewSession)
 
     if status:
@@ -1019,6 +1122,7 @@ async def list_questions(
     limit: int = 100,
     session_db: Session = Depends(get_db),
 ):
+    """List questions with optional category/difficulty filter"""
     try:
         questions = question_bank.get_questions(
             category=category,
@@ -1036,6 +1140,7 @@ async def add_question(
     request: AddQuestionRequest,
     session_db: Session = Depends(get_db),
 ):
+    """Add a new question to the bank"""
     try:
         question = question_bank.add_question(
             text=request.text,
@@ -1059,6 +1164,7 @@ async def list_candidates(
     limit: int = 100,
     session_db: Session = Depends(get_db),
 ):
+    """List all candidates"""
     try:
         candidates = candidate_manager.list_candidates(limit=limit)
         return {"count": len(candidates), "candidates": candidates}
@@ -1072,6 +1178,7 @@ async def create_candidate(
     request: CreateCandidateRequest,
     session_db: Session = Depends(get_db),
 ):
+    """Create a new candidate profile"""
     try:
         candidate = candidate_manager.create_candidate(
             name=request.name,
@@ -1090,6 +1197,7 @@ async def get_candidate(
     candidate_id: str,
     session_db: Session = Depends(get_db),
 ):
+    """Get candidate details by ID"""
     try:
         candidate = candidate_manager.get_candidate(candidate_id)
         if not candidate:
@@ -1107,6 +1215,7 @@ async def get_candidate_history(
     candidate_id: str,
     session_db: Session = Depends(get_db),
 ):
+    """Get candidate interview history"""
     try:
         candidate = candidate_manager.get_candidate(candidate_id)
         if not candidate:
@@ -1138,6 +1247,7 @@ async def create_template(
     request: CreateTemplateRequest,
     session_db: Session = Depends(get_db),
 ):
+    """Create a new interview template"""
     try:
         template = interview_template_manager.create_template(
             name=request.name,
@@ -1164,6 +1274,7 @@ async def ask_question(
     request: AskQuestionRequest,
     session_db: Session = Depends(get_db),
 ):
+    """Get next question for a session"""
     try:
         session_data = session_manager.get_session(request.session_id)
         if not session_data:
@@ -1196,6 +1307,7 @@ async def submit_answer(
     request: SubmitAnswerRequest,
     session_db: Session = Depends(get_db),
 ):
+    """Submit an answer and get feedback"""
     try:
         session_data = session_manager.get_session(request.session_id)
         if not session_data:

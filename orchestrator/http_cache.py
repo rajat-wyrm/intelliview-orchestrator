@@ -8,11 +8,15 @@ best-effort: on any Redis error we fall back to recomputing the value.
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
+from orchestrator.cache_manager import CacheManager
 
 from orchestrator.cache_manager import CacheManager
+
+logger = logging.getLogger(__name__)
 
 _TTL_PREFIX = "httpcache:"
 _DEFAULT_TTL = 2  # seconds — short, dashboard polls every 5s
@@ -33,7 +37,8 @@ def get(name: str) -> Any | None:
     try:
         raw = c.get(_key(name))
         return json.loads(raw) if raw else None
-    except Exception:
+    except (json.JSONDecodeError, TypeError) as e:
+        logger.warning("Failed to deserialize cache entry '%s': %s", name, e)
         return None
 
 
@@ -43,8 +48,8 @@ def set(name: str, value: Any, ttl: int = _DEFAULT_TTL) -> None:
         return
     try:
         c.set(_key(name), json.dumps(value), ex=ttl)
-    except Exception:
-        pass
+    except (TypeError, ValueError) as e:
+        logger.warning("Failed to cache entry '%s': %s", name, e)
 
 
 def invalidate(*names: str) -> None:
@@ -58,7 +63,7 @@ def invalidate(*names: str) -> None:
             for k in c.scan_iter(f"{_TTL_PREFIX}*", count=100):
                 c.delete(k)
     except Exception:
-        pass
+        logger.exception("Failed to invalidate cache")
 
 
 def cached(name: str, ttl: int = _DEFAULT_TTL) -> Callable:

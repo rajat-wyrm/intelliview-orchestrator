@@ -70,8 +70,8 @@ class StateSynchronizer:
             logger.debug(f"Cached session state for {session_id}")
             return True
 
-        except Exception as e:
-            logger.error(f"Error setting session state in Redis: {e!s}")
+        except (TypeError, ValueError):
+            logger.exception("Error setting session state in Redis")
             return False
 
     def get_session_state(self, session_id: str) -> dict[str, Any] | None:
@@ -99,8 +99,8 @@ class StateSynchronizer:
             logger.debug(f"Retrieved cached session state for {session_id}")
             return session_data
 
-        except Exception as e:
-            logger.error(f"Error getting session state from Redis: {e!s}")
+        except (json.JSONDecodeError, TypeError, AttributeError) :
+            logger.exception("Error getting session state from Redis")
             return None
 
     def delete_session_state(self, session_id: str) -> bool:

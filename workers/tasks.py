@@ -23,6 +23,8 @@ from sqlalchemy import select
 
 from database.db import SessionLocal
 from database.models import InterviewSession
+from orchestrator.cache_manager import CacheManager
+
 from monitoring.prometheus_metrics import (
     CELERY_ACTIVE_TASKS,
     CELERY_TASK_RUNTIME,
@@ -342,7 +344,11 @@ def process_interview_session(self, session_id: str):
 
 @celery_app.task(name="workers.tasks.scan_and_dispatch_retries")
 def scan_and_dispatch_retries():
-    """Scan Redis for retry entries whose retry_after timestamp has passed."""
+    """Scan Redis for retry entries whose ``retry_after`` timestamp has
+    passed and re-dispatch the corresponding session through the normal
+    scheduling path. Runs every 60 s via Celery Beat.
+    """
+
     redis_client = get_redis_client()
     retry_scheduled_prefix = "retry_scheduled:"
 
@@ -380,7 +386,7 @@ def scan_and_dispatch_retries():
                     redis_client.delete(key)
                     logger.info("Dispatched retry for session %s", session_id)
 
-                except Exception as exc:
+                except (json.JSONDecodeError, ValueError, TypeError, AttributeError) as exc:
                     logger.debug("Error processing retry key %s: %s", key, exc)
                     continue
 

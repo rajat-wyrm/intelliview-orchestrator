@@ -396,6 +396,7 @@ def _llm_generate_question(session_id: str, topic: str = "systems_design") -> st
 
         question = response.strip()
         is_valid, reasons = validate_generated_question(question)
+
         if not is_valid:
             logger.warning(
                 "LLM-generated question rejected for session %s. Reasons: %s",
@@ -405,7 +406,8 @@ def _llm_generate_question(session_id: str, topic: str = "systems_design") -> st
             return None
 
         return question
-    except Exception:
+    except Exception as exc:
+        logger.debug("OpenAI question generation failed: %s", exc)
         return None
 
 

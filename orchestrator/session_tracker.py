@@ -248,8 +248,8 @@ class SessionTracker:
 
             return result
 
-        except Exception as e:
-            logger.error(f"Error detecting stuck sessions: {e!s}")
+        except (AttributeError, TypeError, RuntimeError):
+            logger.exception("Error detecting stuck sessions")
             return []
         finally:
             session_db.close()

@@ -71,7 +71,7 @@ class WorkerAgent:
                 if r.status_code < 500:
                     return r.status_code < 400
                 logger.warning("API %s returned %s, retrying", path, r.status_code)
-            except Exception as exc:
+            except httpx.HTTPError as exc:
                 logger.warning("API %s failed (%s), retrying", path, exc)
             time.sleep(min(2**attempt, 15))
         return False
@@ -91,7 +91,7 @@ class WorkerAgent:
                 headers=self._headers,
                 timeout=5.0,
             )
-        except Exception as exc:
+        except httpx.HTTPError as exc:
             logger.debug("Deregister failed: %s", exc)
 
     def heartbeat_loop(self) -> None:
