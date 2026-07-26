@@ -12,8 +12,8 @@ Responsibilities:
 
 import asyncio
 import json
-import redis
 import logging
+import redit
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Any
