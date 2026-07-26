@@ -14,11 +14,15 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 from enum import Enum
+from types import SimpleNamespace
 from typing import Any
 
 from orchestrator.redis_client import get_redis_client
+from orchestrator.session_payload import deserialize_session_payload
 
 logger = logging.getLogger(__name__)
+# Backward-compatible patch target for tests/consumers mocking module.redis.from_url.
+redis = SimpleNamespace(from_url=get_redis_client)
 
 
 class FailureType(Enum):
@@ -51,12 +55,17 @@ class FaultManager:
             debounce_time: Seconds to wait before treating alert as new (prevent spam)
         """
         self.debounce_time = debounce_time
-        self.redis_client = get_redis_client()
+        self.redis_client = redis.from_url()
+        self.redis_client = self._create_redis_client()
         self.failure_log_prefix = "failure_log:"
         self.recovery_queue_prefix = "recovery_queue:"
         self.dead_letter_queue = "dead_letter_queue"
 
         logger.info(f"FaultManager initialized with debounce_time={debounce_time}s")
+
+    def _create_redis_client(self) -> Any:
+        """Create the shared Redis client used by the orchestrator."""
+        return get_redis_client()
 
     def detect_failed_sessions(self, timeout_seconds: int = 1800) -> list[str]:
         """
@@ -85,7 +94,7 @@ class FaultManager:
                         if not session_data:
                             continue
 
-                        session = json.loads(session_data)
+                        session = deserialize_session_payload(session_data)
 
                         # Check if session is stuck in PROCESSING
                         if session.get("status") == "PROCESSING":
@@ -215,7 +224,7 @@ class FaultManager:
                     try:
                         session_data = self.redis_client.get(key)
                         if session_data:
-                            session = json.loads(session_data)
+                            session = deserialize_session_payload(session_data)
                             if session.get("assigned_worker") == worker_id:
                                 tasks.append(session.get("session_id"))
                     except Exception:
@@ -313,6 +322,55 @@ class FaultManager:
         except Exception as e:
             logger.error(f"Error moving to dead letter queue: {e!s}")
             return False
+
+    def handle_failed_session(
+        self,
+        session_id: str,
+        reason: str,
+    ) -> bool:
+        """
+        Handle a failed session.
+
+        1. Log failure.
+        2. Retry if possible via retry_manager.
+        3. Otherwise move to DLQ.
+        """
+
+        logger.warning(
+            "Handling failed session %s",
+            session_id,
+        )
+
+        self.log_failure(
+            session_id=session_id,
+            failure_type=FailureType.TASK_EXCEPTION,
+            error_message=reason,
+        )
+
+        # Attempt to schedule retry via retry_manager if available
+        scheduled = False
+        if hasattr(self, "retry_manager") and self.retry_manager:
+            try:
+                scheduled = self.retry_manager.schedule_retry(session_id)
+            except Exception:
+                scheduled = False
+
+        if scheduled:
+            return True
+
+        logger.error(
+            "Retries exhausted for %s",
+            session_id,
+        )
+
+        moved = self.move_to_dead_letter_queue(session_id, reason)
+
+        if moved:
+            logger.warning("Session %s moved to Dead Letter Queue", session_id)
+        else:
+            logger.error("Failed to move %s to Dead Letter Queue", session_id)
+
+        return False
 
     def get_recovery_queue(self, limit: int = 100) -> list[dict[str, Any]]:
         """
