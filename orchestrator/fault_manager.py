@@ -12,7 +12,7 @@ Responsibilities:
 
 import json
 import logging
-import redit
+import redis
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from types import SimpleNamespace
