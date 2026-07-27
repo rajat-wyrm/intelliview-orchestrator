@@ -3,12 +3,30 @@ SQLAlchemy ORM Models for AI Interview Orchestrator
 Defines database models using declarative base
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
+<<<<<<< HEAD
 from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
+=======
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Float,
+    Integer,
+    String,
+)
+from sqlalchemy.sql import func  # noqa: F401  (re-exported for ORM consumers)
+>>>>>>> upstream/main
 
 from database.db import Base
+
+
+def utcnow() -> datetime:
+    """Return a timezone-aware UTC datetime."""
+    return datetime.now(timezone.utc)
 
 
 class InterviewSession(Base):
@@ -18,8 +36,35 @@ class InterviewSession(Base):
     """
 
     __tablename__ = "interview_sessions"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ("
+            "'pending',"
+            "'CREATED',"
+            "'QUEUED',"
+            "'VIDEO_PROCESSING',"
+            "'AUDIO_PROCESSING',"
+            "'EVALUATING',"
+            "'PROCESSING',"
+            "'COMPLETED',"
+            "'FAILED',"
+            "'TIMEOUT',"
+            "'CANCELLED'"
+            ")",
+            name="ck_interview_status",
+        ),
+        CheckConstraint(
+            "risk_score IS NULL OR risk_score >= 0",
+            name="ck_risk_score_non_negative",
+        ),
+        CheckConstraint(
+            "overall_score IS NULL OR overall_score >= 0",
+            name="ck_overall_score_non_negative",
+        ),
+    )
 
     session_id = Column(String(255), primary_key=True, index=True, nullable=False)
+<<<<<<< HEAD
 
     candidate_id = Column(
         String(255),
@@ -29,9 +74,14 @@ class InterviewSession(Base):
     )
 
     status = Column(String(50), nullable=False, default="pending")
+=======
+    candidate_id = Column(String(255), nullable=False, index=True)
+    status = Column(String(50), nullable=False, default="pending", index=True)
+>>>>>>> upstream/main
     assigned_node = Column(String(255), nullable=True)
-    start_time = Column(DateTime, nullable=True, default=datetime.utcnow)
+    start_time = Column(DateTime, nullable=True, default=utcnow)
     end_time = Column(DateTime, nullable=True)
+
     risk_score = Column(Float, nullable=True)
 
     # Analysis results stored as JSON
@@ -43,6 +93,7 @@ class InterviewSession(Base):
     questions_asked = Column(JSON, nullable=True, default=list)
     answers_provided = Column(JSON, nullable=True, default=list)
     feedback_generated = Column(JSON, nullable=True, default=list)
+<<<<<<< HEAD
     overall_score = Column(Float, nullable=True)
 
     template_id = Column(
@@ -69,6 +120,13 @@ class InterviewSession(Base):
         "InterviewTemplate",
         back_populates="interview_sessions",
     )
+=======
+    overall_score = Column(Float, nullable=True, index=True)
+    template_id = Column(String(255), nullable=True, index=True)
+
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+>>>>>>> upstream/main
 
     def __repr__(self):
         return (
@@ -89,11 +147,11 @@ class Question(Base):
     category = Column(String(50), nullable=False, index=True)
     difficulty = Column(String(20), nullable=False, default="medium")
     tags = Column(JSON, nullable=True, default=list)
-    usage_count = Column(Integer, nullable=False, default=0)
-    avg_score = Column(Float, nullable=True)
+    usage_count = Column(Integer, nullable=False, default=0, index=True)
+    avg_score = Column(Float, nullable=True, index=True)
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
     def __repr__(self):
         return f"<Question(question_id='{self.question_id}', category='{self.category}', difficulty='{self.difficulty}')>"
@@ -110,9 +168,13 @@ class Candidate(Base):
     resume_text = Column(String(10000), nullable=True)
     skills = Column(JSON, nullable=True, default=list)
     interview_history = Column(JSON, nullable=True, default=list)
-    avg_score = Column(Float, nullable=True)
-    total_interviews = Column(Integer, nullable=False, default=0)
+    # Optional demographic information for fairness auditing.
+    # This data is NOT passed to the LLM and is only used for compliance analytics.
+    demographics = Column(JSON, nullable=True, default=dict)
+    avg_score = Column(Float, nullable=True, index=True)
+    total_interviews = Column(Integer, nullable=False, default=0, index=True)
 
+<<<<<<< HEAD
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(
         DateTime,
@@ -126,6 +188,10 @@ class Candidate(Base):
         "InterviewSession",
         back_populates="candidate",
     )
+=======
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+>>>>>>> upstream/main
 
     def __repr__(self):
         return f"<Candidate(candidate_id='{self.candidate_id}', name='{self.name}')>"
@@ -144,9 +210,10 @@ class InterviewTemplate(Base):
     question_count = Column(Integer, nullable=False, default=10)
     category_distribution = Column(JSON, nullable=True, default=dict)
     difficulty_distribution = Column(JSON, nullable=True, default=dict)
-    usage_count = Column(Integer, nullable=False, default=0)
-    success_rate = Column(Float, nullable=True)
+    usage_count = Column(Integer, nullable=False, default=0, index=True)
+    success_rate = Column(Float, nullable=True, index=True)
 
+<<<<<<< HEAD
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(
         DateTime,
@@ -160,6 +227,10 @@ class InterviewTemplate(Base):
         "InterviewSession",
         back_populates="template",
     )
+=======
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+>>>>>>> upstream/main
 
     def __repr__(self):
         return (
