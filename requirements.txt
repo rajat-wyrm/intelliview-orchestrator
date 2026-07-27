@@ -1,6 +1,6 @@
 
 # === Async task queue ===
-celery[redis]==5.5.3
+celery[redis]==5.6.3
 redis==5.2.1
 flower==2.0.1
 
