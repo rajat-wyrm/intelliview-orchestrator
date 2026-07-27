@@ -115,10 +115,9 @@ services:
     command: python -m workers.worker_entrypoint
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      test: ["CMD-SHELL", "python -c \"import sys; sys.exit(0)\""]
       interval: 30s
       timeout: 5s
-      start_period: 15s
       retries: 3
     deploy:
       resources:

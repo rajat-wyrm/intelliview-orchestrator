@@ -8,13 +8,18 @@ Responsibilities:
 - Maintain worker health status
 - Provide worker availability queries
 """
-
+import os
+import redis
 import logging
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Any
-
 from orchestrator.redis_client import get_redis_client
+
+from monitoring.prometheus_metrics import (
+    WORKERS_REGISTERED,
+    WORKERS_HEALTHY,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,15 +38,25 @@ class WorkerRegistry:
     def __init__(self):
         """Initialize worker registry"""
         try:
-            self.redis_client = get_redis_client()
+            self.redis_client = redis.from_url(
+                os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+                decode_responses=True
+           )
+
             self.local_workers: dict[str, dict[str, Any]] = {}
             self.lock = Lock()
             self._hydrated = False
+
             self._hydrate_from_redis()
+
             logger.info("Worker Registry initialized")
+
         except Exception as e:
             logger.error(f"Error initializing Worker Registry: {e!s}")
             self.redis_client = None
+            self.local_workers = {}
+            self.lock = Lock()
+        
 
     def _hydrate_from_redis(self) -> None:
         """Populate `local_workers` from Redis on first use so workers
@@ -65,6 +80,17 @@ class WorkerRegistry:
                     "total_tasks_processed": int(raw.get("total_tasks_processed", 0)),
                     "failed_tasks": int(raw.get("failed_tasks", 0)),
                 }
+            # Update Prometheus worker metrics
+            WORKERS_REGISTERED.set(len(self.local_workers))
+
+            healthy_workers = sum(
+                1
+                for worker in self.local_workers.values()
+                if worker.get("status") == "healthy"
+            )
+
+            WORKERS_HEALTHY.set(healthy_workers)
+
             self._hydrated = True
         except Exception as exc:
             logger.warning("Could not hydrate worker registry from Redis: %s", exc)

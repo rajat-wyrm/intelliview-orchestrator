@@ -10,8 +10,7 @@ Integrates:
 - Load Balancer for worker distribution
 - Worker Registry for node tracking
 - Task Queue integration with Celery
-"""
-
+""" 
 import logging
 import re
 import time as _time

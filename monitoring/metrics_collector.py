@@ -170,16 +170,17 @@ class MetricsCollector:
 
                 for key in keys:
                     try:
-                        worker_data = self.redis_client.get(key)
-                        if worker_data:
-                            worker = json.loads(worker_data)
-                            total_workers += 1
+                        worker_data = self.redis_client.hgetall(key)
 
-                            if worker.get("health_status") == "healthy":
+                        if worker_data:
+                           worker = worker_data
+                           total_workers += 1
+
+                           if worker.get("status") == "healthy":
                                 healthy_workers += 1
 
-                            total_capacity += worker.get("capacity", 0)
-                            active_tasks += worker.get("active_tasks", 0)
+                           total_capacity += int(worker.get("capacity", 0))
+                           active_tasks += int(worker.get("active_tasks", 0))
                     except Exception:
                         continue
 

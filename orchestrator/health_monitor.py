@@ -12,7 +12,11 @@ Responsibilities:
 - Kubernetes-style readiness and liveness probes
 - Dependency status tracking with latency measurements
 """
-
+import os
+from monitoring.prometheus_metrics import (
+    REDIS_HEALTH, 
+    POSTGRES_HEALTH
+)
 import json
 import logging
 import time
@@ -82,6 +86,9 @@ class HealthMonitor:
         self.health_status_key = "system:health_status"
         self.last_check_key = "system:last_health_check"
         self._dep_status: dict[str, DependencyStatus] = {}
+        
+        # Update Prometheus health metrics on startup
+        self.check_system_health()
 
         logger.info(
             "HealthMonitor initialized: heartbeat_timeout=%ds, session_timeout=%ds, queue_threshold=%d",
@@ -153,11 +160,17 @@ class HealthMonitor:
             if not self.redis_client:
                 dep.error = "Redis client not initialized"
                 self._dep_status["redis"] = dep
+                REDIS_HEALTH.set(
+                   1 if dep.healthy else 0
+                )
+
                 return dep.to_dict()
 
             self.redis_client.ping()
             dep.latency_ms = (time.monotonic() - start) * 1000
             dep.healthy = True
+
+            REDIS_HEALTH.set(1)
 
             info = self.redis_client.info()
             dep.metadata = {
@@ -168,6 +181,7 @@ class HealthMonitor:
             }
             dep.last_check = datetime.now(timezone.utc).isoformat()
         except Exception as exc:
+            REDIS_HEALTH.set(0)
             dep.healthy = False
             dep.error = str(exc)
             dep.latency_ms = (time.monotonic() - start) * 1000
@@ -187,15 +201,24 @@ class HealthMonitor:
                 result = conn.execute(__import__("sqlalchemy").text("SELECT 1 AS ok"))
                 row = result.fetchone()
                 dep.healthy = row is not None and row[0] == 1
+                POSTGRES_HEALTH.set(
+                   1 if dep.healthy else 0
+                )
             dep.latency_ms = (time.monotonic() - start) * 1000
             dep.last_check = datetime.now(timezone.utc).isoformat()
+            dep.healthy = row is not None and row[0] == 1
+            POSTGRES_HEALTH.set(1 if dep.healthy else 0)
         except Exception as exc:
+            POSTGRES_HEALTH.set(0)
             dep.healthy = False
             dep.error = str(exc)
             dep.latency_ms = (time.monotonic() - start) * 1000
             logger.warning("Postgres deep check failed: %s", exc)
 
         self._dep_status["postgres"] = dep
+        POSTGRES_HEALTH.set(
+             1 if dep.healthy else 0
+        )
         return dep.to_dict()
 
     def _deep_check_celery_broker(self) -> dict[str, Any]:
@@ -240,6 +263,15 @@ class HealthMonitor:
             health_status["components"]["redis"] = redis_status
             if redis_status["status"] != HealthStatus.HEALTHY:
                 health_status["overall_status"] = HealthStatus.CRITICAL
+            REDIS_HEALTH.set(
+                1 if redis_status["status"] == HealthStatus.HEALTHY else 0
+            )  
+            postgres_status = self._deep_check_postgres()
+
+            if postgres_status["healthy"]:
+                POSTGRES_HEALTH.set(1)
+            else:
+                POSTGRES_HEALTH.set(0) 
 
             if worker_registry:
                 worker_status = self.check_worker_health(worker_registry)
@@ -386,26 +418,38 @@ class HealthMonitor:
             return {"status": HealthStatus.UNHEALTHY, "error": str(e)}
 
     def _check_redis_health(self) -> dict[str, Any]:
-        """Check Redis connectivity and responsiveness."""
-        try:
-            if not self.redis_client:
-                return {"status": HealthStatus.UNHEALTHY, "error": "Redis client not initialized"}
+       """Check Redis connectivity and responsiveness."""
+       try:
+           if not self.redis_client:
+              REDIS_HEALTH.set(0)
+              return {
+                  "status": HealthStatus.UNHEALTHY,
+                  "error": "Redis client not initialized"
+              }
 
-            self.redis_client.ping()
-            info = self.redis_client.info()
-            connected_clients = info.get("connected_clients", 0)
-            used_memory = info.get("used_memory_human", "unknown")
+           self.redis_client.ping()
 
-            return {
-                "status": HealthStatus.HEALTHY,
-                "connected": True,
-                "clients": connected_clients,
-                "memory": used_memory,
+           # Redis is working
+           REDIS_HEALTH.set(1)
+
+           info = self.redis_client.info()
+           connected_clients = info.get("connected_clients", 0)
+           used_memory = info.get("used_memory_human", "unknown")
+
+           return {
+               "status": HealthStatus.HEALTHY,
+               "connected": True,
+               "clients": connected_clients,
+               "memory": used_memory,
             }
 
-        except Exception as e:
+       except Exception as e:
+            REDIS_HEALTH.set(0)
             logger.error("Error checking Redis health: %s", e)
-            return {"status": HealthStatus.UNHEALTHY, "error": str(e)}
+            return {
+                "status": HealthStatus.UNHEALTHY,
+                "error": str(e)
+            }
 
     def detect_worker_failures(self, worker_registry) -> list[str]:
         """Identify workers that appear to have failed."""
