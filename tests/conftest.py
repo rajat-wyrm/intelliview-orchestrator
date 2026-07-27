@@ -8,7 +8,6 @@ For unit tests that don't need Redis/Postgres, see test_unit_*.py.
 import os
 
 # ---------------------------------------------------------------------------
- main
 # workers/celery_app.py does `from config import REDIS_URL`, which
 # instantiates pydantic Settings (cached via @lru_cache).  If that
 # happens before os.environ is seeded, pydantic reads .env first and
