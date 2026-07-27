@@ -56,6 +56,7 @@ class AudioAnalysisResult(TypedDict):
     background_voices: BackgroundVoiceResult
     suspicious_conversation: SuspiciousPatternResult
     risk_score: float
+ fix/43-duration-seconds-v2
 
 
 def _get_audio_duration(audio_path: str, segments: list[dict[str, Any]]) -> float:
@@ -87,7 +88,8 @@ def _get_audio_duration(audio_path: str, segments: list[dict[str, Any]]) -> floa
     if segments:
         return round(max(s.get("end", 0) for s in segments), 2)
 
-    return 0.0
+    return 0.
+ main
 
 
 def _real_transcribe(session_id: str) -> dict[str, Any] | None:
@@ -123,7 +125,10 @@ def _real_transcribe(session_id: str) -> dict[str, Any] | None:
             "text": result.get("text", ""),
             "confidence": confidence,
             "language": result.get("language", "en"),
-            "duration_seconds": _get_audio_duration(audio_path, result.get("segments", [])),
+          fix/43-duration-seconds-v2
+            "duration_seconds": _get_audio_duration(audio_path, result.get("segments", []))
+            "duration_seconds": (sum(s.get("end", 0) - s.get("start", 0) for s in segments) or 120.0)
+          main
             "timestamp": time.time(),
         }
 
@@ -348,7 +353,19 @@ def detect_suspicious_conversation(session_id: str) -> dict[str, Any]:
         "suspicious_pattern_detected": suspicious,
         "pattern_type": pattern if suspicious else None,
         "confidence": round(_seeded_unit(session_id, "susp_conf"), 3),
-        "details": {},
+        "details": {
+            "indicators": [
+                "monotone_delivery",
+                "scripted_phrasing",
+            ],
+            "flagged_segments": [
+                round(_seeded_unit(session_id, "seg1") * 200),
+                round(_seeded_unit(session_id, "seg2") * 200),
+            ],
+            "analysis_version": "stub-v1",
+        }
+        if suspicious
+        else {},
     }
 
 

@@ -315,6 +315,7 @@ class FaultManager:
 
             if self.redis_client:
                 self.redis_client.lpush(self.dead_letter_queue, json.dumps(dlq_entry))
+                self.redis_client.expire(self.dead_letter_queue, 604800)
                 logger.warning(f"Session {session_id} moved to dead letter queue: {reason}")
 
             return True
