@@ -7,8 +7,8 @@ from orchestrator.fault_manager import FailureType, FaultManager
 
 
 def _manager():
-    with patch("orchestrator.fault_manager.redis.from_url") as mock_redis:
-        client = mock_redis.return_value
+    with patch("orchestrator.fault_manager.get_redis_client") as mock_get_redis_client:
+        client = mock_get_redis_client.return_value
         client.ping.return_value = True
         client.lpush.return_value = 1
         client.ltrim.return_value = True
@@ -16,8 +16,10 @@ def _manager():
         client.scan.return_value = (0, [])
         client.lrange.return_value = []
         client.get.return_value = None
-        client.setex.return_value = True
+        client.set.return_value = True
         client.incr.return_value = 1
+
+        return FaultManager()
         return FaultManager()
 
 
@@ -36,6 +38,10 @@ def test_move_to_dlq_uses_dead_letter_queue_key():
     assert fm.move_to_dead_letter_queue("s9", "max retries") is True
     fm.redis_client.lpush.assert_called_once()
     assert fm.redis_client.lpush.call_args.args[0] == "dead_letter_queue"
+    fm.redis_client.expire.assert_called_once_with(
+        "dead_letter_queue",
+        604800,
+    )
 
 
 def test_get_failure_log_decodes_json_entries():
