@@ -343,6 +343,7 @@ def test_sync_state_to_db_updates_database():
     db_session.commit.assert_called_once()
     db_session.close.assert_called_once()
 
+
 def test_delete_session_state_handles_redis_exception():
     redis = MagicMock()
     redis.delete.side_effect = Exception("Redis error")
@@ -374,6 +375,7 @@ def test_get_cache_stats_handles_redis_exception():
 
     assert stats["status"] == "error"
 
+
 def test_get_session_state_returns_none_when_redis_fails():
     sync = StateSynchronizer.__new__(StateSynchronizer)
 
@@ -384,11 +386,13 @@ def test_get_session_state_returns_none_when_redis_fails():
 
     assert sync.get_session_state("s1") is None
 
+
 def test_set_session_state_returns_false_when_redis_unavailable():
     sync = StateSynchronizer.__new__(StateSynchronizer)
     sync.redis_client = None
 
     assert sync.set_session_state("s1", {"status": "QUEUED"}) is False
+
 
 def test_set_session_state_handles_redis_exception():
     redis = MagicMock()
@@ -407,10 +411,7 @@ def test_sync_state_to_db_handles_database_exception():
     sync = StateSynchronizer.__new__(StateSynchronizer)
 
     with patch("database.db.SessionLocal", return_value=db_session):
-        assert sync.sync_state_to_db(
-            "session-1",
-            {"status": "COMPLETED"}
-        ) is False
+        assert sync.sync_state_to_db("session-1", {"status": "COMPLETED"}) is False
 
     db_session.rollback.assert_called_once()
     db_session.close.assert_called_once()
