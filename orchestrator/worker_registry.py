@@ -94,7 +94,7 @@ class WorkerRegistry:
             self._hydrated = True
         except Exception as exc:
             logger.warning("Could not hydrate worker registry from Redis: %s", exc)
-      def _get_native_redis_client(self) -> Any:
+    def _get_native_redis_client(self) -> Any:
         """Helper to safely extract the raw, native Redis client from CacheManager / wrappers"""
         if not self.redis_client:
             return None
@@ -115,16 +115,25 @@ class WorkerRegistry:
                 break
 
         return client if hasattr(client, "pubsub") else None
-async def _start_pubsub_listener(self) -> None:
-    pubsub = native.pubsub()
-    pubsub.subscribe(self.SYNC_CHANNEL)
-    while True:
-        message = await asyncio.to_thread(
-            pubsub.get_message, ignore_subscribe_messages=True, timeout=1.0
-        )
-        if message:
-            self._handle_pubsub_message(message)
-        await asyncio.sleep(0)
+
+    async def _start_pubsub_listener(self) -> None:
+        """Background task that listens on the Redis Pub/Sub sync channel
+        and applies incoming messages to the local worker cache."""
+        native = self._get_native_redis_client()
+        if not native:
+            logger.warning("Cannot start Pub/Sub listener: no native Redis client available")
+            return
+
+        pubsub = native.pubsub()
+        try:
+            pubsub.subscribe(self.SYNC_CHANNEL)
+            while True:
+                try:
+                    message = await asyncio.to_thread(
+                        pubsub.get_message, ignore_subscribe_messages=True, timeout=1.0
+                    )
+                    if message:
+                        self._handle_pubsub_message(message)
                 except Exception as e:
                     logger.error(f"Error processing message in Pub/Sub loop: {e!s}")
 
