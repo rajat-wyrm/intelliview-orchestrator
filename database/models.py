@@ -59,9 +59,9 @@ class InterviewSession(Base):
             name="ck_overall_score_non_negative",
         ),
     )
+    #
 
     session_id = Column(String(255), primary_key=True, index=True, nullable=False)
-<<<<<<< ours
 
     candidate_id = Column(
         String(255),
@@ -70,11 +70,13 @@ class InterviewSession(Base):
         index=True,
     )
 
-    status = Column(String(50), nullable=False, default="pending")
-=======
-    candidate_id = Column(String(255), nullable=False, index=True)
-    status = Column(String(50), nullable=False, default="pending", index=True)
->>>>>>> theirs
+    status = Column(
+        String(50),
+        nullable=False,
+        default="pending",
+        index=True,
+    )
+
     assigned_node = Column(String(255), nullable=True)
     start_time = Column(DateTime, nullable=True, default=utcnow)
     end_time = Column(DateTime, nullable=True)
@@ -90,21 +92,18 @@ class InterviewSession(Base):
     questions_asked = Column(JSON, nullable=True, default=list)
     answers_provided = Column(JSON, nullable=True, default=list)
     feedback_generated = Column(JSON, nullable=True, default=list)
-<<<<<<< ours
-    overall_score = Column(Float, nullable=True)
+
+    overall_score = Column(Float, nullable=True, index=True)
+
     template_id = Column(
         String(255),
         ForeignKey("interview_templates.template_id"),
         nullable=True,
+        index=True,
     )
-=======
-    overall_score = Column(Float, nullable=True, index=True)
-    template_id = Column(String(255), nullable=True, index=True)
->>>>>>> theirs
 
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
-
     candidate = relationship(
         "Candidate",
         back_populates="interview_sessions",
@@ -169,7 +168,7 @@ class Candidate(Base):
 
     interview_sessions = relationship(
         "InterviewSession",
-        back_populates="template",
+        back_populates="candidate",
     )
 
     def __repr__(self):
@@ -194,10 +193,9 @@ class InterviewTemplate(Base):
 
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
-
     interview_sessions = relationship(
         "InterviewSession",
-        back_populates="candidate",
+        back_populates="template",
     )
 
     def __repr__(self):
