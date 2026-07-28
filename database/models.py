@@ -217,8 +217,7 @@ class InterviewTemplate(Base):
 
     def __repr__(self):
         return (
-            f"<InterviewSession(session_id='{self.session_id}', "
-            f"candidate_id='{self.candidate_id}', "
-            f"status='{self.status}', "
-            f"risk_score={self.risk_score})>"
+            f"<InterviewTemplate(template_id='{self.template_id}', "
+            f"name='{self.name}', "
+            f"type='{self.interview_type}')>"
         )
