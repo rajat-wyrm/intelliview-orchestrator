@@ -19,6 +19,18 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
+# Import Prometheus system health monitoring metrics
+from monitoring.prometheus_metrics import (
+    POSTGRES_HEALTH,
+    QUEUE_DEPTH,
+    REDIS_HEALTH,
+    REDIS_MEMORY_FRAGMENTATION,
+    REDIS_MEMORY_MAX,
+    REDIS_MEMORY_PEAK,
+    REDIS_MEMORY_USAGE_PERCENT,
+    REDIS_MEMORY_USED,
+    REDIS_SPACE_USED,
+)
 from orchestrator.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -69,25 +81,48 @@ class HealthMonitor:
     - Deep dependency checks (Redis, Postgres, Celery broker)
     """
 
+    # Redis reports this as used_memory_rss / used_memory. Above ~1.5 usually
+    # indicates fragmentation worth investigating; above ~2.0 is a strong
+    # signal something is wrong (e.g. large deletes/resizes, allocator
+    # behavior) and may warrant a MEMORY PURGE or restart during a
+    # maintenance window.
+    REDIS_FRAGMENTATION_WARN_THRESHOLD = 1.5
+    REDIS_FRAGMENTATION_CRITICAL_THRESHOLD = 2.0
+
     def __init__(
         self,
         heartbeat_timeout: int = 60,
         session_timeout: int = 1800,
         queue_threshold: int = 1000,
+        redis_fragmentation_warn_threshold: float | None = None,
+        redis_fragmentation_critical_threshold: float | None = None,
     ):
         self.heartbeat_timeout = heartbeat_timeout
         self.session_timeout = session_timeout
         self.queue_threshold = queue_threshold
+        self.redis_fragmentation_warn_threshold = (
+            redis_fragmentation_warn_threshold
+            if redis_fragmentation_warn_threshold is not None
+            else self.REDIS_FRAGMENTATION_WARN_THRESHOLD
+        )
+        self.redis_fragmentation_critical_threshold = (
+            redis_fragmentation_critical_threshold
+            if redis_fragmentation_critical_threshold is not None
+            else self.REDIS_FRAGMENTATION_CRITICAL_THRESHOLD
+        )
         self.redis_client = get_redis_client()
         self.health_status_key = "system:health_status"
         self.last_check_key = "system:last_health_check"
         self._dep_status: dict[str, DependencyStatus] = {}
 
         logger.info(
-            "HealthMonitor initialized: heartbeat_timeout=%ds, session_timeout=%ds, queue_threshold=%d",
+            "HealthMonitor initialized: heartbeat_timeout=%ds, session_timeout=%ds, "
+            "queue_threshold=%d, redis_frag_warn=%.2f, redis_frag_critical=%.2f",
             heartbeat_timeout,
             session_timeout,
             queue_threshold,
+            self.redis_fragmentation_warn_threshold,
+            self.redis_fragmentation_critical_threshold,
         )
 
     # ------------------------------------------------------------------
@@ -145,6 +180,57 @@ class HealthMonitor:
 
         return results
 
+    def _evaluate_redis_fragmentation(self, info: dict[str, Any], context: str) -> dict[str, Any]:
+        """Extract and evaluate Redis memory fragmentation ratio from an INFO payload.
+
+        Returns a small dict with the ratio and derived status, and logs a
+        warning/error if the ratio exceeds the configured thresholds.
+        """
+        fragmentation_ratio = None
+        try:
+            raw_ratio = info.get("mem_fragmentation_ratio")
+            if raw_ratio is not None:
+                fragmentation_ratio = float(raw_ratio)
+            else:
+                used_memory = float(info.get("used_memory", 0) or 0)
+                used_memory_rss = float(info.get("used_memory_rss", 0) or 0)
+                if used_memory > 0:
+                    fragmentation_ratio = used_memory_rss / used_memory
+        except (TypeError, ValueError) as exc:
+            logger.debug("Could not compute Redis fragmentation ratio: %s", exc)
+
+        fragmentation_status = HealthStatus.HEALTHY
+        if fragmentation_ratio is not None:
+            if fragmentation_ratio >= self.redis_fragmentation_critical_threshold:
+                fragmentation_status = HealthStatus.CRITICAL
+                logger.error(
+                    "Redis memory fragmentation ratio critical (%s): %.2f >= %.2f "
+                    "(used_memory=%s, used_memory_rss=%s)",
+                    context,
+                    fragmentation_ratio,
+                    self.redis_fragmentation_critical_threshold,
+                    info.get("used_memory"),
+                    info.get("used_memory_rss"),
+                )
+            elif fragmentation_ratio >= self.redis_fragmentation_warn_threshold:
+                fragmentation_status = HealthStatus.DEGRADED
+                logger.warning(
+                    "Redis memory fragmentation ratio elevated (%s): %.2f >= %.2f "
+                    "(used_memory=%s, used_memory_rss=%s)",
+                    context,
+                    fragmentation_ratio,
+                    self.redis_fragmentation_warn_threshold,
+                    info.get("used_memory"),
+                    info.get("used_memory_rss"),
+                )
+
+        return {
+            "fragmentation_ratio": round(fragmentation_ratio, 3) if fragmentation_ratio is not None else None,
+            "fragmentation_status": fragmentation_status,
+            "warn_threshold": self.redis_fragmentation_warn_threshold,
+            "critical_threshold": self.redis_fragmentation_critical_threshold,
+        }
+
     def _deep_check_redis(self) -> dict[str, Any]:
         """Ping Redis, measure latency, and report server info."""
         dep = DependencyStatus("redis")
@@ -160,12 +246,21 @@ class HealthMonitor:
             dep.healthy = True
 
             info = self.redis_client.info()
+            fragmentation_info = self._evaluate_redis_fragmentation(info, context="deep_check")
             dep.metadata = {
                 "connected_clients": info.get("connected_clients", 0),
                 "used_memory_human": info.get("used_memory_human", "unknown"),
                 "redis_version": info.get("redis_version", "unknown"),
                 "uptime_seconds": info.get("uptime_in_seconds", 0),
+                **fragmentation_info,
             }
+            # A critically fragmented Redis is still reachable, but we
+            # surface it as unhealthy so readiness/alerting can react.
+            if fragmentation_info["fragmentation_status"] == HealthStatus.CRITICAL:
+                dep.healthy = False
+                dep.error = (
+                    f"Redis memory fragmentation ratio too high: {fragmentation_info['fragmentation_ratio']}"
+                )
             dep.last_check = datetime.now(timezone.utc).isoformat()
         except Exception as exc:
             dep.healthy = False
@@ -187,9 +282,14 @@ class HealthMonitor:
                 result = conn.execute(__import__("sqlalchemy").text("SELECT 1 AS ok"))
                 row = result.fetchone()
                 dep.healthy = row is not None and row[0] == 1
+
+                # Mark PostgreSQL as healthy in Prometheus
+                POSTGRES_HEALTH.set(1)
             dep.latency_ms = (time.monotonic() - start) * 1000
             dep.last_check = datetime.now(timezone.utc).isoformat()
         except Exception as exc:
+            # Mark PostgreSQL as unhealthy in Prometheus
+            POSTGRES_HEALTH.set(0)
             dep.healthy = False
             dep.error = str(exc)
             dep.latency_ms = (time.monotonic() - start) * 1000
@@ -237,6 +337,17 @@ class HealthMonitor:
             }
 
             redis_status = self._check_redis_health()
+
+            # Perform PostgreSQL health check
+            postgres_status = self._deep_check_postgres()
+
+            # Include PostgreSQL status in overall health report
+            health_status["components"]["postgres"] = postgres_status
+
+            # Mark system as critical if PostgreSQL is unavailable
+            if not postgres_status["healthy"]:
+                health_status["overall_status"] = HealthStatus.CRITICAL
+
             health_status["components"]["redis"] = redis_status
             if redis_status["status"] != HealthStatus.HEALTHY:
                 health_status["overall_status"] = HealthStatus.CRITICAL
@@ -269,7 +380,7 @@ class HealthMonitor:
 
             if self.redis_client:
                 self.redis_client.set(self.health_status_key, json.dumps(health_status), ex=300)
-                self.redis_client.set(self.last_check_key, datetime.now(timezone.utc).isoformat())
+                self.redis_client.set(self.last_check_key, datetime.now(timezone.utc).isoformat(), ex=300)
 
             logger.info("System health check complete: %s", health_status["overall_status"])
             return health_status
@@ -366,6 +477,8 @@ class HealthMonitor:
 
             queue_length = self.redis_client.llen("celery_queue") if self.redis_client else 0
 
+            # Update current Celery queue depth
+            QUEUE_DEPTH.set(queue_length)
             status = HealthStatus.HEALTHY
             if queue_length > self.queue_threshold:
                 status = HealthStatus.CRITICAL
@@ -392,18 +505,63 @@ class HealthMonitor:
                 return {"status": HealthStatus.UNHEALTHY, "error": "Redis client not initialized"}
 
             self.redis_client.ping()
+
+            # Mark Redis as healthy in Prometheus
+            REDIS_HEALTH.set(1)
+            # Get Redis server information
             info = self.redis_client.info()
+
+            # Fetch Redis memory statistics
+            used_memory = info.get("used_memory", 0)
+            peak_memory = info.get("used_memory_peak", 0)
+            max_memory = info.get("maxmemory", 0)
+            fragmentation = info.get("mem_fragmentation_ratio", 0)
             connected_clients = info.get("connected_clients", 0)
-            used_memory = info.get("used_memory_human", "unknown")
+
+            # ------------------------------------------------------------------
+            # Update Prometheus Redis memory and space metrics
+            # ------------------------------------------------------------------
+
+            # Current Redis memory usage
+            REDIS_MEMORY_USED.set(used_memory)
+
+            # Peak Redis memory usage
+            REDIS_MEMORY_PEAK.set(peak_memory)
+
+            # Maximum configured Redis memory
+            REDIS_MEMORY_MAX.set(max_memory)
+
+            # Redis dataset space usage
+            REDIS_SPACE_USED.set(used_memory)
+
+            # Redis memory fragmentation ratio
+            REDIS_MEMORY_FRAGMENTATION.set(fragmentation)
+
+            # Calculate memory usage percentage
+            if max_memory > 0:
+                REDIS_MEMORY_USAGE_PERCENT.set((used_memory / max_memory) * 100)
+            else:
+                REDIS_MEMORY_USAGE_PERCENT.set(0)
+
+            used_memory_human = info.get("used_memory_human", "unknown")
+            fragmentation_info = self._evaluate_redis_fragmentation(info, context="basic_check")
+
+            status = HealthStatus.HEALTHY
+            if fragmentation_info["fragmentation_status"] == HealthStatus.CRITICAL:
+                status = HealthStatus.DEGRADED
 
             return {
-                "status": HealthStatus.HEALTHY,
+                "status": status,
                 "connected": True,
                 "clients": connected_clients,
-                "memory": used_memory,
+                "memory": used_memory_human,
+                "memory_bytes": used_memory,
+                **fragmentation_info,
             }
 
         except Exception as e:
+            # Mark Redis as unhealthy in Prometheus
+            REDIS_HEALTH.set(0)
             logger.error("Error checking Redis health: %s", e)
             return {"status": HealthStatus.UNHEALTHY, "error": str(e)}
 
