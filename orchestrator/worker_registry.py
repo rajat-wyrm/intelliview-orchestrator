@@ -17,7 +17,10 @@ from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Any
 from orchestrator.redis_client import get_redis_client
+
 logger = logging.getLogger(__name__)
+
+
 class WorkerRegistry:
     """
     Centralized registry for tracking worker nodes in the system
@@ -94,6 +97,7 @@ class WorkerRegistry:
             self._hydrated = True
         except Exception as exc:
             logger.warning("Could not hydrate worker registry from Redis: %s", exc)
+
     def _get_native_redis_client(self) -> Any:
         """Helper to safely extract the raw, native Redis client from CacheManager / wrappers"""
         if not self.redis_client:
