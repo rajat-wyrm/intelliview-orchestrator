@@ -321,7 +321,11 @@ class FaultManager:
             logger.error(f"Error moving to dead letter queue: {e!s}")
             return False
 
-    def handle_failed_session(self, session_id: str, reason: str,) -> bool:
+    def handle_failed_session(
+        self,
+        session_id: str,
+        reason: str,
+    ) -> bool:
         """
         Handle a failed session.
 
@@ -359,7 +363,6 @@ class FaultManager:
             logger.error("Failed to move %s to Dead Letter Queue", session_id)
 
         return False
-
 
     def get_recovery_queue(self, limit: int = 100) -> list[dict[str, Any]]:
         """

@@ -244,6 +244,22 @@ class RiskScoringEngine:
         return risk_factors
 
     @staticmethod
+    def _generate_explanation(
+        risk_classification: str,
+        risk_factors: list[str],
+    ) -> str:
+        """Generate human-readable explanation for the risk classification."""
+
+        if not risk_factors:
+            return f"Risk classified as {risk_classification}. No significant risk factors were detected."
+
+        return (
+            f"Risk classified as {risk_classification} due to the following factors: "
+            + ", ".join(risk_factors)
+            + "."
+        )
+
+    @staticmethod
     def _generate_recommendation(risk_classification: str) -> str:
         """Generate recommendation based on risk classification."""
         recommendations = {
@@ -255,6 +271,8 @@ class RiskScoringEngine:
         return recommendations.get(risk_classification, "Review interview manually.")
 
 
+
+        
 class RiskDecisionTree:
     """
     Decision tree for interview risk classification.
@@ -307,11 +325,10 @@ class RiskDecisionTree:
         # Poor technical accuracy
         accuracy = evaluation_result.get("technical_accuracy", {}).get("accuracy_score", 50)
         if accuracy < 40:
-            return "MEDIUM"
-
+                return "MEDIUM"
+        
         # Poor communication
         clarity = evaluation_result.get("communication_clarity", {}).get("clarity_score", 50)
         if clarity < 40:
             return "MEDIUM"
-
         return "LOW"

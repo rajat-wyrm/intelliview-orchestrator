@@ -1,0 +1,10 @@
+[35mtasks (1).py[m[36m:[m[1;31m@celery_app.task[m(
+[35mtasks (1).py[m[36m:[m[1;31m@celery_app.task[m(
+[35mtasks (1).py[m[36m:[m[1;31m@celery_app.task[m(name="workers.tasks._after_parallel")
+[35mtasks (1).py[m[36m:[m[1;31m@celery_app.task[m(
+[35mtasks (1).py[m[36m:[m[1;31m@celery_app.task[m(name="workers.tasks.scan_and_dispatch_retries")
+[35mworkers/tasks.py[m[36m:[m[1;31m@celery_app.task[m(bind=True, max_retries=3, name="workers.tasks._run_video")
+[35mworkers/tasks.py[m[36m:[m[1;31m@celery_app.task[m(bind=True, max_retries=3, name="workers.tasks._run_audio")
+[35mworkers/tasks.py[m[36m:[m[1;31m@celery_app.task[m(bind=True, max_retries=3, name="workers.tasks._after_parallel")
+[35mworkers/tasks.py[m[36m:[m[1;31m@celery_app.task[m(bind=True, max_retries=3, name="workers.tasks.process_interview_session")
+[35mworkers/tasks.py[m[36m:[m[1;31m@celery_app.task[m(name="workers.tasks.scan_and_dispatch_retries")

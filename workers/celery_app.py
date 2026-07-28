@@ -5,19 +5,18 @@ and a `session_failed` signal that lets us mark the DB session as
 FAILED only after Celery has exhausted its retries (rather than on
 every transient exception).
 """
-"""
+
 # TODO:
- Separate worker deployment is pending.
- These queues prepare task routing for future deployment where:
- - interview queue will be processed by workers with
-   worker_prefetch_multiplier=1 for long-running tasks.
- - maintenance queue will be processed by dedicated workers with a
-   higher worker_prefetch_multiplier for short-running tasks.
+# Separate worker deployment is pending.
+# These queues prepare task routing for future deployment where:
+# - interview queue will be processed by workers with
+#   worker_prefetch_multiplier=1 for long-running tasks.
+# - maintenance queue will be processed by dedicated workers with a
+#   higher worker_prefetch_multiplier for short-running tasks.
+#
+# from celery import Celery, signals
+# from kombu import Queue
 
-from celery import Celery, signals
-from kombu import Queue
-
-"""
 from celery import Celery, signals
 
 from config import REDIS_URL
@@ -38,12 +37,9 @@ celery_app.conf.update(
     task_soft_time_limit=25 * 60,  # 25 minutes soft limit
     task_acks_late=True,  # re-deliver if worker dies mid-task
     task_reject_on_worker_lost=True,
-
     # Long-running interview tasks should reserve only one task at a time
     worker_prefetch_multiplier=1,
-
     broker_connection_retry_on_startup=True,
-
     # Periodic beat schedule — scan for due retries every 60 seconds
     beat_schedule={
         "scan-due-retries": {
@@ -115,7 +111,7 @@ def _on_task_failure(sender, task_id, exception, args, kwargs, traceback, einfo,
         if not session_id:
             return
         SessionManager().mark_session_failed(session_id, f"Celery task exhausted retries: {exception!s}")
-        send_mock_email_alert.delay(session_id)
+        # send_mock_email_alert.delay(session_id)
     except Exception as exc:
         # Don't let a signal handler crash the worker.
         import logging

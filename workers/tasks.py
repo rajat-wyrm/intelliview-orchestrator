@@ -63,6 +63,7 @@ ACTIVE_PROCESSING_STATUSES = {
 # Helper to set background infrastructure health states
 # ---------------------------------------------------------------------------
 
+
 def _update_infra_health(healthy: bool = True):
     """Sets system infrastructure gauges to reflect live operations."""
     state = 1.0 if healthy else 0.0
@@ -279,6 +280,7 @@ def process_interview_session(self, session_id):
         result = parallel_group.apply_async()
 
         from celery.result import allow_join_result
+
         with allow_join_result():
             video_result, audio_result = result.get(timeout=600)
 

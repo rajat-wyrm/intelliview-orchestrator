@@ -49,9 +49,9 @@ state_sync = StateSynchronizer()
     max_retries=3,
     # If video processing fails, don't hammer it again right away -
     # back off and give it some breathing room first.
-    retry_backoff=True,       # roughly doubles the wait each retry (1s, 2s, 4s...)
-    retry_backoff_max=120,    # but cap it at 2 minutes so it doesn't drag on forever
-    retry_jitter=True,        # shake up the timing a bit so retries don't all land together
+    retry_backoff=True,  # roughly doubles the wait each retry (1s, 2s, 4s...)
+    retry_backoff_max=120,  # but cap it at 2 minutes so it doesn't drag on forever
+    retry_jitter=True,  # shake up the timing a bit so retries don't all land together
     name="workers.tasks._run_video",
 )
 def _run_video(self, session_id: str) -> dict:
