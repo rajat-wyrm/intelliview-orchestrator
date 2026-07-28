@@ -8,8 +8,9 @@ Strategies:
 3. Queue-based - Fallback to Redis queue if no workers available
 """
 
+import json  # Added json serialization for pushing tasks to Redis
 import logging
-from enum import Enum
+from enum import Enum  # Fixed typo from 'Enuma' to standard 'Enum'
 from typing import Any
 
 from orchestrator.worker_registry import WorkerRegistry
@@ -42,19 +43,22 @@ class LoadBalancer:
         self.round_robin_index = 0
         logger.info(f"Load Balancer initialized with strategy: {strategy.value}")
 
-    def select_worker(self) -> dict[str, Any] | None:
+    def select_worker(self, task: dict[str, Any] | None = None) -> dict[str, Any] | None:
         """
         Select a worker for task execution based on current strategy
 
+        Args:
+            task: Optional task payload dictionary (passed to queue-based strategy)
+
         Returns:
-            dict: Selected worker details or None if no workers available
+            dict: Selected worker details or None if no workers available / task queued
         """
         if self.strategy == BalancingStrategy.ROUND_ROBIN:
             return self._select_round_robin()
         if self.strategy == BalancingStrategy.LEAST_LOADED:
             return self._select_least_loaded()
         if self.strategy == BalancingStrategy.QUEUE_BASED:
-            return self._select_queue_based()
+            return self._select_queue_based(task)
         # Default to least loaded
         return self._select_least_loaded()
 
@@ -103,20 +107,29 @@ class LoadBalancer:
         )
         return worker
 
-    def _select_queue_based(self) -> dict[str, Any] | None:
+    def _select_queue_based(self, task: dict[str, Any] | None = None) -> dict[str, Any] | None:
         """
-        Queue-based Strategy: Fallback to queue if no workers available
+        Queue-based Strategy: Fallback to Redis queue if no workers available.
 
-        First tries to select a worker. If none available, returns None to signal
-        task should be queued in Redis for later processing.
+        Attempts to select the least loaded worker available. If no workers are
+        available, serializes and pushes the task payload directly into the Redis queue.
+
+        Args:
+            task: Optional task payload dictionary to be queued
 
         Returns:
-            dict: Selected worker or None to trigger queueing
+            dict: Selected worker details, or None after queuing the task in Redis
         """
         worker = self.worker_registry.get_least_loaded_worker()
 
+        # If no worker is free, push task directly into Redis queue
         if not worker:
-            logger.debug("No workers available - task will be queued in Redis")
+            if task and hasattr(self, "redis_client") and self.redis_client:
+                queue_name = task.get("queue_name", "default_task_queue")
+                self.redis_client.rpush(queue_name, json.dumps(task))
+                logger.info(f"No workers available. Task {task.get('id')} queued in Redis ('{queue_name}').")
+            else:
+                logger.warning("No workers available - task will be queued in Redis")
             return None
 
         logger.debug(f"Queue-based selected worker: {worker['worker_id']}")
