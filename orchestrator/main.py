@@ -40,8 +40,18 @@ from database.models import Base, Candidate, InterviewSession
 from monitoring.dashboard_api import create_dashboard_routes
 from monitoring.metrics_collector import MetricsCollector
 from monitoring.prometheus_metrics import (
+    POSTGRES_HEALTH,
+    REDIS_HEALTH,
     REQUEST_COUNT,
     REQUEST_DURATION,
+    SESSIONS_ACTIVE,
+    SESSIONS_CREATED,
+    WORKER_ACTIVE_TASKS,
+    WORKER_CAPACITY,
+    WORKER_HEARTBEAT_AGE_SECONDS,
+    WORKERS_HEALTHY,
+    WORKERS_REGISTERED,
+    WORKERS_UNHEALTHY,
 )
 from monitoring.websocket_manager import ws_manager
 from orchestrator import http_cache
@@ -66,6 +76,8 @@ from workers.bias_auditor import BiasAuditor
 # Configure logging after imports so startup messages are structured.
 configure_logging()
 logger = logging.getLogger(__name__)
+
+APP_START_TIME = datetime.now(timezone.utc)
 
 
 @asynccontextmanager
@@ -114,6 +126,8 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
 @app.middleware("http")
 async def prometheus_middleware(request, call_next):
     start = time.perf_counter()
@@ -460,6 +474,16 @@ class CreateTemplateRequest(BaseModel):
 
 
 @app.get("/health")
+async def health():
+    uptime = int((datetime.now(timezone.utc) - APP_START_TIME).total_seconds())
+
+    return {
+        "alive": True,
+        "status": "system running",
+        "uptime_seconds": uptime,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
 
 # ========== Deep Health & Probe Endpoints ==========
 
@@ -514,12 +538,19 @@ if ENABLE_PROMETHEUS:
 
     @app.get("/metrics")
     async def prometheus_metrics():
-        REDIS_HEALTH.set(...)
-        POSTGRES_HEALTH.set(...)
-        WORKERS_REGISTERED.set(...)
-        WORKERS_HEALTHY.set(...)
-        WORKERS_UNHEALTHY.set(...)
         """Prometheus metrics endpoint."""
+        # Dynamic check of dependency statuses
+        deps = health_monitor._check_all_dependencies()
+        REDIS_HEALTH.set(1 if deps.get("redis", {}).get("status") == "healthy" else 0)
+        POSTGRES_HEALTH.set(1 if deps.get("postgres", {}).get("status") == "healthy" else 0)
+
+        # Worker status gauges
+        all_workers = worker_registry.get_all_workers()
+        unhealthy = worker_registry.detect_unhealthy_workers()
+        WORKERS_REGISTERED.set(len(all_workers))
+        WORKERS_HEALTHY.set(len(all_workers) - len(unhealthy))
+        WORKERS_UNHEALTHY.set(len(unhealthy))
+
         return _Response(
             content=get_metrics_text(),
             media_type="text/plain; version=0.0.4; charset=utf-8",
@@ -586,6 +617,11 @@ async def start_interview(
             candidate_name=request.candidate_name,
             position=request.position,
         )
+
+        # Increment total interview sessions created
+        SESSIONS_CREATED.inc()
+        # Increase active interview session count
+        SESSIONS_ACTIVE.inc()
 
         logger.info(f"Session created: {session_id}")
 
@@ -727,7 +763,7 @@ async def get_interview_report(
                     text=q_data.get("text", ""),
                     answer=q_data.get("answer"),
                     score=q_data.get("score"),
-                    feedback=q_data.get("feedback")
+                    feedback=q_data.get("feedback"),
                 )
             )
 
@@ -753,42 +789,39 @@ async def get_interview_report(
         return InterviewReportResponse(
             session_id=session_id,
             candidate=ReportCandidate(
-                candidate_id=candidate_obj.candidate_id,
-                name=candidate_obj.name,
-                email=candidate_obj.email
+                candidate_id=candidate_obj.candidate_id, name=candidate_obj.name, email=candidate_obj.email
             ),
             interview_summary=ReportInterviewSummary(
                 start_time=session_obj.start_time.isoformat() if session_obj.start_time else None,
                 end_time=session_obj.end_time.isoformat() if session_obj.end_time else None,
-                duration_minutes=duration_minutes
+                duration_minutes=duration_minutes,
             ),
             questions=questions_list,
             overall_evaluation=ReportEvaluation(
                 quality=eval_analysis.get("quality"),
                 accuracy=eval_analysis.get("accuracy"),
-                clarity=eval_analysis.get("clarity")
+                clarity=eval_analysis.get("clarity"),
             ),
             llm_feedback=ReportLLMFeedback(
                 strengths=strengths,
                 improvements=improvements,
                 recommendation=recommendation,
-                detailed_feedback=detailed_feedback
+                detailed_feedback=detailed_feedback,
             ),
             risk_assessment=ReportRiskAssessment(
-                score=risk_score,
-                classification=classification,
-                factors=eval_analysis.get("risk_factors", [])
+                score=risk_score, classification=classification, factors=eval_analysis.get("risk_factors", [])
             ),
             metadata=ReportMetadata(
                 token_usage=None,  # Feature #3 not yet merged
-                estimated_cost_usd=None
-            )
+                estimated_cost_usd=None,
+            ),
         )
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error fetching interview report: {e!s}")
         raise HTTPException(status_code=500, detail=f"Error fetching report: {e!s}")
+
 
 @app.get("/session-status/{session_id}/risk-report")
 async def get_session_risk_report(session_id: str, format: str = "json"):
@@ -866,7 +899,6 @@ def _build_risk_report_pdf(report: dict) -> Response:
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=risk_report_{report['session_id']}.pdf"},
     )
-
 
 
 @app.get("/task-status/{task_id}", response_model=TaskStatusResponse)
@@ -1479,8 +1511,7 @@ async def worker_heartbeat(request: WorkerHeartbeatRequest):
 
         worker_status = worker_registry.get_worker(request.worker_id)
         if worker_status:
-          WORKER_CAPACITY.labels(worker_id=request.worker_id).set(worker_status.get("capacity", 0))
-
+            WORKER_CAPACITY.labels(worker_id=request.worker_id).set(worker_status.get("capacity", 0))
 
         # Invalidate the workers + load caches so the next dashboard poll is fresh.
         http_cache.invalidate("workers", "worker-statistics", "load-status")
@@ -1789,9 +1820,6 @@ async def retry_failed_session(session_id: str):
                 detail=f"Session {session_id} has exceeded maximum retry attempts",
             )
 
-        # Get retry info
-        retry_info = retry_manager.get_retry_info(session_id)
-
         # Schedule retry with exponential backoff
         # Schedule retry
         retry_scheduled = retry_manager.schedule_retry(session_id)
@@ -1805,12 +1833,7 @@ async def retry_failed_session(session_id: str):
         # -----------------------------
         # Actually requeue the interview
         # -----------------------------
-        from orchestrator.scheduler import TaskPriority
-
-        scheduler.schedule_task(
-            session_id=session_id,
-            priority=TaskPriority.MEDIUM
-        )
+        scheduler.schedule_task(session_id=session_id, priority=TaskPriority.MEDIUM)
 
         logger.info(
             "Session %s requeued successfully after retry scheduling.",

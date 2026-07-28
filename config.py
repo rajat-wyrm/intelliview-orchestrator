@@ -16,7 +16,6 @@ class _CsvList(list):
     """Marker type that prevents pydantic-settings from JSON-parsing."""
 
 
-
 class Settings(BaseSettings):
     """Application configuration loaded from the environment."""
 
@@ -79,21 +78,15 @@ class Settings(BaseSettings):
     @classmethod
     def validate_required_database_fields(cls, value: str) -> str:
         if not value or not value.strip():
-            raise ValueError(
-                "Database configuration values cannot be empty"
-            )
+            raise ValueError("Database configuration values cannot be empty")
         return value
-
 
     @field_validator("postgres_port")
     @classmethod
     def validate_database_port(cls, value: int) -> int:
         if value <= 0 or value > 65535:
-            raise ValueError(
-                "PostgreSQL port must be between 1 and 65535"
-            )
+            raise ValueError("PostgreSQL port must be between 1 and 65535")
         return value
-
 
     @field_validator("database_sslmode")
     @classmethod
@@ -108,9 +101,7 @@ class Settings(BaseSettings):
         }
 
         if value not in allowed_modes:
-            raise ValueError(
-                f"Invalid database SSL mode: {value}"
-            )
+            raise ValueError(f"Invalid database SSL mode: {value}")
 
         return value
 
