@@ -214,22 +214,6 @@ class InterviewTemplate(Base):
         "InterviewSession",
         back_populates="template",
     )
-    # created_at = Column(DateTime, nullable=False, default=utcnow)
-    # <<<<<<< HEAD
-    #     updated_at = Column(
-    #         DateTime,
-    #         nullable=False,
-    #         default=utcnow,
-    #         onupdate=utcnow,
-    #     )
-
-    # =======
-    #     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
-    # >>>>>>> upstream/main
-    #     interview_sessions = relationship(
-    #         "InterviewSession",
-    #         back_populates="template",
-    #     )
 
     def __repr__(self):
         return (
