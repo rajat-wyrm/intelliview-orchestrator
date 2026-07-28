@@ -31,7 +31,12 @@ sys.path.insert(0, str(ROOT))
 
 from config import get_settings  # noqa: E402
 from database.db import Base, SessionLocal, engine  # noqa: E402
-from database.models import InterviewSession  # noqa: E402
+from database.models import (
+    Candidate,
+    InterviewSession,
+    InterviewTemplate,
+    Question,
+)  # noqa: E402
 from orchestrator.worker_registry import WorkerRegistry  # noqa: E402
 
 WORKER_FIXTURES = [
@@ -40,6 +45,86 @@ WORKER_FIXTURES = [
     {"worker_id": "worker-gamma", "capacity": 2, "active_tasks": 0, "status": "healthy"},
 ]
 
+# ---------------------------------------------------------------------
+# Sample Candidates
+# ---------------------------------------------------------------------
+
+CANDIDATE_FIXTURES = [
+    {
+        "candidate_id": "cand-1001",
+        "name": "Aanchal Sharma",
+        "email": "aanchal@example.com",
+        "resume_text": "Python, FastAPI, Docker, SQL",
+        "skills": ["Python", "FastAPI", "Docker", "SQL"],
+    },
+    {
+        "candidate_id": "cand-1002",
+        "name": "Rahul Verma",
+        "email": "rahul@example.com",
+        "resume_text": "Java, Spring Boot, MySQL",
+        "skills": ["Java", "Spring Boot", "MySQL"],
+    },
+    {
+        "candidate_id": "cand-1003",
+        "name": "Priya Singh",
+        "email": "priya@example.com",
+        "resume_text": "React, JavaScript, HTML, CSS",
+        "skills": ["React", "JavaScript", "HTML", "CSS"],
+    },
+]
+
+# ---------------------------------------------------------------------
+# Sample Questions
+# ---------------------------------------------------------------------
+
+QUESTION_FIXTURES = [
+    {
+        "question_id": "q-001",
+        "text": "Explain REST API.",
+        "category": "Backend",
+        "difficulty": "easy",
+        "tags": ["REST", "API"],
+    },
+    {
+        "question_id": "q-002",
+        "text": "What is Docker?",
+        "category": "DevOps",
+        "difficulty": "easy",
+        "tags": ["Docker", "Containers"],
+    },
+    {
+        "question_id": "q-003",
+        "text": "Explain SQL JOIN.",
+        "category": "Database",
+        "difficulty": "medium",
+        "tags": ["SQL", "Join"],
+    },
+]
+
+# ---------------------------------------------------------------------
+# Sample Interview Templates
+# ---------------------------------------------------------------------
+
+TEMPLATE_FIXTURES = [
+    {
+        "template_id": "template-001",
+        "name": "Backend Interview",
+        "description": "Backend Developer Interview",
+        "interview_type": "Technical",
+        "duration_minutes": 60,
+        "question_count": 10,
+        "category_distribution": {
+            "Backend": 5,
+            "Database": 3,
+            "DevOps": 2,
+        },
+        "difficulty_distribution": {
+            "easy": 3,
+            "medium": 5,
+            "hard": 2,
+        },
+    }
+]
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -55,6 +140,125 @@ def seed_workers() -> None:
             print(f"  + worker {spec['worker_id']} (capacity={spec['capacity']})")
         registry.heartbeat(spec["worker_id"], active_tasks=spec["active_tasks"])
 
+def seed_candidates() -> None:
+    """Insert sample candidates. Safe to run multiple times."""
+
+    db = SessionLocal()
+
+    try:
+        for candidate in CANDIDATE_FIXTURES:
+
+            # Check if candidate already exists
+            existing = (
+                db.query(Candidate)
+                .filter(Candidate.candidate_id == candidate["candidate_id"])
+                .first()
+            )
+
+            if existing:
+                print(f"  = candidate {candidate['candidate_id']} already exists")
+                continue
+
+            db.add(
+                Candidate(
+                    candidate_id=candidate["candidate_id"],
+                    name=candidate["name"],
+                    email=candidate["email"],
+                    resume_text=candidate["resume_text"],
+                    skills=candidate["skills"],
+                    interview_history=[],
+                    avg_score=0.0,
+                    total_interviews=0,
+                )
+            )
+
+            print(f"  + inserted candidate {candidate['candidate_id']}")
+
+        db.commit()
+
+    finally:
+        db.close()
+
+def seed_questions() -> None:
+    """Insert sample interview questions. Safe to run multiple times."""
+
+    db = SessionLocal()
+
+    try:
+        for question in QUESTION_FIXTURES:
+
+            # Check if question already exists
+            existing = (
+                db.query(Question)
+                .filter(Question.question_id == question["question_id"])
+                .first()
+            )
+
+            if existing:
+                print(f"  = question {question['question_id']} already exists")
+                continue
+
+            db.add(
+                Question(
+                    question_id=question["question_id"],
+                    text=question["text"],
+                    category=question["category"],
+                    difficulty=question["difficulty"],
+                    tags=question["tags"],
+                    usage_count=0,
+                    avg_score=0.0,
+                )
+            )
+
+            print(f"  + inserted question {question['question_id']}")
+
+        db.commit()
+
+    finally:
+        db.close()
+
+def seed_templates() -> None:
+    """Insert sample interview templates. Safe to run multiple times."""
+
+    db = SessionLocal()
+
+    try:
+        for template in TEMPLATE_FIXTURES:
+
+            # Check if template already exists
+            existing = (
+                db.query(InterviewTemplate)
+                .filter(
+                    InterviewTemplate.template_id == template["template_id"]
+                )
+                .first()
+            )
+
+            if existing:
+                print(f"  = template {template['template_id']} already exists")
+                continue
+
+            db.add(
+                InterviewTemplate(
+                    template_id=template["template_id"],
+                    name=template["name"],
+                    description=template["description"],
+                    interview_type=template["interview_type"],
+                    duration_minutes=template["duration_minutes"],
+                    question_count=template["question_count"],
+                    category_distribution=template["category_distribution"],
+                    difficulty_distribution=template["difficulty_distribution"],
+                    usage_count=0,
+                    success_rate=0.0,
+                )
+            )
+
+            print(f"  + inserted template {template['template_id']}")
+
+        db.commit()
+
+    finally:
+        db.close()
 
 def seed_sessions(reset: bool = False) -> None:
     """Insert a realistic mix of completed, active, and failed sessions."""
@@ -165,6 +369,9 @@ def main() -> int:
 
     print(f"Seeding demo data into {get_settings().database_url} …")
     seed_workers()
+    seed_candidates()
+    seed_questions()
+    seed_templates()
     seed_sessions(reset=args.reset)
     print("Done.")
 

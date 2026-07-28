@@ -11,14 +11,14 @@ Every important update:
 2. Sync to PostgreSQL (persistent)
 """
 
-import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
 
-from orchestrator.redis_client import get_redis_client
+from orchestrator.cache_manager import CacheManager
+from orchestrator.session_payload import deserialize_session_payload, serialize_session_payload
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class StateSynchronizer:
     def __init__(self):
         """Initialize Redis connection"""
         try:
-            self.redis_client = get_redis_client()
+            self.redis_client = CacheManager()
             logger.info("Connected to Redis for state caching")
         except Exception as e:
             logger.error(f"Error initializing Redis connection: {e!s}")
@@ -59,7 +59,7 @@ class StateSynchronizer:
 
         try:
             key = f"{self.SESSION_KEY_PREFIX}{session_id}"
-            value = json.dumps(session_data)
+            value = serialize_session_payload(session_data)
 
             # Set with TTL
             self.redis_client.set(key, value, ex=self.SESSION_TTL)
@@ -95,7 +95,7 @@ class StateSynchronizer:
                 logger.debug(f"Session {session_id} not found in cache")
                 return None
 
-            session_data = json.loads(value)
+            session_data = deserialize_session_payload(value)
             logger.debug(f"Retrieved cached session state for {session_id}")
             return session_data
 

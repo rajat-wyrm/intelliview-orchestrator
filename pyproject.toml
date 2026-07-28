@@ -55,7 +55,6 @@ ignore = [
     "N815",   # mixedCase in class scope
     "N818",   # exception naming
     "UP031",  # % formatting — kept for log clarity
-    "UP038",  # isinstance tuple syntax
     "RUF002", # ambiguous dashes in docstrings
     "ASYNC230",
     "ASYNC240",
