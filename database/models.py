@@ -5,21 +5,18 @@ Defines database models using declarative base
 
 from datetime import datetime, timezone
 
-<<<<<<< HEAD
-from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String
-from sqlalchemy.orm import relationship
-=======
 from sqlalchemy import (
     JSON,
     CheckConstraint,
     Column,
     DateTime,
     Float,
+    ForeignKey,
     Integer,
     String,
 )
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func  # noqa: F401  (re-exported for ORM consumers)
->>>>>>> upstream/main
 
 from database.db import Base
 
@@ -64,7 +61,6 @@ class InterviewSession(Base):
     )
 
     session_id = Column(String(255), primary_key=True, index=True, nullable=False)
-<<<<<<< HEAD
 
     candidate_id = Column(
         String(255),
@@ -73,11 +69,8 @@ class InterviewSession(Base):
         index=True,
     )
 
-    status = Column(String(50), nullable=False, default="pending")
-=======
-    candidate_id = Column(String(255), nullable=False, index=True)
     status = Column(String(50), nullable=False, default="pending", index=True)
->>>>>>> upstream/main
+
     assigned_node = Column(String(255), nullable=True)
     start_time = Column(DateTime, nullable=True, default=utcnow)
     end_time = Column(DateTime, nullable=True)
@@ -93,24 +86,23 @@ class InterviewSession(Base):
     questions_asked = Column(JSON, nullable=True, default=list)
     answers_provided = Column(JSON, nullable=True, default=list)
     feedback_generated = Column(JSON, nullable=True, default=list)
-<<<<<<< HEAD
-    overall_score = Column(Float, nullable=True)
+    overall_score = Column(Float, nullable=True, index=True)
 
     template_id = Column(
         String(255),
         ForeignKey("interview_templates.template_id"),
         nullable=True,
+        index=True,
     )
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(
         DateTime,
         nullable=False,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=utcnow,
+        onupdate=utcnow,
     )
 
-    # ORM Relationships
     candidate = relationship(
         "Candidate",
         back_populates="interview_sessions",
@@ -120,13 +112,6 @@ class InterviewSession(Base):
         "InterviewTemplate",
         back_populates="interview_sessions",
     )
-=======
-    overall_score = Column(Float, nullable=True, index=True)
-    template_id = Column(String(255), nullable=True, index=True)
-
-    created_at = Column(DateTime, nullable=False, default=utcnow)
-    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
->>>>>>> upstream/main
 
     def __repr__(self):
         return (
@@ -174,24 +159,18 @@ class Candidate(Base):
     avg_score = Column(Float, nullable=True, index=True)
     total_interviews = Column(Integer, nullable=False, default=0, index=True)
 
-<<<<<<< HEAD
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(
         DateTime,
         nullable=False,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=utcnow,
+        onupdate=utcnow,
     )
 
-    # ORM Relationship
     interview_sessions = relationship(
         "InterviewSession",
         back_populates="candidate",
     )
-=======
-    created_at = Column(DateTime, nullable=False, default=utcnow)
-    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
->>>>>>> upstream/main
 
     def __repr__(self):
         return f"<Candidate(candidate_id='{self.candidate_id}', name='{self.name}')>"
@@ -213,24 +192,30 @@ class InterviewTemplate(Base):
     usage_count = Column(Integer, nullable=False, default=0, index=True)
     success_rate = Column(Float, nullable=True, index=True)
 
-<<<<<<< HEAD
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    # created_at = Column(DateTime, nullable=False, default=utcnow)
+    # updated_at = Column(
+    #     DateTime,
+    #     nullable=False,
+    #     default=utcnow,
+    #     onupdate=utcnow,
+    # )
+
+    # interview_sessions = relationship(
+    #     "InterviewSession",
+    #     back_populates="template",
+    # )
+    created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(
         DateTime,
         nullable=False,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=utcnow,
+        onupdate=utcnow,
     )
 
-    # ORM Relationship
     interview_sessions = relationship(
         "InterviewSession",
         back_populates="template",
     )
-=======
-    created_at = Column(DateTime, nullable=False, default=utcnow)
-    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
->>>>>>> upstream/main
 
     def __repr__(self):
         return (
