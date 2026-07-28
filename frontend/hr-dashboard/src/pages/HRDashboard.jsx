@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import StatsCards from "../components/StatsCards";
 import FilterBar from "../components/FilterBar";
 import CandidateTable from "../components/CandidateTable";
@@ -42,33 +42,43 @@ function HRDashboard() {
   const [stats, setStats] = useState(null);
   const [totalPages, setTotalPages] = useState(1);
 
+  // Tracks the most recently issued request so that if an older, slower
+  // request resolves after a newer one, its (stale) result is discarded.
+  const latestRequestId = useRef(0);
+
   useEffect(() => {
     document.title = "HR Dashboard";
-  }, [fetchDashboardData]);
+  }, []);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, [filters, pagination.currentPage]);
+  const applyFilters = useCallback(
+    (data) => {
+      return data.filter((c) => {
+        if (filters.search && !c.name.toLowerCase().includes(filters.search.toLowerCase())) return false;
+        if (filters.domain && c.domain !== filters.domain) return false;
+        if (filters.type && c.type !== filters.type) return false;
+        if (filters.status && c.status !== filters.status) return false;
+        if (filters.dateFrom && c.appliedDate < filters.dateFrom) return false;
+        if (filters.dateTo && c.appliedDate > filters.dateTo) return false;
+        return true;
+      });
+    },
+    [filters]
+  );
 
-  const applyFilters = (data) => {
-    return data.filter((c) => {
-      if (filters.search && !c.name.toLowerCase().includes(filters.search.toLowerCase())) return false;
-      if (filters.domain && c.domain !== filters.domain) return false;
-      if (filters.type && c.type !== filters.type) return false;
-      if (filters.status && c.status !== filters.status) return false;
-      if (filters.dateFrom && c.appliedDate < filters.dateFrom) return false;
-      if (filters.dateTo && c.appliedDate > filters.dateTo) return false;
-      return true;
-    });
-  };
+  const fetchDashboardData = useCallback(async () => {
+    // Bump the request id and capture this call's id so we can tell, once
+    // the (simulated) network call resolves, whether a newer request has
+    // since been issued -- if so, this response is stale and is discarded.
+    const requestId = ++latestRequestId.current;
 
-  const fetchDashboardData = async () => {
     setIsLoading(true);
     setError(null);
     try {
       // TODO: replace with real API call once backend endpoint is available
       // e.g. const res = await fetch(`/api/candidates?${new URLSearchParams({...filters, page: pagination.currentPage})}`);
       await new Promise((resolve) => setTimeout(resolve, 300)); // simulate network delay
+
+      if (requestId !== latestRequestId.current) return; // stale response, ignore
 
       const filtered = applyFilters(ALL_MOCK_CANDIDATES);
 
@@ -86,11 +96,19 @@ function HRDashboard() {
       setStats(mockStats);
       setTotalPages(Math.max(1, Math.ceil(filtered.length / pagination.limit)));
     } catch (err) {
-      setError("Failed to load dashboard data.");
+      if (requestId === latestRequestId.current) {
+        setError("Failed to load dashboard data.");
+      }
     } finally {
-      setIsLoading(false);
+      if (requestId === latestRequestId.current) {
+        setIsLoading(false);
+      }
     }
-  };
+  }, [applyFilters, pagination.currentPage, pagination.limit]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const handleFilterChange = (newFilters) => {
     setFilters(newFilters);
