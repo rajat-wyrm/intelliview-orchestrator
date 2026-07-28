@@ -13,8 +13,12 @@ deterministic per-session signals so end-to-end risk scoring and the
 HIGH/CRITICAL thresholds fire correctly without GPU dependencies.
 """
 
+import contextlib
 import logging
 import os
+import shutil
+import tempfile
+import threading
 import time
 from typing import Any, TypedDict
 
@@ -22,6 +26,55 @@ from workers._stubs import _seeded_unit
 
 logger = logging.getLogger(__name__)
 AUDIO_TEMP_DIR = os.getenv("AUDIO_TEMP_DIR", "/tmp")
+
+# Thread-safe registry to track active temporary directory paths for each session
+_temp_dir_lock = threading.Lock()
+_session_temp_dirs: dict[str, str] = {}
+
+
+@contextlib.contextmanager
+def manage_session_audio(session_id: str):
+    """Context manager to manage the lifetime of the temporary directory for a session analysis.
+
+    Copies the legacy/input audio file into the secure temporary directory if it exists.
+    """
+    with tempfile.TemporaryDirectory(prefix=f"interview_{session_id}_") as temp_dir:
+        with _temp_dir_lock:
+            _session_temp_dirs[session_id] = temp_dir
+
+        legacy_path = os.path.join(AUDIO_TEMP_DIR, f"interview_{session_id}.wav")
+        temp_path = os.path.join(temp_dir, f"interview_{session_id}.wav")
+        if os.path.exists(legacy_path):
+            shutil.copy2(legacy_path, temp_path)
+
+        try:
+            yield temp_path
+        finally:
+            with _temp_dir_lock:
+                _session_temp_dirs.pop(session_id, None)
+
+
+@contextlib.contextmanager
+def session_audio_context(session_id: str):
+    """Context manager to access the secure temporary audio file path.
+
+    If run_audio_analysis has set up a session-level temporary directory,
+    it uses that. Otherwise (e.g. in standalone helper calls/tests),
+    it creates a one-off temporary directory, copies the source file if present,
+    and cleans it up.
+    """
+    with _temp_dir_lock:
+        temp_dir = _session_temp_dirs.get(session_id)
+
+    if temp_dir:
+        yield os.path.join(temp_dir, f"interview_{session_id}.wav")
+    else:
+        with tempfile.TemporaryDirectory(prefix=f"interview_{session_id}_") as local_dir:
+            legacy_path = os.path.join(AUDIO_TEMP_DIR, f"interview_{session_id}.wav")
+            temp_path = os.path.join(local_dir, f"interview_{session_id}.wav")
+            if os.path.exists(legacy_path):
+                shutil.copy2(legacy_path, temp_path)
+            yield temp_path
 
 
 # ---------------------------------------------------------------------------
@@ -65,35 +118,38 @@ def _real_transcribe(session_id: str) -> dict[str, Any] | None:
 
         from workers.ai_client import transcribe_audio_file
 
-        audio_path = f"{AUDIO_TEMP_DIR}/interview_{session_id}.wav"
-        if not os.path.exists(audio_path):
-            logger.warning("Audio file not found: %s", audio_path)
-            return None
-        result = transcribe_audio_file(audio_path)
-        segments = result.get("segments", [])
-        if segments:
-            avg_logprob = np.mean([s.get("avg_logprob", -1.0) for s in segments])
+        with session_audio_context(session_id) as audio_path:
+            if not os.path.exists(audio_path):
+                logger.warning("Audio file not found: %s", audio_path)
+                return None
+            result = transcribe_audio_file(audio_path)
+            if result is None:
+                return None
+            segments = result.get("segments", [])
+            avg_logprob = None
+            if segments:
+                avg_logprob = np.mean([s.get("avg_logprob", -1.0) for s in segments])
 
-            confidence = round(
-                max(0.0, min(1.0, 1.0 + avg_logprob)),
-                3,
+                confidence = round(
+                    max(0.0, min(1.0, 1.0 + avg_logprob)),
+                    3,
+                )
+            else:
+                confidence = 0.0
+
+            logger.info(
+                "avg_logprob=%s, confidence=%s",
+                avg_logprob,
+                confidence,
             )
-        else:
-            confidence = 0.0
 
-        logger.info(
-            "avg_logprob=%s, confidence=%s",
-            avg_logprob,
-            confidence,
-        )
-
-        return {
-            "text": result.get("text", ""),
-            "confidence": confidence,
-            "language": result.get("language", "en"),
-            "duration_seconds": (sum(s.get("end", 0) - s.get("start", 0) for s in segments) or 120.0),
-            "timestamp": time.time(),
-        }
+            return {
+                "text": result.get("text", ""),
+                "confidence": confidence,
+                "language": result.get("language", "en"),
+                "duration_seconds": (sum(s.get("end", 0) - s.get("start", 0) for s in segments) or 120.0),
+                "timestamp": time.time(),
+            }
 
     except ImportError:
         logger.info("Whisper not installed, using stub fallback")
@@ -121,29 +177,29 @@ def _real_detect_background_voices(session_id: str) -> dict[str, Any] | None:
     try:
         from workers.ai_client import detect_speaker_segments
 
-        audio_path = f"{AUDIO_TEMP_DIR}/interview_{session_id}.wav"
-        if not os.path.exists(audio_path):
-            logger.warning("Audio file not found: %s", audio_path)
-            return None
-        segments = detect_speaker_segments(audio_path)
-        if segments is None:
-            return None
-        speaker_ids = {s["speaker_id"] for s in segments}
-        voice_count = len(speaker_ids)
-        return {
-            "background_voices_detected": voice_count > 1,
-            "voice_count": voice_count,
-            "confidence": 0.85,
-            "speaker_segments": segments,
-            "timestamps": [
-                {
-                    "speaker": s["speaker_id"],
-                    "start": s["start"],
-                    "end": s["end"],
-                }
-                for s in segments
-            ],
-        }
+        with session_audio_context(session_id) as audio_path:
+            if not os.path.exists(audio_path):
+                logger.warning("Audio file not found: %s", audio_path)
+                return None
+            segments = detect_speaker_segments(audio_path)
+            if segments is None:
+                return None
+            speaker_ids = {s["speaker_id"] for s in segments}
+            voice_count = len(speaker_ids)
+            return {
+                "background_voices_detected": voice_count > 1,
+                "voice_count": voice_count,
+                "confidence": 0.85,
+                "speaker_segments": segments,
+                "timestamps": [
+                    {
+                        "speaker": s["speaker_id"],
+                        "start": s["start"],
+                        "end": s["end"],
+                    }
+                    for s in segments
+                ],
+            }
     except ImportError:
         logger.info("pyannote not installed, using stub fallback")
         return None
@@ -240,9 +296,12 @@ def run_audio_analysis(session_id: str) -> dict[str, Any]:
     """Execute audio analysis pipeline for an interview session."""
     logger.info(f"Starting audio analysis for session {session_id}")
 
-    transcription = transcribe_speech(session_id)
-    bg_voices = detect_background_voices(session_id)
-    suspicious = detect_suspicious_conversation(session_id)
+    success = False
+    with manage_session_audio(session_id):
+        transcription = transcribe_speech(session_id)
+        bg_voices = detect_background_voices(session_id)
+        suspicious = detect_suspicious_conversation(session_id)
+        success = True
 
     results = {
         "session_id": session_id,
@@ -254,6 +313,16 @@ def run_audio_analysis(session_id: str) -> dict[str, Any]:
 
     results["risk_score"] = calculate_audio_risk_score(results)
     logger.info(f"Audio analysis completed for session {session_id}: {results}")
+
+    if success:
+        legacy_path = os.path.join(AUDIO_TEMP_DIR, f"interview_{session_id}.wav")
+        if os.path.exists(legacy_path):
+            try:
+                os.remove(legacy_path)
+                logger.info("Cleaned up legacy audio file: %s", legacy_path)
+            except Exception as exc:
+                logger.warning("Failed to clean up legacy audio file %s: %s", legacy_path, exc)
+
     return results
 
 
