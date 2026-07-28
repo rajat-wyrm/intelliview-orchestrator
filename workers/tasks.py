@@ -8,7 +8,6 @@ Pipeline:
      Celery. The session is NOT marked FAILED here — only after Celery
      has exhausted retries (see `celery_app.task_failure` signal).
 """
-from orchestrator.redis_client import get_redis_client
 from __future__ import annotations
 
 import json
@@ -35,6 +34,7 @@ from monitoring.prometheus_metrics import (
     RISK_SCORE,
     WORKERS_HEALTHY,
 )
+from orchestrator.redis_client import get_redis_client
 from orchestrator.session_manager import SessionManager
 from orchestrator.state_sync import StateSynchronizer
 from workers.celery_app import celery_app

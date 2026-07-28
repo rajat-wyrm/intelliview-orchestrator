@@ -10,6 +10,7 @@ import pathlib
 import sys
 
 import pytest
+
 from workers.celery_app import celery_app
 
 # Make project root importable so `from config import ...` works.

@@ -5,15 +5,15 @@ the Celery worker, with active task count tracked via Celery signals.
 
 import logging
 import os
-import signal
 import sys
 import threading
 
 from celery.signals import task_postrun, task_prerun, worker_shutdown
+
 from config import WORKER_CONCURRENCY
 from workers.celery_app import celery_app
-from workers.worker_agent import WorkerAgent
 from workers.metrics_server import start_worker_metrics
+from workers.worker_agent import WorkerAgent
 
 logger = logging.getLogger(__name__)
 SUPPORTED_POOL = "solo"
@@ -80,7 +80,7 @@ def main() -> int:
     def _on_worker_shutdown(**kwargs):
         logger.info("Shutting down worker")
         agent.deregister()
-    
+
 
     logger.info("Worker entrypoint ready; starting Celery")
     _run_celery()
