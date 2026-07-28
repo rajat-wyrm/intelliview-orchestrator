@@ -11,12 +11,8 @@ Integrates:
 - Worker Registry for node tracking
 - Task Queue integration with Celery
 """
-<<<<<<< HEAD
-import json
-=======
-
 import io
->>>>>>> upstream/main
+import json
 import logging
 import re
 import time
@@ -45,8 +41,16 @@ from database.models import Base, Candidate, InterviewSession
 from monitoring.dashboard_api import create_dashboard_routes
 from monitoring.metrics_collector import MetricsCollector
 from monitoring.prometheus_metrics import (
+    POSTGRES_HEALTH,
+    REDIS_HEALTH,
     REQUEST_COUNT,
     REQUEST_DURATION,
+    WORKER_ACTIVE_TASKS,
+    WORKER_CAPACITY,
+    WORKER_HEARTBEAT_AGE_SECONDS,
+    WORKERS_HEALTHY,
+    WORKERS_REGISTERED,
+    WORKERS_UNHEALTHY,
 )
 from monitoring.websocket_manager import ws_manager
 from orchestrator import http_cache
@@ -70,7 +74,6 @@ from orchestrator.session_tracker import SessionTracker
 from orchestrator.state_sync import StateSynchronizer
 from orchestrator.worker_registry import WorkerRegistry
 from workers.bias_auditor import BiasAuditor
- 
 
 # Configure logging after imports so startup messages are structured.
 configure_logging()
@@ -127,12 +130,8 @@ async def lifespan(app: FastAPI):
                     close()
                 except Exception as exc:
                     logger.debug("shutdown close failed: %s", exc)
-<<<<<<< HEAD
-=======
         # Close the shared Redis client
         from orchestrator.cache_manager import CacheManager
->>>>>>> upstream/main
-
         rc = CacheManager()
         if rc is not None:
             try:
@@ -1822,7 +1821,7 @@ async def retry_failed_session(session_id: str):
             )
 
         # Get retry info
-        retry_info = retry_manager.get_retry_info(session_id)
+        retry_manager.get_retry_info(session_id)
 
         # Schedule retry with exponential backoff
         # Schedule retry

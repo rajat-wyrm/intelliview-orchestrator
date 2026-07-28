@@ -8,7 +8,7 @@ Pipeline:
      Celery. The session is NOT marked FAILED here — only after Celery
      has exhausted retries (see `celery_app.task_failure` signal).
 """
-
+from orchestrator.redis_client import get_redis_client
 from __future__ import annotations
 
 import json
@@ -155,7 +155,7 @@ def _after_parallel(self, session_id: str, video_result: dict, audio_result: dic
             if interview:
                 interview.risk_score = final_risk_score
                 interview.video_analysis = video_result
-                interview.audio_analysis = audio_analysis
+                interview.audio_analysis = audio_result
                 interview.evaluation_analysis = evaluation_result
                 interview.end_time = now
                 interview.updated_at = now

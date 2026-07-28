@@ -10,6 +10,7 @@ import pathlib
 import sys
 
 import pytest
+from workers.celery_app import celery_app
 
 # Make project root importable so `from config import ...` works.
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -28,7 +29,7 @@ os.environ.setdefault("API_TOKEN", "test-token")
 @pytest.fixture(scope="session")
 def api_base_url() -> str:
     return os.getenv("API_BASE_URL", "http://localhost:8000")
-from workers.celery_app import celery_app
+
 
 
 @pytest.fixture(scope="session")
