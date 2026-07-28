@@ -112,34 +112,59 @@ class LoadBalancer:
         logger.warning("No valid workers available for Round Robin selection")
         return None
 
+    # def _select_least_loaded(self) -> dict[str, Any] | None:
+    #     """
+    #     Least Loaded Strategy: Assign to worker with fewest active tasks (RECOMMENDED)
+
+    #     Selects the worker with the lowest number of active tasks among available workers.
+    #     Provides better load balancing for varying task durations.
+
+    #     Returns:
+    #         dict: Least loaded worker or None if no workers available
+    #     """
+        
+    #     if not worker:
+    #         logger.warning("No workers available for Least Loaded selection")
+    #         return None
+
+    #     if not self._is_valid_worker(worker):
+    #         return None
+
+    #     logger.debug(
+    #         f"Least Loaded selected worker: {worker['worker_id']} "
+    #         f"(active: {worker['active_tasks']}/{worker['capacity']})"
+    #     )
+
+    #     return worker
+    
     def _select_least_loaded(self) -> dict[str, Any] | None:
         """
-        Least Loaded Strategy: Assign to worker with fewest active tasks (RECOMMENDED)
-
-        Selects the worker with the lowest number of active tasks among available workers.
-        Provides better load balancing for varying task durations.
+        Least Loaded Strategy: Assign to worker with fewest active tasks.
 
         Returns:
-            dict: Least loaded worker or None if no workers available
+        dict: Least loaded worker or None if no workers available
         """
-        # worker = self.worker_registry.get_least_loaded_worker()
 
-        # if not worker:
-        #     logger.warning("No workers available for Least Loaded selection")
-        #     return None
+        available_workers = self.worker_registry.get_available_workers()
 
-        # logger.debug(
-        #     f"Least Loaded selected worker: {worker['worker_id']} "
-        #     f"(active: {worker['active_tasks']}/{worker['capacity']})"
-        # )
-        # return worker
-        
-        if not worker:
+        if not available_workers:
             logger.warning("No workers available for Least Loaded selection")
             return None
 
-        if not self._is_valid_worker(worker):
+        valid_workers = [
+            worker
+            for worker in available_workers
+            if self._is_valid_worker(worker)
+        ]
+
+        if not valid_workers:
+            logger.warning("No workers with valid capacity available")
             return None
+
+        worker = min(
+            valid_workers,
+            key=lambda w: w["active_tasks"]
+        )
 
         logger.debug(
             f"Least Loaded selected worker: {worker['worker_id']} "
@@ -150,23 +175,14 @@ class LoadBalancer:
 
     def _select_queue_based(self) -> dict[str, Any] | None:
         """
-        Queue-based Strategy: Fallback to queue if no workers available
+    Queue-based Strategy: Fallback to queue if no workers available.
 
-        First tries to select a worker. If none available, returns None to signal
-        task should be queued in Redis for later processing.
-
-        Returns:
-            dict: Selected worker or None to trigger queueing
+    Returns:
+        dict: Selected worker or None to trigger queueing
         """
+
         worker = self.worker_registry.get_least_loaded_worker()
 
-        # if not worker:
-        #     logger.debug("No workers available - task will be queued in Redis")
-        #     return None
-
-        # logger.debug(f"Queue-based selected worker: {worker['worker_id']}")
-        # return worker
-        
         if not worker:
             logger.debug("No workers available - task will be queued in Redis")
             return None
@@ -176,6 +192,7 @@ class LoadBalancer:
             return None
 
         logger.debug(f"Queue-based selected worker: {worker['worker_id']}")
+
         return worker
 
     def switch_strategy(self, strategy: BalancingStrategy) -> None:
