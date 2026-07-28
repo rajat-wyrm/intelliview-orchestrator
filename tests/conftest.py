@@ -30,12 +30,15 @@ import sys
 
 import pytest
 
-from workers.celery_app import celery_app
-
-# Make project root importable so `from config import ...` works.
+# Make project root importable so `from config import ...` and
+# `from workers... import ...` work, regardless of the directory pytest
+# is invoked from. This MUST run before importing workers.celery_app,
+# since that module itself does `from config import REDIS_URL`.
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+from workers.celery_app import celery_app  # noqa: E402 (must follow sys.path setup above)
 
 
 @pytest.fixture(scope="session")
