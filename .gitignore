@@ -18,3 +18,13 @@ frontend/out/
 frontend/.env.local
 frontend/*.tsbuildinfo
 
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env.local
+frontend/*.tsbuildinfo
+
+# Ignore accidental nested repo
+intelliview-orchestrator/
+
