@@ -43,6 +43,8 @@ from monitoring.prometheus_metrics import (
     REDIS_HEALTH,
     REQUEST_COUNT,
     REQUEST_DURATION,
+    SESSIONS_ACTIVE,
+    SESSIONS_CREATED,
     WORKER_ACTIVE_TASKS,
     WORKER_CAPACITY,
     WORKER_HEARTBEAT_AGE_SECONDS,
@@ -604,6 +606,11 @@ async def start_interview(
             candidate_name=request.candidate_name,
             position=request.position,
         )
+
+        # Increment total interview sessions created
+        SESSIONS_CREATED.inc()
+        # Increase active interview session count
+        SESSIONS_ACTIVE.inc()
 
         logger.info(f"Session created: {session_id}")
 
