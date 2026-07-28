@@ -15,13 +15,67 @@ HIGH/CRITICAL thresholds fire correctly without GPU dependencies.
 
 import logging
 import os
+import tempfile
+import threading
 import time
 from typing import Any, TypedDict
 
 from workers._stubs import _seeded_unit
 
 logger = logging.getLogger(__name__)
-AUDIO_TEMP_DIR = os.getenv("AUDIO_TEMP_DIR", "/tmp")
+
+# Base directory under which session-scoped secure temp directories are
+# created. Defaults to the OS temp dir; AUDIO_TEMP_DIR is still honored
+# for deployments that pin audio storage to a specific volume/mount.
+AUDIO_TEMP_DIR = os.getenv("AUDIO_TEMP_DIR") or tempfile.gettempdir()
+
+AUDIO_FILENAME = "audio.wav"
+
+# Registry mapping session_id -> the securely-created TemporaryDirectory
+# for that session's audio file. Replaces the old predictable
+# f"{AUDIO_TEMP_DIR}/interview_{session_id}.wav" path (issue #452):
+# each directory now has a random, unguessable suffix (via tempfile),
+# is unique per session even under concurrent access, and is fully
+# removed (dir + contents) via cleanup_session_audio() instead of being
+# left on disk indefinitely.
+_session_audio_dirs: dict[str, tempfile.TemporaryDirectory] = {}
+_session_audio_dirs_lock = threading.Lock()
+
+
+def get_session_audio_dir(session_id: str) -> str:
+    """Return (creating if necessary) the secure temp directory for this
+    session's audio file. Thread-safe and idempotent per session_id, so
+    every stage of the pipeline resolves the same path.
+
+    IMPORTANT: whatever code saves the raw recorded audio for a session
+    (e.g. the upload/recording endpoint) must write to
+    `get_session_audio_path(session_id)` instead of constructing its own
+    static path, or the analysis functions below won't find the file.
+    """
+    with _session_audio_dirs_lock:
+        entry = _session_audio_dirs.get(session_id)
+        if entry is None:
+            entry = tempfile.TemporaryDirectory(prefix=f"interview_{session_id}_", dir=AUDIO_TEMP_DIR)
+            _session_audio_dirs[session_id] = entry
+        return entry.name
+
+
+def get_session_audio_path(session_id: str) -> str:
+    """Return this session's audio file path inside its secure temp dir."""
+    return os.path.join(get_session_audio_dir(session_id), AUDIO_FILENAME)
+
+
+def cleanup_session_audio(session_id: str) -> None:
+    """Remove the session's temporary audio directory and all its
+    contents. Safe to call even if the session was never analyzed, or
+    was already cleaned up (no-op in that case)."""
+    with _session_audio_dirs_lock:
+        entry = _session_audio_dirs.pop(session_id, None)
+    if entry is not None:
+        try:
+            entry.cleanup()
+        except Exception as exc:
+            logger.warning("Failed to clean up temp audio dir for session %s: %s", session_id, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -97,7 +151,7 @@ def _real_transcribe(session_id: str) -> dict[str, Any] | None:
 
         from workers.ai_client import transcribe_audio_file
 
-        audio_path = f"{AUDIO_TEMP_DIR}/interview_{session_id}.wav"
+        audio_path = get_session_audio_path(session_id)
         if not os.path.exists(audio_path):
             logger.warning("Audio file not found: %s", audio_path)
             return None
@@ -153,7 +207,7 @@ def _real_detect_background_voices(session_id: str) -> dict[str, Any] | None:
     try:
         from workers.ai_client import detect_speaker_segments
 
-        audio_path = f"{AUDIO_TEMP_DIR}/interview_{session_id}.wav"
+        audio_path = get_session_audio_path(session_id)
         if not os.path.exists(audio_path):
             logger.warning("Audio file not found: %s", audio_path)
             return None
@@ -272,21 +326,27 @@ def run_audio_analysis(session_id: str) -> dict[str, Any]:
     """Execute audio analysis pipeline for an interview session."""
     logger.info(f"Starting audio analysis for session {session_id}")
 
-    transcription = transcribe_speech(session_id)
-    bg_voices = detect_background_voices(session_id)
-    suspicious = detect_suspicious_conversation(session_id)
+    try:
+        transcription = transcribe_speech(session_id)
+        bg_voices = detect_background_voices(session_id)
+        suspicious = detect_suspicious_conversation(session_id)
 
-    results = {
-        "session_id": session_id,
-        "transcription": transcription,
-        "background_voices": bg_voices,
-        "suspicious_conversation": suspicious,
-        "risk_score": 0.0,
-    }
+        results = {
+            "session_id": session_id,
+            "transcription": transcription,
+            "background_voices": bg_voices,
+            "suspicious_conversation": suspicious,
+            "risk_score": 0.0,
+        }
 
-    results["risk_score"] = calculate_audio_risk_score(results)
-    logger.info(f"Audio analysis completed for session {session_id}: {results}")
-    return results
+        results["risk_score"] = calculate_audio_risk_score(results)
+        logger.info(f"Audio analysis completed for session {session_id}: {results}")
+        return results
+    finally:
+        # Issue #452: temp audio (if any was created for this session) is
+        # removed once all analysis stages have finished, regardless of
+        # whether they succeeded or raised.
+        cleanup_session_audio(session_id)
 
 
 def transcribe_speech(session_id: str) -> dict[str, Any]:
