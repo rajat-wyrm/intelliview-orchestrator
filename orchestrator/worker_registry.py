@@ -64,13 +64,9 @@ class WorkerRegistry:
                     logger.info("Worker Registry initialized with Pub/Sub Sync")
                 except RuntimeError:
                     # No running event loop (pytest/unit tests)
-                    logger.debug(
-                        "Skipping Pub/Sub listener because no event loop is running"
-                    )
+                    logger.debug("Skipping Pub/Sub listener because no event loop is running")
             else:
-                logger.warning(
-                    "Worker Registry initialized WITHOUT Redis connection"
-                )
+                logger.warning("Worker Registry initialized WITHOUT Redis connection")
 
         except Exception as e:
             logger.error(f"Error initializing Worker Registry: {e!s}")

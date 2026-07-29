@@ -11,6 +11,7 @@ Integrates:
 - Worker Registry for node tracking
 - Task Queue integration with Celery
 """
+
 import io
 import json
 import logging
@@ -47,12 +48,6 @@ from monitoring.prometheus_metrics import (
     REQUEST_DURATION,
     SESSIONS_ACTIVE,
     SESSIONS_CREATED,
-    WORKER_ACTIVE_TASKS,
-    WORKER_CAPACITY,
-    WORKER_HEARTBEAT_AGE_SECONDS,
-    WORKERS_HEALTHY,
-    WORKERS_REGISTERED,
-    WORKERS_UNHEALTHY,
     WORKER_ACTIVE_TASKS,
     WORKER_CAPACITY,
     WORKER_HEARTBEAT_AGE_SECONDS,
@@ -142,12 +137,15 @@ async def lifespan(app: FastAPI):
                     logger.debug("shutdown close failed: %s", exc)
         # Close the shared Redis client
         from orchestrator.cache_manager import CacheManager
+
         rc = CacheManager()
         if rc is not None:
             try:
                 rc.raw.close()
             except Exception:
                 pass
+
+
 # Initialize FastAPI application
 app = FastAPI(
     title="AI Interview Orchestrator",

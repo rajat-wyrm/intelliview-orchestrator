@@ -31,8 +31,6 @@ import pytest
 
 from workers.celery_app import celery_app
 
-from workers.celery_app import celery_app
-
 # Make project root importable so `from config import ...` works.
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
@@ -42,7 +40,6 @@ if str(ROOT) not in sys.path:
 @pytest.fixture(scope="session")
 def api_base_url() -> str:
     return os.getenv("API_BASE_URL", "http://localhost:8000")
-
 
 
 @pytest.fixture(scope="session")

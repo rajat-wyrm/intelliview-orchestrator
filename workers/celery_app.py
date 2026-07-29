@@ -103,8 +103,6 @@ def _on_task_failure(sender, task_id, exception, args, kwargs, traceback, einfo,
             f"Celery task exhausted retries: {exception!s}",
         )
 
-        from workers.tasks import send_mock_email_alert
-
         # TODO: enable notification task when implemented
         # send_mock_email_alert.delay(session_id)
     except Exception as exc:

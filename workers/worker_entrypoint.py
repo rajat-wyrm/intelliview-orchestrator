@@ -10,7 +10,6 @@ import threading
 
 from celery.signals import task_postrun, task_prerun, worker_shutdown
 
-
 from config import WORKER_CONCURRENCY
 from workers.celery_app import celery_app
 from workers.metrics_server import start_worker_metrics
@@ -90,7 +89,6 @@ def main() -> int:
     def _on_worker_shutdown(**kwargs):
         logger.info("Shutting down worker")
         agent.deregister()
-
 
     logger.info("Worker entrypoint ready; starting Celery")
 

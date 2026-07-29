@@ -8,6 +8,7 @@ Pipeline:
      Celery. The session is NOT marked FAILED here — only after Celery
      has exhausted retries (see `celery_app.task_failure` signal).
 """
+
 from __future__ import annotations
 
 import json
