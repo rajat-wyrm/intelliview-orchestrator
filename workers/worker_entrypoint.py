@@ -12,7 +12,6 @@ from celery.signals import task_postrun, task_prerun, worker_shutdown
 
 from config import WORKER_CONCURRENCY
 from workers.celery_app import celery_app
-from workers.metrics_server import start_worker_metrics
 from workers.worker_agent import WorkerAgent
 
 logger = logging.getLogger(__name__)
@@ -48,20 +47,13 @@ def _run_celery() -> None:
 
 
 def main() -> int:
-    global agent
-
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
-    start_worker_metrics()
-
     api_url = os.getenv("API_URL", "http://fastapi:8000")
-    worker_id = os.getenv(
-        "WORKER_ID",
-        f"worker-{os.uname().nodename}-{os.getpid()}",
-    )
+    worker_id = os.getenv("WORKER_ID", f"worker-{os.uname().nodename}-{os.getpid()}")
 
     agent = WorkerAgent(
         api_url=api_url,
