@@ -58,20 +58,16 @@ class WorkerRegistry:
             if self.redis_client:
                 try:
                     loop = asyncio.get_running_loop()
-                except RuntimeError:
-                    loop = None
-                if loop is not None:
                     task = loop.create_task(self._start_pubsub_listener())
                     self.background_tasks.add(task)
                     task.add_done_callback(self.background_tasks.discard)
                     logger.info("Worker Registry initialized with Pub/Sub Sync")
-                else:
-                    logger.warning(
-                        "Pub/Sub listener not started (no event loop); "
-                        "multi-instance sync will be unavailable."
-                    )
+                except RuntimeError:
+                    # No running event loop (pytest/unit tests)
+                    logger.debug("Skipping Pub/Sub listener because no event loop is running")
             else:
                 logger.warning("Worker Registry initialized WITHOUT Redis connection")
+
         except Exception as e:
             logger.error(f"Error initializing Worker Registry: {e!s}")
             self.redis_client = None

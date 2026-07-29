@@ -1,0 +1,27 @@
+===== Notification Deduplication System =====
+
+Enter Event Name: Interview Scheduled
+Enter User ID: 101
+Enter Timestamp (Leave empty for current time): 2026-06-18T10:00:00
+
+Notification Sent Successfully
+
+{
+'idempotency_key':'sha256:9d84....',
+'status':'sent',
+'sent_at':'2026-06-18T10:00:00'
+}
+
+--------------------------------------------
+
+Enter Event Name: Interview Scheduled
+Enter User ID: 101
+Enter Timestamp (Leave empty for current time): 2026-06-18T10:05:00
+
+Notification Skipped
+
+{
+'idempotency_key':'sha256:9d84....',
+'status':'skipped_duplicate',
+'original_sent_at':'2026-06-18T10:00:00'
+}

@@ -66,11 +66,28 @@ def _real_transcribe(session_id: str) -> dict[str, Any] | None:
         from workers.ai_client import transcribe_audio_file
 
         audio_path = f"{AUDIO_TEMP_DIR}/interview_{session_id}.wav"
+
+        # Check if the audio file exists
         if not os.path.exists(audio_path):
-            logger.warning("Audio file not found: %s", audio_path)
+            logger.warning(
+                "Audio file not found for session %s: %s",
+                session_id,
+                audio_path,
+            )
             return None
+
+        # Check if the audio file is empty
+        if os.path.getsize(audio_path) == 0:
+            logger.warning(
+                "Audio file is empty (0 bytes) for session %s: %s",
+                session_id,
+                audio_path,
+            )
+            return None
+
         result = transcribe_audio_file(audio_path)
         segments = result.get("segments", [])
+
         if segments:
             avg_logprob = np.mean([s.get("avg_logprob", -1.0) for s in segments])
 
@@ -80,6 +97,7 @@ def _real_transcribe(session_id: str) -> dict[str, Any] | None:
             )
         else:
             confidence = 0.0
+            avg_logprob = 0.0
 
         logger.info(
             "avg_logprob=%s, confidence=%s",
@@ -113,7 +131,7 @@ def _real_transcribe(session_id: str) -> dict[str, Any] | None:
             exc,
             exc_info=True,
         )
-    return None
+        return None
 
 
 def _real_detect_background_voices(session_id: str) -> dict[str, Any] | None:

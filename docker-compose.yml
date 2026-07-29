@@ -213,6 +213,15 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: ai-interview-jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"
+      - "4317:4317"
     networks:
       - ai-interview-network
     depends_on:
