@@ -60,7 +60,14 @@ class SessionManager:
             FAILED,
             TIMEOUT,
         ],
-        VIDEO_PROCESSING: [ AUDIO_PROCESSING,PROCESSING,EVALUATING,COMPLETED,FAILED,TIMEOUT,],
+        VIDEO_PROCESSING: [
+            AUDIO_PROCESSING,
+            PROCESSING,
+            EVALUATING,
+            COMPLETED,
+            FAILED,
+            TIMEOUT,
+        ],
         AUDIO_PROCESSING: [EVALUATING, PROCESSING, FAILED, TIMEOUT],
         EVALUATING: [COMPLETED, PROCESSING, FAILED, TIMEOUT],
         COMPLETED: [],
@@ -121,7 +128,6 @@ class SessionManager:
 
             SESSIONS_CREATED.inc()
 
-
             SESSIONS_ACTIVE.inc()
             logger.info("Prometheus session metrics updated")
 
@@ -135,7 +141,7 @@ class SessionManager:
                 "created_at": _utcnow().isoformat(),
                 "updated_at": _utcnow().isoformat(),
                 "risk_score": None,
-                "max_task_retries" : 3,
+                "max_task_retries": 3,
             }
             self.state_sync.set_session_state(session_id, session_data)
 
@@ -199,12 +205,12 @@ class SessionManager:
             )
 
             if new_status == self.COMPLETED:
-              SESSIONS_COMPLETED.inc()
-              SESSIONS_ACTIVE.dec()
+                SESSIONS_COMPLETED.inc()
+                SESSIONS_ACTIVE.dec()
 
             elif new_status == self.FAILED:
-              SESSIONS_FAILED.inc()
-              SESSIONS_ACTIVE.dec()
+                SESSIONS_FAILED.inc()
+                SESSIONS_ACTIVE.dec()
 
             # Update Redis cache
             session_data = self.state_sync.get_session_state(session_id)
@@ -301,6 +307,7 @@ class SessionManager:
             SESSIONS_ACTIVE,
             SESSIONS_FAILED,
         )
+
         SESSIONS_FAILED.inc()
         print("SESSIONS_FAILED =", SESSIONS_FAILED._value.get())
         SESSIONS_ACTIVE.dec()
@@ -341,6 +348,7 @@ class SessionManager:
                 SESSIONS_ACTIVE,
                 SESSIONS_COMPLETED,
             )
+
             session_db.commit()
             SESSIONS_COMPLETED.inc()
             print("SESSIONS_COMPLETED =", SESSIONS_COMPLETED._value.get())
@@ -349,10 +357,8 @@ class SessionManager:
             RISK_SCORE.observe(risk_score)
 
             if interview.start_time:
-              duration = (
-              interview.end_time - interview.start_time
-              ).total_seconds()
-              SESSION_PROCESSING_DURATION.observe(duration)
+                duration = (interview.end_time - interview.start_time).total_seconds()
+                SESSION_PROCESSING_DURATION.observe(duration)
 
             # Update Redis
             session_data = self.state_sync.get_session_state(session_id)

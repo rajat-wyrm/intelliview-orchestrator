@@ -1,13 +1,11 @@
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
-from alembic import context
-
-from config import DATABASE_URL
-from database.db import Base
 
 # IMPORTANT: Import all models so SQLAlchemy registers them
-import database.models
+from alembic import context
+from config import DATABASE_URL
+from database.db import Base
 
 # Alembic Config object
 config = context.config

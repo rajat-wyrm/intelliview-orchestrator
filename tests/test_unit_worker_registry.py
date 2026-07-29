@@ -1,14 +1,27 @@
 """Unit tests for WorkerRegistry — register, heartbeat, capacity, deregister."""
+
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 from orchestrator.worker_registry import WorkerRegistry
 
 
+# def _new_registry():
+#     with patch("orchestrator.worker_registry.redis.from_url") as mock_redis:
+#         mock_redis.return_value.ping.return_value = True
+#         mock_redis.return_value.hset.return_value = True
+#         mock_redis.return_value.sadd.return_value = True
+#         mock_redis.return_value.expire.return_value = True
+#         mock_redis.return_value.setex.return_value = True
+#         mock_redis.return_value.delete.return_value = 1
+#         mock_redis.return_value.srem.return_value = 1
+#         mock_redis.return_value.hincrby.return_value = 1
+#         return WorkerRegistry()
 def _new_registry():
     with patch("orchestrator.worker_registry.get_redis_client") as mock_get_redis:
         mock_redis = MagicMock()
 
+        mock_redis.ping.return_value = True
         mock_redis.hset.return_value = True
         mock_redis.sadd.return_value = True
         mock_redis.expire.return_value = True
@@ -86,6 +99,7 @@ def test_worker_statistics_computes_utilization():
     assert stats["total_active_tasks"] == 2
     assert stats["capacity_utilization"] == 25.0
 
+
 def test_detect_unhealthy_worker_marks_status():
     reg = _new_registry()
 
@@ -101,6 +115,7 @@ def test_detect_unhealthy_worker_marks_status():
     assert "worker1" in unhealthy
     assert reg.get_worker("worker1")["status"] == "unhealthy"
 
+
 def test_detect_unhealthy_worker_keeps_recent_worker_healthy():
     reg = _new_registry()
 
@@ -110,6 +125,7 @@ def test_detect_unhealthy_worker_keeps_recent_worker_healthy():
 
     assert unhealthy == []
     assert reg.get_worker("worker2")["status"] == "healthy"
+
 
 def test_detect_unhealthy_workers_only_marks_expired_workers():
     reg = _new_registry()
@@ -126,6 +142,7 @@ def test_detect_unhealthy_workers_only_marks_expired_workers():
     assert unhealthy == ["stale_worker"]
     assert reg.get_worker("healthy_worker")["status"] == "healthy"
     assert reg.get_worker("stale_worker")["status"] == "unhealthy"
+
 
 def test_deregister_worker_removes_entry():
     reg = _new_registry()

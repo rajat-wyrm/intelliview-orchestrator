@@ -49,14 +49,11 @@ class Scheduler:
         logger.info("Scheduler initialized with Least Loaded strategy")
 
     def schedule_task(
-
         self,
         session_id: str,
         priority: TaskPriority = TaskPriority.MEDIUM,
         delay_seconds: int = 0,
     ) -> bool:
-
-
         """
         Schedule an interview task for execution
 
@@ -108,10 +105,10 @@ class Scheduler:
                 logger.info("===== About to dispatch Celery task =====")
                 if delay_seconds > 0:
                     task = process_interview_session.apply_async(args=[session_id], countdown=delay_seconds)
-                    #logger.info(f"Task queued with {delay_seconds}s delay: {task.id}")
+                    # logger.info(f"Task queued with {delay_seconds}s delay: {task.id}")
                 else:
                     task = process_interview_session.delay(session_id)
-                    #logger.info(f"Task enqueued immediately: {task.id}")
+                    # logger.info(f"Task enqueued immediately: {task.id}")
 
                 logger.info("===== Celery Task ID: %s =====", task.id)
 
@@ -139,6 +136,11 @@ class Scheduler:
             bool: True if queued successfully
         """
         try:
+            # Ensure status is marked so workers and API pollers know it is dispatched
+            self.session_manager.update_session_status(
+                session_id, self.session_manager.QUEUED, {"queued_at": datetime.now(timezone.utc).isoformat()}
+            )
+
             if delay_seconds > 0:
                 task = process_interview_session.apply_async(args=[session_id], countdown=delay_seconds)
             else:
@@ -149,6 +151,7 @@ class Scheduler:
 
         except Exception as e:
             logger.error(f"Error queuing task: {e!s}")
+            self.session_manager.mark_session_failed(session_id, f"Queueing error: {e!s}")
             return False
 
     def get_scheduling_status(self) -> dict[str, Any]:
