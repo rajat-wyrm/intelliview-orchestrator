@@ -30,7 +30,7 @@ prometheus-client==0.21.1
 # === Dev / test ===
 pytest==8.3.4
 pytest-asyncio==0.25.0
-reportlab==4.2.5
+reportlab==4.5.1
 fakeredis==2.36.2
 
 opentelemetry-api
