@@ -68,3 +68,101 @@ def test_full_capacity_workers_excluded():
     lb = LoadBalancer()
     lb.worker_registry = FakeRegistry(workers)
     assert lb.select_worker()["worker_id"] in {"w3"}
+
+def test_medium_priority_selects_least_loaded_underutilized():
+    """Medium priority should choose the least-loaded worker below 70%."""
+
+    # Intentionally not sorted by active_tasks
+    workers = [
+        {
+            "worker_id": "w1",
+            "capacity": 10,
+            "active_tasks": 5,
+            "status": "healthy",
+        },
+        {
+            "worker_id": "w3",
+            "capacity": 10,
+            "active_tasks": 4,
+            "status": "healthy",
+        },
+        {
+            "worker_id": "w2",
+            "capacity": 10,
+            "active_tasks": 2,
+            "status": "healthy",
+        },
+    ]
+
+    lb = LoadBalancer()
+    lb.worker_registry = FakeRegistry(workers)
+
+    worker = lb.get_best_worker_for_priority("medium")
+
+    assert worker["worker_id"] == "w2"
+
+
+def test_medium_priority_fallback_selects_least_loaded():
+    """Medium priority should choose least loaded if all workers are >= 70%."""
+
+    # Intentionally not sorted
+    workers = [
+        {
+            "worker_id": "w1",
+            "capacity": 10,
+            "active_tasks": 8,
+            "status": "healthy",
+        },
+        {
+            "worker_id": "w3",
+            "capacity": 10,
+            "active_tasks": 9,
+            "status": "healthy",
+        },
+        {
+            "worker_id": "w2",
+            "capacity": 10,
+            "active_tasks": 7,
+            "status": "healthy",
+        },
+    ]
+
+    lb = LoadBalancer()
+    lb.worker_registry = FakeRegistry(workers)
+
+    worker = lb.get_best_worker_for_priority("medium")
+
+    assert worker["worker_id"] == "w2"
+
+
+def test_low_priority_selects_most_loaded_from_shuffled_workers():
+    """Low priority should choose the most-loaded worker regardless of list order."""
+
+    # Most-loaded worker is deliberately placed in the middle.
+    workers = [
+        {
+            "worker_id": "w1",
+            "capacity": 10,
+            "active_tasks": 3,
+            "status": "healthy",
+        },
+        {
+            "worker_id": "w3",
+            "capacity": 10,
+            "active_tasks": 8,
+            "status": "healthy",
+        },
+        {
+            "worker_id": "w2",
+            "capacity": 10,
+            "active_tasks": 5,
+            "status": "healthy",
+        },
+    ]
+
+    lb = LoadBalancer()
+    lb.worker_registry = FakeRegistry(workers)
+
+    worker = lb.get_best_worker_for_priority("low")
+
+    assert worker["worker_id"] == "w3"
