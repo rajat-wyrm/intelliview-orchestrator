@@ -1,53 +1,76 @@
-import React from 'react';
+import React from "react";
 
 /**
  * DashboardSkeleton.jsx
  *
- * Loading placeholder shown during initial dashboard load.
- * Mirrors the layout of:
- *  - StatsCards.jsx   (4 cards, single row on desktop)
- *  - CandidateTable.jsx (6-column table, 5 placeholder rows)
+ * Loading placeholder displayed while dashboard data is loading.
+ * Mirrors:
+ *  - StatsCards.jsx (4 cards)
+ *  - CandidateTable.jsx (6 columns, 5 rows)
  *
  * Usage:
- *   {isInitialLoading ? <DashboardSkeleton /> : <DashboardContent data={data} />}
- *
+ * {isInitialLoading ? <DashboardSkeleton /> : <Dashboard />}
  */
 
-const SkeletonBox = ({ className = '' }) => (
-  <div className={`bg-gray-200 rounded animate-pulse ${className}`} />
+const STAT_CARD_COUNT = 4;
+const TABLE_COLUMN_COUNT = 6;
+const TABLE_ROW_COUNT = 5;
+
+const TABLE_COLUMN_WIDTHS = [
+  "w-32",
+  "w-24",
+  "w-20",
+  "w-28",
+  "w-24",
+  "w-16",
+];
+
+const SkeletonBox = ({ className = "" }) => (
+  <div className={`rounded-md bg-gray-200 ${className}`} />
 );
 
-/* ---------- Stats cards skeleton (matches StatsCards.jsx) ---------- */
+/* ----------------------- Stats Cards ----------------------- */
 
 const StatCardSkeleton = () => (
-  <div className="bg-white rounded-lg shadow p-6 flex flex-col gap-3">
-    <SkeletonBox className="h-4 w-24" />   {/* label */}
-    <SkeletonBox className="h-8 w-16" />   {/* big number */}
-    <SkeletonBox className="h-3 w-20" />   {/* delta / subtext */}
+  <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+    <div className="flex flex-col gap-3">
+      <SkeletonBox className="h-4 w-24" />
+      <SkeletonBox className="h-8 w-16" />
+      <SkeletonBox className="h-3 w-20" />
+    </div>
   </div>
 );
 
 const StatsCardsSkeleton = () => (
   <div
-    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+    className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
     data-testid="stats-cards-skeleton"
   >
-    {Array.from({ length: 4 }).map((_, i) => (
-      <StatCardSkeleton key={i} />
+    {Array.from({ length: STAT_CARD_COUNT }, (_, index) => (
+      <StatCardSkeleton key={`stat-card-${index}`} />
     ))}
   </div>
 );
 
-/* ---------- Table skeleton (matches CandidateTable.jsx) ---------- */
+/* ----------------------- Candidate Table ----------------------- */
 
-const COLUMN_COUNT = 6;
-const ROW_COUNT = 5;
+const TableHeaderSkeleton = () => (
+  <thead className="border-b border-gray-200">
+    <tr>
+      {TABLE_COLUMN_WIDTHS.map((width, index) => (
+        <th key={`header-${index}`} className="px-4 py-3 text-left">
+          <SkeletonBox className={`h-4 ${width}`} />
+        </th>
+      ))}
+    </tr>
+  </thead>
+);
 
-const TableRowSkeleton = () => (
-  <tr>
-    {Array.from({ length: COLUMN_COUNT }).map((_, i) => (
-      <td key={i} className="px-4 py-3">
-        <SkeletonBox className="h-4 w-full" />
+const TableRowSkeleton = ({ row }) => (
+  <tr key={row} className="border-b border-gray-100 last:border-none">
+    {TABLE_COLUMN_WIDTHS.map((width, index) => (
+      <td key={`${row}-${index}`} className="px-4 py-4">
+        <SkeletonBox className={`h-4 ${width}`} />
       </td>
     ))}
   </tr>
@@ -55,38 +78,38 @@ const TableRowSkeleton = () => (
 
 const CandidateTableSkeleton = () => (
   <div
-    className="bg-white rounded-lg shadow overflow-hidden"
+    className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm"
     data-testid="candidate-table-skeleton"
   >
-    <table className="min-w-full divide-y divide-gray-200">
-      <thead>
-        <tr>
-          {Array.from({ length: COLUMN_COUNT }).map((_, i) => (
-            <th key={i} className="px-4 py-3 text-left">
-              <SkeletonBox className="h-3 w-16" />
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-gray-100">
-        {Array.from({ length: ROW_COUNT }).map((_, i) => (
-          <TableRowSkeleton key={i} />
+    <table className="min-w-full">
+      <TableHeaderSkeleton />
+
+      <tbody>
+        {Array.from({ length: TABLE_ROW_COUNT }, (_, index) => (
+          <TableRowSkeleton key={`row-${index}`} row={index} />
         ))}
       </tbody>
     </table>
   </div>
 );
 
-/* ---------- Full dashboard skeleton ---------- */
+/* ----------------------- Dashboard ----------------------- */
 
 const DashboardSkeleton = () => {
   return (
-    <div className="space-y-6" aria-busy="true" aria-live="polite">
-      <span className="sr-only">Loading dashboard…</span>
+    <div
+      className="space-y-6 animate-pulse"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <span className="sr-only">Loading dashboard...</span>
+
       <StatsCardsSkeleton />
+
       <CandidateTableSkeleton />
     </div>
   );
 };
 
-export default DashboardSkeleton;
+export default React.memo(DashboardSkeleton);
