@@ -236,10 +236,19 @@ class RetryManager:
                 return 1
 
             count_key = f"{self.retry_count_key}{session_id}"
-            count = self.redis_client.incr(count_key)
 
-            # Set TTL to 7 days
-            self.redis_client.expire(count_key, 604800)
+            # Use MULTI/EXEC pipeline to atomically INCR and EXPIRE
+            client = getattr(self.redis_client, "raw", self.redis_client)
+            if hasattr(client, "pipeline"):
+                pipe = client.pipeline()
+                pipe.incr(count_key)
+                pipe.expire(count_key, 604800)
+                results = pipe.execute()
+                count = results[0]
+            else:
+                count = self.redis_client.incr(count_key)
+                # Set TTL to 7 days
+                self.redis_client.expire(count_key, 604800)
 
             logger.debug(f"Incremented retry count for {session_id} to {count}")
 

@@ -103,7 +103,12 @@ class InterviewSession(Base):
     )
 
     created_at = Column(DateTime, nullable=False, default=utcnow)
-    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=utcnow,
+        onupdate=utcnow,
+    )
     candidate = relationship(
         "Candidate",
         back_populates="interview_sessions",
@@ -118,7 +123,8 @@ class InterviewSession(Base):
         return (
             f"<InterviewSession(session_id='{self.session_id}', "
             f"candidate_id='{self.candidate_id}', "
-            f"status='{self.status}', risk_score={self.risk_score})>"
+            f"status='{self.status}', "
+            f"risk_score={self.risk_score})>"
         )
 
 
@@ -164,7 +170,12 @@ class Candidate(Base):
     total_interviews = Column(Integer, nullable=False, default=0, index=True)
 
     created_at = Column(DateTime, nullable=False, default=utcnow)
-    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=utcnow,
+        onupdate=utcnow,
+    )
 
     interview_sessions = relationship(
         "InterviewSession",
@@ -192,7 +203,13 @@ class InterviewTemplate(Base):
     success_rate = Column(Float, nullable=True, index=True)
 
     created_at = Column(DateTime, nullable=False, default=utcnow)
-    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
     interview_sessions = relationship(
         "InterviewSession",
         back_populates="template",
