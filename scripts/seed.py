@@ -36,7 +36,7 @@ from database.models import (
     InterviewSession,
     InterviewTemplate,
     Question,
-)  # noqa: E402
+)
 from orchestrator.worker_registry import WorkerRegistry  # noqa: E402
 
 WORKER_FIXTURES = [
