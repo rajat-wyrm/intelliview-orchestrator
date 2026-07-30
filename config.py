@@ -8,7 +8,7 @@ should be overridden in production.
 
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -188,3 +188,15 @@ BANNED_TOPICS: list[str] = [
     "medical condition",
     "health condition",
 ]
+class Settings(BaseSettings):
+    """Application configuration loaded from the environment."""
+
+    # --- Application environment ---
+    environment: str = "development"
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=False,
+    )
