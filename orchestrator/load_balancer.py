@@ -39,7 +39,7 @@ class LoadBalancer:
         """
         self.worker_registry = WorkerRegistry()
         self.strategy = strategy
-        self.round_robin_index = 0
+        self.last_assigned_worker_id = None
         logger.info(f"Load Balancer initialized with strategy: {strategy.value}")
 
     def select_worker(self) -> dict[str, Any] | None:
@@ -74,9 +74,18 @@ class LoadBalancer:
             logger.warning("No workers available for Round Robin selection")
             return None
 
-        # Select using round robin index
-        worker = available[self.round_robin_index % len(available)]
-        self.round_robin_index += 1
+        # Sort for deterministic ordering
+        available.sort(key=lambda w: w["worker_id"])
+
+        idx = 0
+        if hasattr(self, "last_assigned_worker_id") and self.last_assigned_worker_id:
+            for i, w in enumerate(available):
+                if w["worker_id"] == self.last_assigned_worker_id:
+                    idx = (i + 1) % len(available)
+                    break
+
+        worker = available[idx]
+        self.last_assigned_worker_id = worker["worker_id"]
 
         logger.debug(f"Round Robin selected worker: {worker['worker_id']}")
         return worker
@@ -156,11 +165,11 @@ class LoadBalancer:
             # Select a worker that's not overloaded
             underutilized = [w for w in available if w["active_tasks"] < w["capacity"] * 0.7]
             if underutilized:
-                return underutilized[0]
-            return available[0]
+                return min(underutilized, key=lambda w: w["active_tasks"])
+            return min(available, key=lambda w: w["active_tasks"])
 
         # For low priority, select any available
-        return available[-1]  # Select the one with most load (fill it up)
+        return max(available, key=lambda w: w["active_tasks"])  # Select the one with most load (fill it up)
 
     def is_system_overloaded(self, threshold: float = 0.9) -> bool:
         """
