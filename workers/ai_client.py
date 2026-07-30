@@ -97,28 +97,40 @@ except ImportError:
 # OpenAI helpers
 # ---------------------------------------------------------------------------
 
-
 def chat_completion(
     messages: list[dict[str, str]],
     *,
     model: str = "gpt-4o",
     temperature: float = 0.7,
     max_tokens: int = 1024,
-) -> str | None:
+) -> Any:
     """Send a chat completion request; returns the assistant text or None."""
+
     if not HAS_OPENAI:
-        return None
+        return None, None
+
     try:
-        resp = openai_client.chat.completions.create(
+        resps, usage = openai_client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        return resp.choices[0].message.content
+
+        return (
+            resp.choices[0].message.content,
+            {
+                "prompt_tokens": resp.usage.prompt_tokens,
+                "completion_tokens": resp.usage.completion_tokens,
+                "total_tokens": resp.usage.total_tokens,
+                "provider": "openai",
+                "model": model,
+            },
+        )
+
     except Exception as exc:
         logger.warning("OpenAI chat completion failed: %s", exc)
-        return None
+        return None, None
 
 
 # ---------------------------------------------------------------------------
@@ -131,22 +143,22 @@ def gemini_generate(
     *,
     temperature: float = 0.7,
     max_output_tokens: int = 1024,
-) -> str | None:
+) ->  tuple[str | None, dict[str, Any] | None]:
     """Generate text using Gemini; returns the text or None."""
     if not HAS_GEMINI:
         return None
     try:
-        response = gemini_model.generate_content(
+        response,usage = gemini_model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
                 temperature=temperature,
                 max_output_tokens=max_output_tokens,
             ),
         )
-        return response.text
+        return response.text, None
     except Exception as exc:
         logger.warning("Gemini generation failed: %s", exc)
-        return None
+        return None, None
 
 
 def gemini_chat(
@@ -182,21 +194,21 @@ def grok_completion(
     model: str = "grok-2-1212",
     temperature: float = 0.7,
     max_tokens: int = 1024,
-) -> str | None:
+) -> tuple[str | None, dict[str, Any] | None]:
     """Send a chat completion request to Grok; returns the assistant text or None."""
     if not HAS_GROK:
         return None
     try:
-        resp = grok_client.chat.completions.create(
+        resp, usage = grok_client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        return resp.choices[0].message.content
+        return resp.choices[0].message.content,None
     except Exception as exc:
         logger.warning("Grok completion failed: %s", exc)
-        return None
+        return None,None
 
 
 # ---------------------------------------------------------------------------
