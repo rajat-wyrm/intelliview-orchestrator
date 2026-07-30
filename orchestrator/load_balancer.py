@@ -192,4 +192,3 @@ class LoadBalancer:
             "system_overloaded": self.is_system_overloaded(),
             "timestamp": None,
         }
-        

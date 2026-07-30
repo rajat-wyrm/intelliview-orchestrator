@@ -107,6 +107,8 @@ def test_switch_strategy_during_selection():
     t2.join()
 
     assert not errors, f"Unexpected exceptions: {errors}"
+
+
 def test_round_robin_thread_safety():
     """
     Simulates many concurrent calls to select_worker() under ROUND_ROBIN
