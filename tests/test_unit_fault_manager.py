@@ -1,5 +1,6 @@
 """Unit tests for FaultManager — failure logging, DLQ, recovery queue."""
-
+import json
+from pathlib import Path 
 from datetime import datetime, timezone
 from unittest.mock import patch
 
@@ -69,10 +70,44 @@ def test_handle_worker_failure_reassigns_tasks_and_logs():
     log.assert_called_once()
 
 
+def test_log_failure_writes_jsonl_file(tmp_path):
+    import os
+    import json
+    from pathlib import Path
+
+    fm = _manager()
+
+    old_dir = os.getcwd()
+    os.chdir(tmp_path)
+
+    try:
+        fm.log_failure("s1", FailureType.TASK_EXCEPTION, "err1", "w1")
+        fm.log_failure("s2", FailureType.TASK_EXCEPTION, "err2", "w2")
+        fm.log_failure("s3", FailureType.TASK_EXCEPTION, "err3", "w3")
+
+        log_file = Path("failed_logs.jsonl")
+        assert log_file.exists()
+
+        with log_file.open("r") as f:
+            records = [json.loads(line) for line in f]
+
+        assert len(records) == 3
+        assert records[0]["session_id"] == "s1"
+        assert records[1]["session_id"] == "s2"
+        assert records[2]["session_id"] == "s3"
+
+    finally:
+        os.chdir(old_dir)
+
+
 def test_reassign_increments_counter_and_persists():
     fm = _manager()
     fm.redis_client.incr.return_value = 2
     assert fm.reassign_task("s3", original_worker="w_dead") is True
     # The modern redis-py uses `set(key, value, ex=ttl)` instead of the
     # deprecated `setex(key, ttl, value)`.
-    fm.redis_client.set.assert_called()
+    fm.redis_client.set.assert_called() 
+
+ 
+   
+ 

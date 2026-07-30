@@ -120,8 +120,13 @@ class Candidate(Base):
     # Optional demographic information for fairness auditing.
     # This data is NOT passed to the LLM and is only used for compliance analytics.
     demographics = Column(JSON, nullable=True, default=dict)
+<<<<<<< HEAD
+    avg_score = Column(Float, nullable=True)
+    total_interviews = Column(Integer, nullable=False, default=0)
+=======
     avg_score = Column(Float, nullable=True, index=True)
     total_interviews = Column(Integer, nullable=False, default=0, index=True)
+>>>>>>> main
 
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)

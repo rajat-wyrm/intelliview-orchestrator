@@ -13,6 +13,7 @@ Integrates:
 """
 
 import io
+import json
 import logging
 import re
 import time
@@ -23,6 +24,11 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -34,9 +40,11 @@ from config import (
     CORS_ALLOW_ORIGINS,
     ENABLE_PROMETHEUS,
     MAX_REQUEST_BODY_BYTES,
+    get_settings,
 )
 from database.db import engine, get_db
 from database.models import Base, Candidate, InterviewSession
+
 from monitoring.dashboard_api import create_dashboard_routes
 from monitoring.metrics_collector import MetricsCollector
 from monitoring.prometheus_metrics import (
@@ -44,6 +52,8 @@ from monitoring.prometheus_metrics import (
     REDIS_HEALTH,
     REQUEST_COUNT,
     REQUEST_DURATION,
+    SESSIONS_ACTIVE,
+    SESSIONS_CREATED,
     WORKER_ACTIVE_TASKS,
     WORKER_CAPACITY,
     WORKER_HEARTBEAT_AGE_SECONDS,
@@ -51,8 +61,11 @@ from monitoring.prometheus_metrics import (
     WORKERS_REGISTERED,
     WORKERS_UNHEALTHY,
 )
+from monitoring.dashboard_api import create_dashboard_routes
+from monitoring.metrics_collector import MetricsCollector
 from monitoring.websocket_manager import ws_manager
 from orchestrator import http_cache
+from orchestrator.auth import create_access_token
 from orchestrator.candidate_manager import CandidateManager
 from orchestrator.fault_manager import FaultManager
 from orchestrator.health_monitor import HealthMonitor
@@ -61,10 +74,14 @@ from orchestrator.load_balancer import BalancingStrategy, LoadBalancer
 from orchestrator.logging_config import configure_logging, log_event
 from orchestrator.question_bank import QuestionBank
 from orchestrator.rate_limiter import RateLimiterMiddleware
-from orchestrator.redis_client import circuit_breaker
+from orchestrator.redis_client import (
+    circuit_breaker,
+    get_redis_client,
+)
 from orchestrator.request_validation import RequestValidationMiddleware
 from orchestrator.retry_manager import RetryManager, RetryStrategy
 from orchestrator.scheduler import Scheduler, TaskPriority
+from orchestrator.security import get_current_user, require_role
 from orchestrator.session_manager import SessionManager
 from orchestrator.session_tracker import SessionTracker
 from orchestrator.state_sync import StateSynchronizer
@@ -80,25 +97,47 @@ APP_START_TIME = datetime.now(timezone.utc)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Execute on application startup/shutdown.
+    """Execute on application startup/shutdown."""
 
-    Startup: ensure schema exists, run an initial health probe, and warn
-    loudly if the default API token is still in use.
-
-    Shutdown: best-effort graceful drain — flush the request-id log line,
-    close the shared Redis client, and notify clients.
-    """
     Base.metadata.create_all(bind=engine)
+
     if API_TOKEN == "dev-token-change-me":
-        logger.warning(
-            "API_TOKEN is the built-in dev default — set a strong token "
-            "in production via the API_TOKEN env var."
+        raise RuntimeError(
+            "CRITICAL SECURITY ERROR: Default API_TOKEN detected! "
+            "You MUST set a secure API_TOKEN environment variable."
         )
+
     logger.info("AI Interview Orchestrator server starting...")
+
+    settings = get_settings()
+    redis_client = get_redis_client()
+
+    try:
+        redis_client.hset(
+            "config:startup",
+            mapping={
+                "worker_concurrency": str(settings.worker_concurrency),
+                "max_retries": str(settings.max_retries),
+                "cors_allow_origins": json.dumps(settings.cors_allow_origins),
+                "realtime_enabled": str(settings.realtime_enabled),
+                "moment_tracking_enabled": str(settings.moment_tracking_enabled),
+            },
+        )
+
+        logger.info("Configuration cache warmed successfully.")
+
+    except Exception as exc:
+        logger.warning(
+            "Configuration cache warm-up failed: %s",
+            exc,
+        )
+
     try:
         yield
+
     finally:
         logger.info("AI Interview Orchestrator server shutting down...")
+
         for resource in (ws_manager, state_sync, metrics_collector):
             close = getattr(resource, "close", None)
             if callable(close):
@@ -124,6 +163,36 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+@app.middleware("http")
+async def prometheus_middleware(request, call_next):
+    start = time.perf_counter()
+
+    response = await call_next(request)
+
+    duration = time.perf_counter() - start
+
+    REQUEST_COUNT.labels(
+        method=request.method,
+        path=request.url.path,
+        status=response.status_code,
+    ).inc()
+
+    REQUEST_DURATION.labels(
+        method=request.method,
+        path=request.url.path,
+    ).observe(duration)
+
+    return response
+
+logging.getLogger("opentelemetry.exporter.otlp.proto.grpc.exporter").setLevel(logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
+
+trace.set_tracer_provider(TracerProvider())
+tracer_provider = trace.get_tracer_provider()
+otlp_exporter = OTLPSpanExporter(endpoint="http://jaeger:4317", insecure=True)
+tracer_provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
+
+FastAPIInstrumentor.instrument_app(app)
 
 
 @app.middleware("http")
@@ -165,6 +234,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         incoming = request.headers.get("x-request-id", "").strip()
         request_id = incoming if _VALID_ID_RE.match(incoming) else uuid4().hex
         request.state.request_id = request_id
+        trace.get_current_span().set_attribute("request_id", request_id)
         start = _time.perf_counter()
         try:
             response = await call_next(request)
@@ -233,6 +303,24 @@ def require_token(x_api_token: str | None = Header(default=None)) -> None:
         logger.debug("Using default API token — set API_TOKEN in production")
     if x_api_token != API_TOKEN:
         raise HTTPException(status_code=401, detail="invalid or missing API token")
+
+
+class LoginRequest(BaseModel):
+    api_token: str
+
+
+@app.post("/login")
+async def login(request: LoginRequest):
+    """
+    Exchange a valid API token for a JWT access token.
+    """
+
+    if request.api_token != API_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid API token")
+
+    access_token = create_access_token({"sub": "system", "role": "admin"})
+
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
 # Initialize managers and orchestrators
@@ -309,6 +397,10 @@ class WorkerHeartbeatRequest(BaseModel):
 
     worker_id: str
     active_tasks: int
+
+
+class LoginRequest(BaseModel):
+    api_token: str
 
 
 class InterviewSessionResponse(BaseModel):
@@ -482,7 +574,6 @@ async def health():
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
-
 # ========== Deep Health & Probe Endpoints ==========
 
 
@@ -495,7 +586,7 @@ async def liveness_probe():
 @app.get("/readyz")
 async def readiness_probe():
     """Kubernetes-style readiness probe. Returns 200 only when all dependencies are up."""
-    result = health_monitor.readiness_check()
+    result = await health_monitor.readiness_check()
     if not result["ready"]:
         from fastapi.responses import JSONResponse as _JSONResponse
 
@@ -506,7 +597,7 @@ async def readiness_probe():
 @app.get("/dependencies")
 async def get_dependency_statuses():
     """Deep health check of all dependencies (Redis, Postgres, Celery broker)."""
-    return health_monitor._check_all_dependencies()
+    return await health_monitor._check_all_dependencies()
 
 
 @app.get("/admin/fairness-audit", dependencies=[Depends(require_token)])
@@ -536,9 +627,14 @@ if ENABLE_PROMETHEUS:
 
     @app.get("/metrics")
     async def prometheus_metrics():
+        REDIS_HEALTH.set(...)
+        POSTGRES_HEALTH.set(...)
+        WORKERS_REGISTERED.set(...)
+        WORKERS_HEALTHY.set(...)
+        WORKERS_UNHEALTHY.set(...)
         """Prometheus metrics endpoint."""
         # Dynamic check of dependency statuses
-        deps = health_monitor._check_all_dependencies()
+        deps = await health_monitor._check_all_dependencies()
         REDIS_HEALTH.set(1 if deps.get("redis", {}).get("status") == "healthy" else 0)
         POSTGRES_HEALTH.set(1 if deps.get("postgres", {}).get("status") == "healthy" else 0)
 
@@ -573,7 +669,7 @@ async def get_circuit_breaker_status():
 @app.post(
     "/start-interview",
     response_model=InterviewSessionResponse,
-    dependencies=[Depends(require_token)],
+    dependencies=[Depends(get_current_user)],
 )
 async def start_interview(
     request: StartInterviewRequest,
@@ -615,6 +711,11 @@ async def start_interview(
             candidate_name=request.candidate_name,
             position=request.position,
         )
+
+        # Increment total interview sessions created
+        SESSIONS_CREATED.inc()
+        # Increase active interview session count
+        SESSIONS_ACTIVE.inc()
 
         logger.info(f"Session created: {session_id}")
 
@@ -763,8 +864,6 @@ async def get_interview_report(
         eval_analysis = session_obj.evaluation_analysis or {}
         llm_feedback = eval_analysis.get("llm_feedback", {})
 
-        # Since evaluation_analysis structure might differ based on other PRs,
-        # we will handle nested or flat structures for strengths/improvements.
         strengths = eval_analysis.get("strengths", llm_feedback.get("strengths", []))
         improvements = eval_analysis.get("improvements", llm_feedback.get("improvements", []))
         recommendation = eval_analysis.get("recommendation", llm_feedback.get("recommendation"))
@@ -782,7 +881,9 @@ async def get_interview_report(
         return InterviewReportResponse(
             session_id=session_id,
             candidate=ReportCandidate(
-                candidate_id=candidate_obj.candidate_id, name=candidate_obj.name, email=candidate_obj.email
+                candidate_id=candidate_obj.candidate_id,
+                name=candidate_obj.name,
+                email=candidate_obj.email,
             ),
             interview_summary=ReportInterviewSummary(
                 start_time=session_obj.start_time.isoformat() if session_obj.start_time else None,
@@ -802,7 +903,9 @@ async def get_interview_report(
                 detailed_feedback=detailed_feedback,
             ),
             risk_assessment=ReportRiskAssessment(
-                score=risk_score, classification=classification, factors=eval_analysis.get("risk_factors", [])
+                score=risk_score,
+                classification=classification,
+                factors=eval_analysis.get("risk_factors", []),
             ),
             metadata=ReportMetadata(
                 token_usage=None,  # Feature #3 not yet merged
@@ -815,7 +918,10 @@ async def get_interview_report(
         logger.error(f"Error fetching interview report: {e!s}")
         raise HTTPException(status_code=500, detail=f"Error fetching report: {e!s}")
 
+"HEAD"
 
+
+"main"
 @app.get("/session-status/{session_id}/risk-report")
 async def get_session_risk_report(session_id: str, format: str = "json"):
     """
@@ -894,6 +1000,10 @@ def _build_risk_report_pdf(report: dict) -> Response:
     )
 
 
+"HEAD"
+
+
+"main"
 @app.get("/task-status/{task_id}", response_model=TaskStatusResponse)
 async def get_task_status(
     task_id: str,
@@ -977,7 +1087,7 @@ async def get_stuck_sessions(
     """
     Get sessions that appear to be stuck in PROCESSING
 
-    Args:
+    Args:try
         timeout_minutes: Timeout threshold in minutes (default: 30)
 
     Returns:
@@ -1119,7 +1229,7 @@ async def sync_cache_to_database(session_id: str | None = None):
         raise HTTPException(status_code=500, detail="Error syncing to database")
 
 
-@app.delete("/clear-cache", dependencies=[Depends(require_token)])
+@app.delete("/clear-cache", dependencies=[Depends(require_role("admin"))])
 async def clear_session_cache():
     """
     Clear all session cache from Redis
@@ -1494,38 +1604,18 @@ async def worker_heartbeat(request: WorkerHeartbeatRequest):
         dict: Heartbeat confirmation
     """
     try:
-        logger.debug(f"Heartbeat from worker: {request.worker_id} (active_tasks: {request.active_tasks})")
+        logger.debug(f"Heartbeat from worker: {request.worker_id}")
 
         # Update worker heartbeat in registry
-        worker_registry.heartbeat(worker_id=request.worker_id, active_tasks=request.active_tasks)
-        WORKER_HEARTBEAT_AGE_SECONDS.labels(worker_id=request.worker_id).set(0)
-
+        worker_registry.heartbeat(request.worker_id, request.active_tasks)
+        WORKER_HEARTBEAT_AGE_SECONDS.labels(worker_id=request.worker_id).set_to_current_time()
         WORKER_ACTIVE_TASKS.labels(worker_id=request.worker_id).set(request.active_tasks)
 
-        worker_status = worker_registry.get_worker(request.worker_id)
-        if worker_status:
-            WORKER_CAPACITY.labels(worker_id=request.worker_id).set(worker_status.get("capacity", 0))
+        return {"status": "acknowledged", "worker_id": request.worker_id}
 
-        # Invalidate the workers + load caches so the next dashboard poll is fresh.
-        http_cache.invalidate("workers", "worker-statistics", "load-status")
-
-        # Get worker health status
-        worker_status = worker_registry.get_worker(request.worker_id)
-        health_status = (
-            "healthy" if worker_status and worker_status.get("health_status") == "healthy" else "unknown"
-        )
-
-        return {
-            "status": "success",
-            "message": "Heartbeat received",
-            "worker_id": request.worker_id,
-            "health": health_status,
-            "active_tasks": request.active_tasks,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
     except Exception as e:
-        logger.error(f"Error processing heartbeat: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error processing heartbeat: {e!s}")
+        logger.error(f"Error processing heartbeat for {request.worker_id}: {e!s}")
+        raise HTTPException(status_code=500, detail="Error processing heartbeat")
 
 
 @app.get("/workers")
@@ -1675,7 +1765,7 @@ async def get_scheduling_status():
         raise HTTPException(status_code=500, detail=f"Error fetching scheduling status: {e!s}")
 
 
-@app.post("/switch-strategy", dependencies=[Depends(require_token)])
+@app.post("/switch-strategy", dependencies=[Depends(require_role("admin"))])
 async def switch_load_balancing_strategy(strategy: str):
     """
     Change the active load balancing strategy
@@ -1791,11 +1881,14 @@ async def get_failed_sessions(limit: int = 100):
 
 
 @app.post("/retry-session/{session_id}", dependencies=[Depends(require_token)])
-async def retry_failed_session(session_id: str):
+async def retry_failed_session(
+    session_id: str,
+    session_db: Session = Depends(get_db),
+):
     """
     Retry a failed interview session
 
-    Attempts to reschedule the session if it hasn't exceeded max retries.
+    Attempts to reschedule the session if it hasn't exceeded limits.
 
     Args:
         session_id: ID of session to retry
@@ -1810,11 +1903,13 @@ async def retry_failed_session(session_id: str):
         if not retry_manager.can_retry(session_id):
             raise HTTPException(
                 status_code=400,
-                detail=f"Session {session_id} has exceeded maximum retry attempts",
+                detail=f"Session {session_id} has exceeded retry limits or cannot be retried",
             )
 
+        # Get retry info
+        retry_manager.get_retry_info(session_id)
+
         # Schedule retry with exponential backoff
-        # Schedule retry
         retry_scheduled = retry_manager.schedule_retry(session_id)
 
         if not retry_scheduled:
@@ -1823,27 +1918,23 @@ async def retry_failed_session(session_id: str):
                 detail=f"Failed to schedule retry for session {session_id}",
             )
 
-        # -----------------------------
-        # Actually requeue the interview
-        # -----------------------------
-        scheduler.schedule_task(session_id=session_id, priority=TaskPriority.MEDIUM)
+        # Requeue the interview
+        scheduler.schedule_task(
+            session_id=session_id,
+            priority=TaskPriority.MEDIUM,
+        )
 
         logger.info(
-            "Session %s requeued successfully after retry scheduling.",
+            "Session %s requeued successfully after retry",
             session_id,
         )
 
-        return {
-            "status": "success",
-            "message": f"Session {session_id} scheduled and requeued",
-            "session_id": session_id,
-            "retry_info": retry_manager.get_retry_info(session_id),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
+        return {"status": "success", "message": f"Session {session_id} retried successfully"}
+
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error retrying session: {e!s}")
+        logger.error(f"Error retrying session {session_id}: {e!s}")
         raise HTTPException(status_code=500, detail=f"Error retrying session: {e!s}")
 
 
@@ -1995,7 +2086,7 @@ async def get_fault_statistics():
         raise HTTPException(status_code=500, detail=f"Error generating fault statistics: {e!s}")
 
 
-@app.post("/detect-failures", dependencies=[Depends(require_token)])
+@app.post("/detect-failures", dependencies=[Depends(require_role("admin"))])
 async def detect_and_handle_failures():
     """
     Manually trigger failure detection and recovery

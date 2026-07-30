@@ -35,7 +35,10 @@ from monitoring.prometheus_metrics import (
     RISK_SCORE,
     WORKERS_HEALTHY,
 )
+<<<<<<< HEAD
+=======
 from orchestrator.redis_client import get_redis_client
+>>>>>>> main
 from orchestrator.session_manager import SessionManager
 from orchestrator.state_sync import StateSynchronizer
 from workers.celery_app import celery_app
@@ -64,7 +67,10 @@ ACTIVE_PROCESSING_STATUSES = {
 # Helper to set background infrastructure health states
 # ---------------------------------------------------------------------------
 
+<<<<<<< HEAD
+=======
 
+>>>>>>> main
 def _update_infra_health(healthy: bool = True):
     """Sets system infrastructure gauges to reflect live operations."""
     state = 1.0 if healthy else 0.0
@@ -126,6 +132,14 @@ def _run_audio(self, session_id: str) -> dict:
 
 
 @celery_app.task(bind=True, max_retries=3, name="workers.tasks._after_parallel")
+<<<<<<< HEAD
+def _after_parallel(self, session_id: str, video_result: dict, audio_result: dict):
+    """Runs after video + audio group completes; then evaluation + risk."""
+    try:
+        logger.info("Parallel video+audio done for %s - running evaluation", session_id)
+        session_manager.update_session_status(session_id, session_manager.EVALUATING, {"stage": "evaluation"})
+
+=======
 def _after_parallel(self, results: list, session_id: str):
     """Runs after video + audio group completes; then evaluation + risk.
 
@@ -138,6 +152,7 @@ def _after_parallel(self, results: list, session_id: str):
         logger.info("Parallel video+audio done for %s - running evaluation", session_id)
         session_manager.update_session_status(session_id, session_manager.EVALUATING, {"stage": "evaluation"})
 
+>>>>>>> main
         start = time.perf_counter()
         evaluation_result = evaluate_answers(session_id)
 
@@ -163,7 +178,7 @@ def _after_parallel(self, results: list, session_id: str):
             if interview:
                 interview.risk_score = final_risk_score
                 interview.video_analysis = video_result
-                interview.audio_analysis = audio_result
+                interview.audio_analysis = audio_analysis
                 interview.evaluation_analysis = evaluation_result
                 interview.end_time = now
                 interview.updated_at = now
@@ -289,7 +304,24 @@ def process_interview_session(self, session_id):
         )
         chord(parallel_header)(_after_parallel.s(session_id))
 
+<<<<<<< HEAD
+        from celery.result import allow_join_result
+        with allow_join_result():
+            video_result, audio_result = result.get(timeout=600)
+
+        logger.info("Parallel video+audio completed for session %s", session_id)
+        _after_parallel.delay(session_id, video_result, audio_result)
+=======
         logger.info("Dispatched parallel video+audio for session %s", session_id)
+
+        # Record total runtime metrics
+        runtime = time.perf_counter() - start_time
+        CELERY_TASK_RUNTIME.labels(task_name=task_name).observe(runtime)
+
+        # 🌟 Target custom metric incremented upon successful completion
+        CELERY_TASKS_PROCESSED_TOTAL.labels(task="process_interview_session").inc()
+        logger.info("Incremented processed metric for %s", task_name)
+>>>>>>> main
 
         # Record total runtime metrics
         runtime = time.perf_counter() - start_time

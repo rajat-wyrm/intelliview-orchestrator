@@ -26,7 +26,10 @@ from unittest.mock import MagicMock, patch
 # These must be in sys.modules BEFORE we import anything from this project.
 # ---------------------------------------------------------------------------
 
+<<<<<<< HEAD
+=======
 
+>>>>>>> main
 def _install_stubs():
     """Insert lightweight fakes so `from config import REDIS_URL` etc. work."""
     # config stub
@@ -141,51 +144,75 @@ class TestOnTaskFailureScoping:
 
     def test_beat_task_is_ignored(self):
         mock_class, mock_instance = self._fresh_sm()
+<<<<<<< HEAD
+        with patch.dict(sys.modules, {"orchestrator.session_manager": types.SimpleNamespace(SessionManager=mock_class)}):
+=======
         with patch.dict(
             sys.modules, {"orchestrator.session_manager": types.SimpleNamespace(SessionManager=mock_class)}
         ):
+>>>>>>> main
             sender = _make_sender(_BEAT_TASK)
             _invoke_handler(sender, args=(), kwargs={})
         mock_instance.mark_session_failed.assert_not_called()
 
     def test_unknown_task_is_ignored(self):
         mock_class, mock_instance = self._fresh_sm()
+<<<<<<< HEAD
+        with patch.dict(sys.modules, {"orchestrator.session_manager": types.SimpleNamespace(SessionManager=mock_class)}):
+=======
         with patch.dict(
             sys.modules, {"orchestrator.session_manager": types.SimpleNamespace(SessionManager=mock_class)}
         ):
+>>>>>>> main
             sender = _make_sender("workers.tasks.some_future_task")
             _invoke_handler(sender, args=(), kwargs={})
         mock_instance.mark_session_failed.assert_not_called()
 
     def test_main_task_is_handled(self):
         mock_class, mock_instance = self._fresh_sm()
+<<<<<<< HEAD
+        with patch.dict(sys.modules, {"orchestrator.session_manager": types.SimpleNamespace(SessionManager=mock_class)}):
+=======
         with patch.dict(
             sys.modules, {"orchestrator.session_manager": types.SimpleNamespace(SessionManager=mock_class)}
         ):
+>>>>>>> main
             _invoke_handler(_make_sender(_MAIN_TASK), args=(SESSION_ID,))
         mock_instance.mark_session_failed.assert_called_once()
 
     def test_video_task_is_handled(self):
         mock_class, mock_instance = self._fresh_sm()
+<<<<<<< HEAD
+        with patch.dict(sys.modules, {"orchestrator.session_manager": types.SimpleNamespace(SessionManager=mock_class)}):
+=======
         with patch.dict(
             sys.modules, {"orchestrator.session_manager": types.SimpleNamespace(SessionManager=mock_class)}
         ):
+>>>>>>> main
             _invoke_handler(_make_sender(_VIDEO_TASK), args=(SESSION_ID,))
         mock_instance.mark_session_failed.assert_called_once()
 
     def test_audio_task_is_handled(self):
         mock_class, mock_instance = self._fresh_sm()
+<<<<<<< HEAD
+        with patch.dict(sys.modules, {"orchestrator.session_manager": types.SimpleNamespace(SessionManager=mock_class)}):
+=======
         with patch.dict(
             sys.modules, {"orchestrator.session_manager": types.SimpleNamespace(SessionManager=mock_class)}
         ):
+>>>>>>> main
             _invoke_handler(_make_sender(_AUDIO_TASK), args=(SESSION_ID,))
         mock_instance.mark_session_failed.assert_called_once()
 
     def test_after_parallel_task_is_handled(self):
         mock_class, mock_instance = self._fresh_sm()
+<<<<<<< HEAD
+        with patch.dict(sys.modules, {"orchestrator.session_manager": types.SimpleNamespace(SessionManager=mock_class)}):
+=======
         with patch.dict(
             sys.modules, {"orchestrator.session_manager": types.SimpleNamespace(SessionManager=mock_class)}
         ):
+>>>>>>> main
             # _after_parallel(session_id, video_result, audio_result)
             _invoke_handler(_make_sender(_AFTER_TASK), args=(SESSION_ID, {}, {}))
         mock_instance.mark_session_failed.assert_called_once()
@@ -226,7 +253,12 @@ class TestOnTaskFailureSessionIdResolution:
         mock_instance.mark_session_failed.assert_called_once()
         actual_sid, actual_msg = mock_instance.mark_session_failed.call_args[0]
         assert actual_sid == SESSION_ID, (
+<<<<<<< HEAD
+            "session_id passed as a keyword argument was not picked up — "
+            "the args[0] bug is still present"
+=======
             "session_id passed as a keyword argument was not picked up — the args[0] bug is still present"
+>>>>>>> main
         )
         assert "exhausted retries" in actual_msg
 

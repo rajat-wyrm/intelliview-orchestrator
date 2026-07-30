@@ -71,6 +71,7 @@ class RetryManager:
         )
 
     def can_retry(self, session_id: str) -> bool:
+
         """
         Check if a session can be retried (hasn't exceeded max attempts)
 
@@ -106,11 +107,16 @@ class RetryManager:
             logger.error(f"Error checking if can retry: {e!s}")
             return False
 
+<<<<<<< HEAD
+    def schedule_retry(self, session_id:str, delay_seconds: int | None = None,) -> bool:
+
+=======
     def schedule_retry(
         self,
         session_id: str,
         delay_seconds: int | None = None,
     ) -> bool:
+>>>>>>> main
         """
         Schedule a retry.
 
@@ -121,10 +127,18 @@ class RetryManager:
         move the task to the Dead Letter Queue.
         """
         try:
+<<<<<<< HEAD
+
+            if not self.can_retry(session_id):
+                logger.warning(
+                "Maximum retries exceeded for session %s. Sending to DLQ.",
+                session_id,
+=======
             if not self.can_retry(session_id):
                 logger.warning(
                     "Maximum retries exceeded for session %s. Sending to DLQ.",
                     session_id,
+>>>>>>> main
                 )
                 return False
 
@@ -138,11 +152,25 @@ class RetryManager:
                 "retry_count": retry_count,
                 "delay_seconds": delay_seconds,
                 "scheduled_at": datetime.now(timezone.utc).isoformat(),
+<<<<<<< HEAD
+                "retry_after": (
+                    datetime.now(timezone.utc)
+                    + timedelta(seconds=delay_seconds)
+                ).isoformat(),
+                "strategy": self.strategy.value,
+            }
+
+
+
+            if self.redis_client:
+
+=======
                 "retry_after": (datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)).isoformat(),
                 "strategy": self.strategy.value,
             }
 
             if self.redis_client:
+>>>>>>> main
                 scheduled_key = f"{self.retry_scheduled_key}{session_id}"
 
                 self.redis_client.set(
@@ -169,6 +197,10 @@ class RetryManager:
             return True
 
         except Exception as e:
+<<<<<<< HEAD
+
+=======
+>>>>>>> main
             logger.exception(e)
             return False
 
@@ -248,6 +280,7 @@ class RetryManager:
         except Exception as e:
             logger.error(f"Error incrementing retry count: {e!s}")
             return 1
+
 
     def get_retry_info(self, session_id: str) -> dict[str, Any]:
         """

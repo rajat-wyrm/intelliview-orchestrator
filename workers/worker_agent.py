@@ -20,7 +20,6 @@ from config import API_TOKEN, WORKER_CONCURRENCY
 
 logger = logging.getLogger(__name__)
 
-
 class WorkerAgent:
     def __init__(
         self,

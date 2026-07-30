@@ -9,7 +9,10 @@ from orchestrator.main import app
 
 client = TestClient(app)
 
+<<<<<<< HEAD
+=======
 
+>>>>>>> main
 def test_get_interview_report_success():
     mock_db = MagicMock()
 
@@ -27,6 +30,19 @@ def test_get_interview_report_success():
                 "strengths": ["Strong fundamentals"],
                 "improvements": ["More detail needed"],
                 "recommendation": "progress",
+<<<<<<< HEAD
+                "detailed_feedback": "Overall good."
+            }
+        },
+        risk_score=0.1
+    )
+
+    mock_candidate = Candidate(
+        candidate_id="cand_123",
+        name="John Doe",
+        email="john@example.com"
+    )
+=======
                 "detailed_feedback": "Overall good.",
             },
         },
@@ -34,13 +50,20 @@ def test_get_interview_report_success():
     )
 
     mock_candidate = Candidate(candidate_id="cand_123", name="John Doe", email="john@example.com")
+>>>>>>> main
 
     def side_effect(stmt):
         mock_result = MagicMock()
         stmt_str = str(stmt).lower()
+<<<<<<< HEAD
+        if 'interview_sessions' in stmt_str or 'interviewsession' in stmt_str:
+            mock_result.scalar_one_or_none.return_value = mock_session
+        elif 'candidates' in stmt_str or 'candidate' in stmt_str:
+=======
         if "interview_sessions" in stmt_str or "interviewsession" in stmt_str:
             mock_result.scalar_one_or_none.return_value = mock_session
         elif "candidates" in stmt_str or "candidate" in stmt_str:
+>>>>>>> main
             mock_result.scalar_one_or_none.return_value = mock_candidate
         else:
             mock_result.scalar_one_or_none.return_value = None
@@ -86,12 +109,23 @@ def test_get_interview_report_session_not_found():
 def test_get_interview_report_candidate_not_found():
     mock_db = MagicMock()
 
+<<<<<<< HEAD
+    mock_session = InterviewSession(
+        session_id="session_123",
+        candidate_id="cand_123"
+    )
+=======
     mock_session = InterviewSession(session_id="session_123", candidate_id="cand_123")
+>>>>>>> main
 
     def side_effect(stmt):
         mock_result = MagicMock()
         stmt_str = str(stmt).lower()
+<<<<<<< HEAD
+        if 'interview_sessions' in stmt_str or 'interviewsession' in stmt_str:
+=======
         if "interview_sessions" in stmt_str or "interviewsession" in stmt_str:
+>>>>>>> main
             mock_result.scalar_one_or_none.return_value = mock_session
         else:
             mock_result.scalar_one_or_none.return_value = None

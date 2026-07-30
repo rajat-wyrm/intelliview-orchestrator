@@ -18,7 +18,11 @@ from types import SimpleNamespace
 from typing import Any
 
 from orchestrator.redis_client import get_redis_client
+<<<<<<< HEAD
+from orchestrator.retry_manager import RetryManager
+=======
 from orchestrator.session_payload import deserialize_session_payload
+>>>>>>> main
 
 logger = logging.getLogger(__name__)
 # Backward-compatible patch target for tests/consumers mocking module.redis.from_url.
@@ -55,8 +59,13 @@ class FaultManager:
             debounce_time: Seconds to wait before treating alert as new (prevent spam)
         """
         self.debounce_time = debounce_time
+<<<<<<< HEAD
+        self.redis_client = get_redis_client()
+        self.retry_manager = RetryManager()
+=======
         self.redis_client = redis.from_url()
         self.redis_client = self._create_redis_client()
+>>>>>>> main
         self.failure_log_prefix = "failure_log:"
         self.recovery_queue_prefix = "recovery_queue:"
         self.dead_letter_queue = "dead_letter_queue"
@@ -276,25 +285,27 @@ class FaultManager:
             log_entry = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "session_id": session_id,
-                "failure_type": failure_type.value,
+                "failure_type": failure_type.value if hasattr(failure_type, 'value') else str(failure_type),
                 "error_message": error_message,
                 "worker_id": worker_id,
             }
 
+            # Write to a structured local JSON Lines log file (.jsonl)
+            with open("failed_logs.jsonl", "a") as f:
+                f.write(json.dumps(log_entry) + "\n") 
+
             if self.redis_client:
-                # Add to failure log list (keep last 1000 failures)
                 log_key = f"{self.failure_log_prefix}{datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
                 self.redis_client.lpush(log_key, json.dumps(log_entry))
                 self.redis_client.ltrim(log_key, 0, 999)
                 self.redis_client.expire(log_key, 604800)  # 7 day TTL
 
-            logger.info(f"Failure logged: {failure_type.value} - {error_message}")
+            logger.info(f"Failure logged: {log_entry['failure_type']} - {error_message}")
             return True
 
         except Exception as e:
             logger.error(f"Error logging failure: {e!s}")
             return False
-
     def move_to_dead_letter_queue(self, session_id: str, reason: str) -> bool:
         """
         Move permanently failed task to dead letter queue for manual inspection
@@ -311,6 +322,7 @@ class FaultManager:
                 "session_id": session_id,
                 "moved_at": datetime.now(timezone.utc).isoformat(),
                 "reason": reason,
+                "retry_count": self.retry_manager.get_retry_count(session_id),
             }
 
             if self.redis_client:
@@ -323,16 +335,24 @@ class FaultManager:
             logger.error(f"Error moving to dead letter queue: {e!s}")
             return False
 
+<<<<<<< HEAD
+    def handle_failed_session(self, session_id: str, reason: str,) -> bool:
+=======
     def handle_failed_session(
         self,
         session_id: str,
         reason: str,
     ) -> bool:
+>>>>>>> main
         """
         Handle a failed session.
 
         1. Log failure.
+<<<<<<< HEAD
+        2. Retry if possible.
+=======
         2. Retry if possible via retry_manager.
+>>>>>>> main
         3. Otherwise move to DLQ.
         """
 
@@ -347,6 +367,9 @@ class FaultManager:
             error_message=reason,
         )
 
+<<<<<<< HEAD
+        scheduled = self.retry_manager.schedule_retry(session_id)
+=======
         # Attempt to schedule retry via retry_manager if available
         scheduled = False
         if hasattr(self, "retry_manager") and self.retry_manager:
@@ -354,6 +377,7 @@ class FaultManager:
                 scheduled = self.retry_manager.schedule_retry(session_id)
             except Exception:
                 scheduled = False
+>>>>>>> main
 
         if scheduled:
             return True
@@ -372,6 +396,10 @@ class FaultManager:
 
         return False
 
+<<<<<<< HEAD
+
+=======
+>>>>>>> main
     def get_recovery_queue(self, limit: int = 100) -> list[dict[str, Any]]:
         """
         Get sessions queued for recovery/retry

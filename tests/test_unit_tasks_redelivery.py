@@ -66,11 +66,17 @@ def test_redelivery_of_in_flight_session_is_skipped():
     interview = _make_interview(tasks.session_manager.VIDEO_PROCESSING, recent_start)
     db_session = _wire_db_session(interview)
 
+<<<<<<< HEAD
+    with patch.object(tasks, "SessionLocal", return_value=db_session), patch.object(
+        tasks, "group"
+    ) as fake_group, patch.object(tasks.session_manager, "update_session_status") as fake_update_status:
+=======
     with (
         patch.object(tasks, "SessionLocal", return_value=db_session),
         patch.object(tasks, "group") as fake_group,
         patch.object(tasks.session_manager, "update_session_status") as fake_update_status,
     ):
+>>>>>>> main
         result = tasks.process_interview_session.run("session-123")
 
     fake_group.assert_not_called()
@@ -83,6 +89,19 @@ def test_stale_active_session_is_recovered():
     long_ago = datetime.now(timezone.utc) - timedelta(hours=2)
     interview = _make_interview(tasks.session_manager.VIDEO_PROCESSING, long_ago)
     db_session = _wire_db_session(interview)
+<<<<<<< HEAD
+    fake_result = _FakeGroupResult({"video": "ok"}, {"audio": "ok"})
+
+    with patch.object(tasks, "SessionLocal", return_value=db_session), patch.object(
+        tasks, "group"
+    ) as fake_group, patch.object(tasks, "_after_parallel") as fake_after_parallel:
+        fake_group.return_value.apply_async.return_value = fake_result
+
+        result = tasks.process_interview_session.run("session-456")
+
+    fake_group.assert_called_once()
+    fake_after_parallel.delay.assert_called_once_with("session-456", {"video": "ok"}, {"audio": "ok"})
+=======
 
     with (
         patch.object(tasks, "SessionLocal", return_value=db_session),
@@ -96,12 +115,26 @@ def test_stale_active_session_is_recovered():
     # chord(header)(callback.s(session_id))
     fake_chord.assert_called_once()
     fake_after_parallel.s.assert_called_once_with("session-456")
+>>>>>>> main
     assert result["status"] == "processing_parallel"
 
 
 def test_fresh_queued_session_dispatches_normally():
     interview = _make_interview("QUEUED", None)
     db_session = _wire_db_session(interview)
+<<<<<<< HEAD
+    fake_result = _FakeGroupResult({"video": "ok"}, {"audio": "ok"})
+
+    with patch.object(tasks, "SessionLocal", return_value=db_session), patch.object(
+        tasks, "group"
+    ) as fake_group, patch.object(tasks, "_after_parallel") as fake_after_parallel:
+        fake_group.return_value.apply_async.return_value = fake_result
+
+        result = tasks.process_interview_session.run("session-789")
+
+    fake_group.assert_called_once()
+    fake_after_parallel.delay.assert_called_once_with("session-789", {"video": "ok"}, {"audio": "ok"})
+=======
 
     with (
         patch.object(tasks, "SessionLocal", return_value=db_session),
@@ -114,4 +147,5 @@ def test_fresh_queued_session_dispatches_normally():
     fake_group.assert_called_once()
     fake_chord.assert_called_once()
     fake_after_parallel.s.assert_called_once_with("session-789")
+>>>>>>> main
     assert result["status"] == "processing_parallel"

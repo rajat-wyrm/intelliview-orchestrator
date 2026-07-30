@@ -1,11 +1,21 @@
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
+<<<<<<< HEAD
+from alembic import context
+
+from config import DATABASE_URL
+from database.db import Base
+
+# IMPORTANT: Import all models so SQLAlchemy registers them
+import database.models
+=======
 
 # IMPORTANT: Import all models so SQLAlchemy registers them
 from alembic import context
 from config import DATABASE_URL
 from database.db import Base
+>>>>>>> main
 
 # Alembic Config object
 config = context.config
@@ -61,4 +71,8 @@ def run_migrations_online() -> None:
 if context.is_offline_mode():
     run_migrations_offline()
 else:
+<<<<<<< HEAD
     run_migrations_online()
+=======
+    run_migrations_online()
+>>>>>>> main

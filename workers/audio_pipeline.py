@@ -23,7 +23,6 @@ from workers._stubs import _seeded_unit
 logger = logging.getLogger(__name__)
 AUDIO_TEMP_DIR = os.getenv("AUDIO_TEMP_DIR", "/tmp")
 
-
 # ---------------------------------------------------------------------------
 # Real detection helpers (Whisper / pyannote / OpenAI) with fallback to stubs
 # ---------------------------------------------------------------------------
@@ -91,7 +90,12 @@ def _real_transcribe(session_id: str) -> dict[str, Any] | None:
             "text": result.get("text", ""),
             "confidence": confidence,
             "language": result.get("language", "en"),
+<<<<<<< HEAD
+            "duration_seconds": sum(s.get("end", 0) - s.get("start", 0) for s in result.get("segments", []))
+            or 120.0,
+=======
             "duration_seconds": (sum(s.get("end", 0) - s.get("start", 0) for s in segments) or 120.0),
+>>>>>>> main
             "timestamp": time.time(),
         }
 

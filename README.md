@@ -132,7 +132,17 @@ ruff check . && ruff format --check .
 | AI | Gemini, Grok, OpenAI (pluggable) |
 | Monitoring | Prometheus, Grafana |
 | Deploy | Docker Compose |
+<<<<<<< HEAD
+## Failure Logging
+
+Failure events are written to failed_logs.jsonl using the JSON Lines format.
+
+Each line in the file is an individual JSON object. This allows new failure records to be appended efficiently while keeping every record parseable by JSON Lines readers. 
+## License
+
+=======
 
 ## License
 
+>>>>>>> main
 MIT — [Rajat Kumar](https://github.com/rajat-wyrm)

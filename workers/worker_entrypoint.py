@@ -9,13 +9,19 @@ import sys
 import threading
 
 from celery.signals import task_postrun, task_prerun, worker_shutdown
+<<<<<<< HEAD
+=======
 
+>>>>>>> main
 from config import WORKER_CONCURRENCY
 from workers.celery_app import celery_app
 from workers.metrics_server import start_worker_metrics
 from workers.worker_agent import WorkerAgent
+from workers.metrics_server import start_worker_metrics
 
 logger = logging.getLogger(__name__)
+SUPPORTED_POOL = "solo"
+
 
 SUPPORTED_POOL = "solo"
 
@@ -24,13 +30,23 @@ agent = None
 
 def _run_celery() -> None:
     # Validate the configured Celery pool before starting.
+<<<<<<< HEAD
+    # The active task counter is process-local, so only the
+    # solo pool is supported.
+=======
+>>>>>>> main
     pool = os.getenv("CELERY_POOL", SUPPORTED_POOL)
 
     if pool != SUPPORTED_POOL:
         raise RuntimeError(
             f"Unsupported Celery pool '{pool}'. "
             f"Only '{SUPPORTED_POOL}' is supported because the "
+<<<<<<< HEAD
+            "active task counter is process-local and cannot be "
+            "reported accurately across multiple worker processes."
+=======
             "active task counter is process-local."
+>>>>>>> main
         )
 
     argv = [
@@ -47,6 +63,7 @@ def _run_celery() -> None:
     celery_app.worker_main(argv)
 
 
+
 def main() -> int:
     global agent
 
@@ -54,6 +71,7 @@ def main() -> int:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    start_worker_metrics()
 
     start_worker_metrics()
 
@@ -82,11 +100,22 @@ def main() -> int:
     def _on_postrun(**_):
         agent.decrement_active()
 
+<<<<<<< HEAD
+     # Start the heartbeat loop managed by WorkerAgent
+    threading.Thread(target=agent.heartbeat_loop, daemon=True).start()
+
+   @worker_shutdown.connect
+def _on_worker_shutdown(**kwargs):
+    logger.info("Shutting down worker")
+    agent.deregister()
+    stop_event.set()
+=======
     # Start heartbeat thread
     threading.Thread(
         target=agent.heartbeat_loop,
         daemon=True,
     ).start()
+>>>>>>> main
 
     logger.info("Worker entrypoint ready; starting Celery")
 
@@ -94,6 +123,8 @@ def main() -> int:
 
     return 0
 
+<<<<<<< HEAD
+=======
 
 @worker_shutdown.connect
 def _on_worker_shutdown(**kwargs):
@@ -105,5 +136,6 @@ def _on_worker_shutdown(**kwargs):
         agent.deregister()
 
 
+>>>>>>> main
 if __name__ == "__main__":
     sys.exit(main())

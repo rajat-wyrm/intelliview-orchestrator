@@ -17,7 +17,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from orchestrator.cache_manager import CacheManager
+<<<<<<< HEAD
+=======
 from orchestrator.session_payload import deserialize_session_payload
+>>>>>>> main
 
 logger = logging.getLogger(__name__)
 
@@ -421,3 +424,20 @@ class MetricsCollector:
         except Exception as e:
             logger.warning(f"Error getting uptime: {e!s}")
             return 0
+    from monitoring.prometheus_metrics import get_session_metrics
+
+    def _get_session_metrics(self):
+      metrics = get_session_metrics()
+
+      total = (
+        metrics["completed"]
+        + metrics["failed"]
+        + metrics["active"]
+      )
+
+      return {
+        "active": metrics["active"],
+        "completed": metrics["completed"],
+        "failed": metrics["failed"],
+        "total": total,
+      }

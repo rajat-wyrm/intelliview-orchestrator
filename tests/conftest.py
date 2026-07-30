@@ -40,6 +40,10 @@ if str(ROOT) not in sys.path:
 @pytest.fixture(scope="session")
 def api_base_url() -> str:
     return os.getenv("API_BASE_URL", "http://localhost:8000")
+<<<<<<< HEAD
+from workers.celery_app import celery_app
+=======
+>>>>>>> main
 
 
 @pytest.fixture(scope="session")
