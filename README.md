@@ -11,6 +11,8 @@
 
 ## Quick Start
 
+Running `docker compose up -d --build` automatically builds and starts the entire stack, including both the FastAPI backend and the Next.js frontend.
+
 ```bash
 git clone https://github.com/rajat-wyrm/intelliview-orchestrator
 cd intelliview-orchestrator
@@ -111,9 +113,6 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn orchestrator.main:app --reload
 
-# Frontend
-cd frontend && npm install && npm run dev
-
 # Tests
 pytest tests/ --ignore=tests/test_e2e_smoke.py -v
 
@@ -133,6 +132,39 @@ ruff check . && ruff format --check .
 | Monitoring | Prometheus, Grafana |
 | Deploy | Docker Compose |
 
+
+
+## Authentication
+
+The application uses API Token authentication to protect privileged API endpoints.
+
+### API Token
+
+Configure the API token in the `.env` file:
+
+```env
+API_TOKEN=your-api-token
+```
+
+### Protected Endpoints
+
+Protected endpoints require the `X-API-Token` request header.
+
+Example:
+
+```http
+X-API-Token: api123
+```
+
+### Authentication Responses
+
+- **200 OK** – Valid API token.
+- **401 Unauthorized** – Missing or invalid API token.
+
+Authentication is enforced through the `require_token` dependency for protected API endpoints.
+
+
 ## License
 
 MIT — [Rajat Kumar](https://github.com/rajat-wyrm)
+

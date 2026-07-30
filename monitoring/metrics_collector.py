@@ -16,7 +16,8 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from orchestrator.redis_client import get_redis_client
+from orchestrator.cache_manager import CacheManager
+from orchestrator.session_payload import deserialize_session_payload
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ class MetricsCollector:
         """
         Initialize MetricsCollector
         """
-        self.redis_client = get_redis_client()
+        self.redis_client = CacheManager()
         self.metrics_prefix = "metrics:"
         self._system_cache = _TTLCache()
         logger.info("MetricsCollector initialized")
@@ -119,7 +120,7 @@ class MetricsCollector:
                     try:
                         session_data = self.redis_client.get(key)
                         if session_data:
-                            session = json.loads(session_data)
+                            session = deserialize_session_payload(session_data)
                             status = session.get("status", "unknown")
 
                             if status == "PROCESSING":
@@ -384,7 +385,7 @@ class MetricsCollector:
                     try:
                         session_data = self.redis_client.get(key)
                         if session_data:
-                            session = json.loads(session_data)
+                            session = deserialize_session_payload(session_data)
                             if session.get("status") == "COMPLETED":
                                 end_time = session.get("end_time", "")
                                 if end_time and end_time > one_minute_ago:

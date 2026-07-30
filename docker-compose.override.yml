@@ -1,0 +1,41 @@
+# docker-compose.override.yml  —  LOCAL DEVELOPMENT ONLY
+# Docker Compose merges this file automatically when both files are present.
+# It adds source-code bind-mounts and hot-reload mode so you never have to
+# rebuild images just to test a Python change.
+#
+# Usage:
+#   docker compose up           # uses both docker-compose.yml + this file (dev)
+#   docker compose -f docker-compose.yml up  # prod-only (no overrides)
+
+services:
+  fastapi:
+    volumes:
+      - .:/app   # bind-mount: code changes are reflected without rebuild (restart container to pick up)
+    command: uvicorn orchestrator.main:app --host 0.0.0.0 --port 8000
+    environment:
+      API_TOKEN: "${API_TOKEN:-ci-dev-token-local}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+      GRAFANA_PASSWORD: "${GRAFANA_PASSWORD:-admin}"
+    healthcheck:
+      start_period: 45s  # hot-reload takes longer to boot than a prebuilt image
+
+  worker:
+    volumes:
+      - .:/app
+    environment:
+      API_TOKEN: "${API_TOKEN:-ci-dev-token-local}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+
+  flower:
+    volumes:
+      - .:/app
+    environment:
+      API_TOKEN: "${API_TOKEN:-ci-dev-token-local}"
+
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+
+  grafana:
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_PASSWORD:-admin}"

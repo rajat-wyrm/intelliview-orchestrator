@@ -11,10 +11,10 @@ const ICONS = {
   warn: AlertTriangle
 };
 const STYLES = {
-  success: "border-emerald-500/30 bg-emerald-500/10 text-emerald-100",
-  error: "border-rose-500/30 bg-rose-500/10 text-rose-100",
-  info: "border-indigo-500/30 bg-indigo-500/10 text-indigo-100",
-  warn: "border-amber-500/30 bg-amber-500/10 text-amber-100"
+  success: "border-emerald-500/30 bg-emerald-500/10 text-zinc-200",
+  error: "border-rose-500/30 bg-rose-500/10 text-zinc-200",
+  info: "border-indigo-500/30 bg-indigo-500/10 text-zinc-200",
+  warn: "border-amber-500/30 bg-amber-500/10 text-zinc-200"
 };
 const ICON_STYLES = {
   success: "text-emerald-400",
