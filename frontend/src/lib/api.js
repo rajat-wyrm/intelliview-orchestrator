@@ -16,7 +16,7 @@ class ApiClient {
   }
   headers(extra = {}) {
     const h = { "Content-Type": "application/json", ...extra };
-    if (this.token) h["X-API-Token"] = this.token;
+    if (this.token) h["Authorization"] = `Bearer ${this.token}`;
     return h;
   }
   async request(method, path, body, init) {
@@ -77,7 +77,8 @@ const endpoints = {
   failureLog: (limit = 50) => api.get(`/failure-log?limit=${limit}`),
   deadLetterQueue: (limit = 50) => api.get(`/dead-letter-queue?limit=${limit}`),
   retrySession: (session_id) => api.post(`/retry-session/${session_id}`),
-  detectFailures: () => api.post("/detect-failures")
+  detectFailures: () => api.post("/detect-failures"),
+  clearCache: () => api.delete("/clear-cache")
 };
 export {
   ApiClient,

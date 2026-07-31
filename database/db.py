@@ -35,3 +35,24 @@ engine = create_engine(DATABASE_URL, **_engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
+
+
+def get_db():
+    """
+    FastAPI dependency that provides a database session.
+
+    Ensures failed transactions are rolled back and the session
+    is always closed after the request finishes.
+    """
+    db = SessionLocal()
+
+    try:
+        yield db
+
+    except Exception:
+        db.rollback()
+        logger.exception("Database session failed; transaction rolled back")
+        raise
+
+    finally:
+        db.close()

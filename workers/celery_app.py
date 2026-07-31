@@ -13,7 +13,6 @@ from config import REDIS_URL
 
 celery_app = Celery("interview_tasks", broker=REDIS_URL, backend=REDIS_URL)
 CeleryInstrumentor().instrument()
-
 celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
@@ -21,6 +20,8 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     task_track_started=True,
+    worker_send_task_events=True,
+    task_send_sent_event=True,
     task_time_limit=30 * 60,  # 30 minutes hard limit
     task_soft_time_limit=25 * 60,  # 25 minutes soft limit
     task_acks_late=True,  # re-deliver if worker dies mid-task
@@ -80,18 +81,29 @@ def _extract_session_id(args: tuple, kwargs: dict) -> str | None:
 
 
 @signals.task_failure.connect
-def _on_task_failure(task_id, exception, args, kwargs, traceback, einfo, **_extra):
-    """When a task fails permanently (retries exhausted), mark the
-    session as FAILED so the dashboard reflects reality.
+def _on_task_failure(sender, task_id, exception, args, kwargs, traceback, einfo, **_extra):
+    """When a session-aware task fails permanently (retries exhausted), mark
+    the session as FAILED so the dashboard reflects reality.
 
-    `args[0]` is the session_id passed to `process_interview_session`.
+    The handler is scoped to :data:`_SESSION_TASK_NAMES` so that unrelated
+    periodic tasks (e.g. ``scan_and_dispatch_retries``) do not trigger a
+    spurious DB write.
+
+    ``session_id`` is resolved from *either* positional or keyword arguments
+    via :func:`_extract_session_id` so the handler is safe regardless of how
+    the task was dispatched.
+
     Imported lazily so importing this module doesn't pull in the DB stack
     before the worker process is ready.
     """
+    task_name: str = getattr(sender, "name", "") or ""
+    if task_name not in _SESSION_TASK_NAMES:
+        return
+
     try:
         from orchestrator.session_manager import SessionManager
 
-        session_id = args[0] if args else None
+        session_id = _extract_session_id(args, kwargs)
         if not session_id:
             return
         SessionManager().mark_session_failed(
