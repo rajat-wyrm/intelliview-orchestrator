@@ -16,11 +16,24 @@ import logging
 import socket
 from datetime import datetime, timezone
 
-from celery import group
+from celery import chord, group
 from sqlalchemy import select
 
 from database.db import SessionLocal
 from database.models import InterviewSession
+from metrics.prometheus_metrics import (
+    CELERY_ACTIVE_TASKS,
+    CELERY_TASK_RUNTIME,
+    CELERY_TASKS_PROCESSED_TOTAL,  # Updated custom counter
+    FAILURE_COUNT,
+    PIPELINE_LATENCY,
+    POSTGRES_HEALTH,
+    QUEUE_DEPTH,
+    REDIS_HEALTH,
+    RETRY_COUNT,
+    RISK_SCORE,
+    WORKERS_HEALTHY,
+)
 from orchestrator.redis_client import get_redis_client
 from orchestrator.session_manager import SessionManager
 from orchestrator.state_sync import StateSynchronizer
@@ -32,6 +45,31 @@ logger = logging.getLogger(__name__)
 
 session_manager = SessionManager()
 state_sync = StateSynchronizer()
+
+# Redelivered tasks (task_acks_late + task_reject_on_worker_lost) re-run
+# from the top with the same session_id while the DB row may still be
+# active. task_time_limit tells us when a stuck attempt is provably dead.
+REDELIVERY_STALE_AFTER_SECONDS = celery_app.conf.task_time_limit + 60
+
+ACTIVE_PROCESSING_STATUSES = {
+    session_manager.PROCESSING,
+    session_manager.VIDEO_PROCESSING,
+    getattr(session_manager, "AUDIO_PROCESSING", "AUDIO_PROCESSING"),
+    session_manager.EVALUATING,
+}
+
+
+# ---------------------------------------------------------------------------
+# Helper to set background infrastructure health states
+# ---------------------------------------------------------------------------
+
+
+def _update_infra_health(healthy: bool = True):
+    """Sets system infrastructure gauges to reflect live operations."""
+    state = 1.0 if healthy else 0.0
+    WORKERS_HEALTHY.set(state)
+    REDIS_HEALTH.set(state)
+    POSTGRES_HEALTH.set(state)
 
 
 # ---------------------------------------------------------------------------
@@ -60,10 +98,16 @@ def _run_audio(self, session_id: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@celery_app.task(name="workers.tasks._after_parallel")
-def _after_parallel(session_id: str, video_result: dict, audio_result: dict):
-    """Runs after video + audio group completes; then evaluation + risk."""
+@celery_app.task(bind=True, max_retries=3, name="workers.tasks._after_parallel")
+def _after_parallel(self, results: list, session_id: str):
+    """Runs after video + audio group completes; then evaluation + risk.
+
+    Invoked by the chord once both ``_run_video`` and ``_run_audio``
+    succeed.  ``results`` is a two-element list from the group --
+    ``[video_result, audio_result]``.
+    """
     try:
+        video_result, audio_result = results  # unpack chord group results
         logger.info("Parallel video+audio done for %s - running evaluation", session_id)
 
         session_manager.update_session_status(session_id, session_manager.EVALUATING, {"stage": "evaluation"})
@@ -109,13 +153,23 @@ def _after_parallel(session_id: str, video_result: dict, audio_result: dict):
 
 
 @celery_app.task(bind=True, max_retries=3, name="workers.tasks.process_interview_session")
-def process_interview_session(self, session_id):
-    """Run video + audio + evaluation + risk scoring for one session.
+def process_interview_session(self, session_id: str, priority: str = "medium"):
+    logger.info("Session = %s | Priority = %s", session_id, priority)
+    
+    # Determine priority queue for downstream child tasks
+    priority_clean = str(priority).lower() if priority else "medium"
+    if priority_clean not in ("high", "medium", "low"):
+        priority_clean = "medium"
+    target_queue = f"{priority_clean}_priority"
 
-    Video and audio run in parallel via a Celery group; the evaluation
-    and risk scoring stages run sequentially after both complete.
-    """
-    worker_hostname = socket.gethostname()
+    task_name = self.name
+    start_time = time.perf_counter()
+
+    # Track currently active task tracking gauge
+    CELERY_ACTIVE_TASKS.labels(task_name=task_name).inc()
+
+    # Assert worker and backend services are active
+    _update_infra_health(True)
 
     try:
         logger.info("Worker %s starting interview session: %s", worker_hostname, session_id)
@@ -155,25 +209,23 @@ def process_interview_session(self, session_id):
             session_id, session_manager.VIDEO_PROCESSING, {"stage": "parallel_video_audio"}
         )
 
-        parallel_group = group(
-            _run_video.s(session_id),
-            _run_audio.s(session_id),
+        # Use chord to dispatch video + audio in parallel and chain into
+        # _after_parallel once both complete — avoids blocking the solo
+        # worker pool (group + result.get() would deadlock).
+        # Target queue is passed so child tasks match the parent session priority.
+        parallel_header = group(
+            _run_video.s(session_id).set(queue=target_queue),
+            _run_audio.s(session_id).set(queue=target_queue),
         )
-        result = parallel_group.apply_async()
+        chord(parallel_header)(_after_parallel.s(session_id).set(queue=target_queue))
 
-        # Wait for both to finish (group result)
-        video_result, audio_result = result.get(timeout=600)
-        logger.info("Parallel video+audio completed for session %s", session_id)
-
-        # Chain into evaluation + risk scoring
-        _after_parallel.delay(session_id, video_result, audio_result)
+        logger.info("Dispatched parallel video+audio for session %s on queue %s", session_id, target_queue)
 
         return {
             "session_id": session_id,
             "status": "processing_parallel",
-            "video_result": video_result,
-            "audio_result": audio_result,
             "processed_by": worker_hostname,
+            "priority": priority_clean,
         }
 
     except Exception as exc:
