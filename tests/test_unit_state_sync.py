@@ -218,7 +218,7 @@ def test_fault_manager_reads_compressed_session_scans():
             {
                 "session_id": "s4",
                 "status": "PROCESSING",
-                "assigned_worker": "worker-1",
+                "assigned_node": "worker-1",
                 "metadata": {"blob": "x" * SESSION_COMPRESSION_THRESHOLD_BYTES},
             }
         ),
@@ -238,7 +238,7 @@ def test_fault_manager_skips_corrupted_compressed_session_scans():
             {
                 "session_id": "good",
                 "status": "PROCESSING",
-                "assigned_worker": "worker-1",
+                "assigned_node": "worker-1",
                 "metadata": {"blob": "x" * SESSION_COMPRESSION_THRESHOLD_BYTES},
             }
         ),

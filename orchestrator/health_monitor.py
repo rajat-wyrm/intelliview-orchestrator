@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 # Import Prometheus system health monitoring metrics
-from monitoring.prometheus_metrics import (
+from metrics.prometheus_metrics import (
     POSTGRES_HEALTH,
     QUEUE_DEPTH,
     REDIS_HEALTH,
@@ -129,13 +129,13 @@ class HealthMonitor:
     # Readiness probe (Kubernetes-style)
     # ------------------------------------------------------------------
 
-    def readiness_check(self) -> dict[str, Any]:
+    async def readiness_check(self) -> dict[str, Any]:
         """Return true readiness — all critical dependencies must be up.
 
         Use this for k8s readinessProbe: the service only receives
         traffic when this returns ready=True.
         """
-        deps = self._check_all_dependencies()
+        deps = await self._check_all_dependencies()
         ready = all(d["healthy"] for d in deps.values())
         return {
             "ready": ready,
@@ -165,15 +165,17 @@ class HealthMonitor:
     # Deep dependency health checks
     # ------------------------------------------------------------------
 
-    def _check_all_dependencies(self) -> dict[str, dict[str, Any]]:
+    async def _check_all_dependencies(self) -> dict[str, dict[str, Any]]:
         """Check every critical dependency and return its status."""
+        import asyncio
+
         results: dict[str, dict[str, Any]] = {}
 
         # Redis
         results["redis"] = self._deep_check_redis()
 
-        # PostgreSQL
-        results["postgres"] = self._deep_check_postgres()
+        # PostgreSQL (wrapped in to_thread to prevent blocking event loop)
+        results["postgres"] = await asyncio.to_thread(self._deep_check_postgres)
 
         # Celery broker (Redis-backed)
         results["celery_broker"] = self._deep_check_celery_broker()

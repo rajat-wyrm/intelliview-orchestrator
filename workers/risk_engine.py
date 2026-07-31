@@ -149,6 +149,17 @@ class RiskScoringEngine:
         return round(min(max(final_risk, 0.0), 1.0), 3)
 
     @staticmethod
+    def _apply_critical_rule_overrides(final_risk: float, risk_classification: str) -> float:
+        """Apply rule-based overrides to the linear combined risk score."""
+        if risk_classification == "CRITICAL":
+            return max(final_risk, 0.95)
+        if risk_classification == "HIGH":
+            return max(final_risk, 0.8)
+        if risk_classification == "MEDIUM":
+            return max(final_risk, 0.6)
+        return final_risk
+
+    @staticmethod
     def classify_risk(risk_score: float) -> str:
         """Classify risk level based on score."""
         if risk_score < RiskScoringEngine.LOW_RISK_THRESHOLD:
@@ -182,6 +193,7 @@ class RiskScoringEngine:
             audio_result,
             evaluation_result,
         )
+        final_risk = RiskScoringEngine._apply_critical_rule_overrides(final_risk, risk_classification)
         weighted_classification = RiskScoringEngine.classify_risk(final_risk)
         logger.info(
             "Weighted=%s (%.2f), DecisionTree=%s",

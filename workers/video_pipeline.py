@@ -54,12 +54,15 @@ def _real_detect_face(session_id: str) -> dict[str, Any] | None:
         return None
 
 
-def _real_detect_head_movement(session_id: str) -> dict[str, Any] | None:
+def _real_detect_head_movement(session_id: str, video_url: str | None = None) -> dict[str, Any] | None:
     """Detect gaze deviation using MediaPipe face mesh landmarks.
 
-    High average landmark drift from the canonical front-facing position
-    suggests the candidate is looking away.
+    Accepts a ``video_url`` pointing to the candidate's video stream.
+    Falls back to the ``VIDEO_STREAM_URL`` environment variable if not provided.
+    Returns ``None`` if no URL is available, so the seeded stub fires.
     """
+    import os
+
     try:
         import cv2
         import mediapipe as mp  # type: ignore
@@ -69,8 +72,23 @@ def _real_detect_head_movement(session_id: str) -> dict[str, Any] | None:
         if not HAS_MEDIAPIPE:
             return None
 
-        cap = cv2.VideoCapture(0)
+        # Resolve URL: prefer explicit arg → env var → fail gracefully
+        url = video_url or os.environ.get("VIDEO_STREAM_URL", "").strip()
+        if not url:
+            logger.debug(
+                "Head-movement detection skipped for session %s: no video URL configured "
+                "(set VIDEO_STREAM_URL env var or pass video_url argument).",
+                session_id,
+            )
+            return None
+
+        cap = cv2.VideoCapture(url)
         if not cap.isOpened():
+            logger.warning(
+                "Could not open video stream for session %s: %s",
+                session_id,
+                url,
+            )
             return None
         frames: list[Any] = []
         for _ in range(10):

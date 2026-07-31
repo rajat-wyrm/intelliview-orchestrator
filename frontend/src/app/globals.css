@@ -4,20 +4,58 @@
 
 :root {
   color-scheme: dark;
+  --bg: #0a0a0f;
+  --bg-panel: #12121a;
+  --bg-card: #1a1a24;
+  --muted: #71717a;
+  --border: #27272a;
+
+  /* Standard Tailwind Zinc palette */
+  --zinc-50: #fafafa;
+  --zinc-100: #f4f4f5;
+  --zinc-200: #e4e4e7;
+  --zinc-300: #d4d4d8;
+  --zinc-400: #a1a1aa;
+  --zinc-500: #71717a;
+  --zinc-600: #52525b;
+  --zinc-700: #3f3f46;
+  --zinc-800: #27272a;
+  --zinc-900: #18181b;
+  --zinc-950: #09090b;
+
+  --page-bg: #0a0a0f;
+  --page-fg: #e4e4e7;
 }
 
 html, body {
-  background: #0a0a0f;
-  color: #e4e4e7;
+  background: var(--page-bg);
+  color: var(--page-fg);
   -webkit-font-smoothing: antialiased;
 }
 
 html.light {
   color-scheme: light;
-}
-html.light body {
-  background: #fafafa;
-  color: #18181b;
+  --bg: #f8fafc;
+  --bg-panel: #ffffff;
+  --bg-card: #ffffff;
+  --muted: #64748b;
+  --border: #e2e8f0;
+
+  /* Physically Inverted Zinc palette for smart global light mode */
+  --zinc-50: #09090b;
+  --zinc-100: #18181b;
+  --zinc-200: #27272a;
+  --zinc-300: #3f3f46;
+  --zinc-400: #52525b;
+  --zinc-500: #71717a;
+  --zinc-600: #a1a1aa;
+  --zinc-700: #d4d4d8;
+  --zinc-800: #e4e4e7;
+  --zinc-900: #f1f5f9;
+  --zinc-950: #f8fafc;
+
+  --page-bg: #f1f5f9;
+  --page-fg: #0f172a;
 }
 
 * {
