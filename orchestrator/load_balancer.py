@@ -45,15 +45,15 @@ class LoadBalancer:
         logger.info(f"Load Balancer initialized with strategy: {strategy.value}")
 
     def select_worker(self) -> dict[str, Any] | None:
-            with self._lock:
-                if self.strategy == BalancingStrategy.ROUND_ROBIN:
-                    return self._select_round_robin()
-                if self.strategy == BalancingStrategy.LEAST_LOADED:
-                    return self._select_least_loaded()
-                if self.strategy == BalancingStrategy.QUEUE_BASED:
-                    return self._select_queue_based()
+        with self._lock:
+            if self.strategy == BalancingStrategy.ROUND_ROBIN:
+                return self._select_round_robin()
+            if self.strategy == BalancingStrategy.LEAST_LOADED:
+                return self._select_least_loaded()
+            if self.strategy == BalancingStrategy.QUEUE_BASED:
+                return self._select_queue_based()
 
-                return None
+            return None
 
     def select_worker_with_affinity(
         self,
