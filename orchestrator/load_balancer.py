@@ -30,7 +30,10 @@ class LoadBalancer:
     Implements load balancing for task distribution across worker nodes
     """
 
-    def __init__(self, strategy: BalancingStrategy = BalancingStrategy.LEAST_LOADED):
+    def __init__(
+        self,
+        strategy: BalancingStrategy = BalancingStrategy.LEAST_LOADED,
+    ):
         """
         Initialize load balancer
 
@@ -40,17 +43,21 @@ class LoadBalancer:
         self.worker_registry = WorkerRegistry()
         self.strategy = strategy
         self.round_robin_index = 0
-        logger.info(f"Load Balancer initialized with strategy: {strategy.value}")
-        
+
+        logger.info(
+            "Load Balancer initialized with strategy: %s",
+            strategy.value,
+        )
+
     def _is_valid_worker(self, worker: dict[str, Any]) -> bool:
         """
         Validate worker capacity before scheduling tasks.
 
         Args:
-            worker: Worker details.
+            worker: Worker information.
 
         Returns:
-            bool: True if the worker has a valid capacity.
+            bool: True if worker capacity is valid.
         """
         if worker["capacity"] <= 0:
             logger.warning(
@@ -62,221 +69,186 @@ class LoadBalancer:
 
         return True
 
+    def _get_valid_workers(self) -> list[dict[str, Any]]:
+        """
+        Return all available workers with valid capacity.
+        """
+
+        available = self.worker_registry.get_available_workers()
+
+        return [worker for worker in available if self._is_valid_worker(worker)]
+
     def select_worker(self) -> dict[str, Any] | None:
         """
-        Select a worker for task execution based on current strategy
+        Select a worker for task execution based on current strategy.
 
         Returns:
-            dict: Selected worker details or None if no workers available
+            Selected worker details or None.
         """
         if self.strategy == BalancingStrategy.ROUND_ROBIN:
             return self._select_round_robin()
+
         if self.strategy == BalancingStrategy.LEAST_LOADED:
             return self._select_least_loaded()
+
         if self.strategy == BalancingStrategy.QUEUE_BASED:
             return self._select_queue_based()
-        # Default to least loaded
+
         return self._select_least_loaded()
 
     def _select_round_robin(self) -> dict[str, Any] | None:
         """
-        Round Robin Strategy: Distribute tasks in sequence
-
-        Distributes tasks evenly across all available workers in a circular fashion.
-        Good for evenly distributed workloads.
-
-        Returns:
-            dict: Next worker in rotation or None if no workers available
+        Round Robin Strategy.
         """
-        available = self.worker_registry.get_available_workers()
 
-        if not available:
-            logger.warning("No workers available for Round Robin selection")
+        workers = self._get_valid_workers()
+
+        if not workers:
+            logger.warning("No valid workers available for Round Robin selection")
             return None
 
-        # Select using round robin index
-        # worker = available[self.round_robin_index % len(available)]
-        # self.round_robin_index += 1
+        worker = workers[self.round_robin_index % len(workers)]
+        self.round_robin_index += 1
 
-        # logger.debug(f"Round Robin selected worker: {worker['worker_id']}")
-        # return worker
-        
-        for _ in range(len(available)):
-            worker = available[self.round_robin_index % len(available)]
-            self.round_robin_index += 1
+        logger.debug(
+            "Round Robin selected worker: %s",
+            worker["worker_id"],
+        )
 
-            if self._is_valid_worker(worker):
-                logger.debug(f"Round Robin selected worker: {worker['worker_id']}")
-                return worker
+        return worker
 
-        logger.warning("No valid workers available for Round Robin selection")
-        return None
-
-    # def _select_least_loaded(self) -> dict[str, Any] | None:
-    #     """
-    #     Least Loaded Strategy: Assign to worker with fewest active tasks (RECOMMENDED)
-
-    #     Selects the worker with the lowest number of active tasks among available workers.
-    #     Provides better load balancing for varying task durations.
-
-    #     Returns:
-    #         dict: Least loaded worker or None if no workers available
-    #     """
-        
-    #     if not worker:
-    #         logger.warning("No workers available for Least Loaded selection")
-    #         return None
-
-    #     if not self._is_valid_worker(worker):
-    #         return None
-
-    #     logger.debug(
-    #         f"Least Loaded selected worker: {worker['worker_id']} "
-    #         f"(active: {worker['active_tasks']}/{worker['capacity']})"
-    #     )
-
-    #     return worker
-    
     def _select_least_loaded(self) -> dict[str, Any] | None:
         """
-        Least Loaded Strategy: Assign to worker with fewest active tasks.
+        Least Loaded Strategy.
 
         Returns:
-        dict: Least loaded worker or None if no workers available
+            Least loaded worker or None.
         """
 
-        available_workers = self.worker_registry.get_available_workers()
+        workers = self._get_valid_workers()
 
-        if not available_workers:
-            logger.warning("No workers available for Least Loaded selection")
-            return None
-
-        valid_workers = [
-            worker
-            for worker in available_workers
-            if self._is_valid_worker(worker)
-        ]
-
-        if not valid_workers:
+        if not workers:
             logger.warning("No workers with valid capacity available")
             return None
 
         worker = min(
-            valid_workers,
-            key=lambda w: w["active_tasks"]
+            workers,
+            key=lambda w: w["active_tasks"],
         )
 
         logger.debug(
-            f"Least Loaded selected worker: {worker['worker_id']} "
-            f"(active: {worker['active_tasks']}/{worker['capacity']})"
+            "Least Loaded selected worker: %s (active: %s/%s)",
+            worker["worker_id"],
+            worker["active_tasks"],
+            worker["capacity"],
         )
 
         return worker
 
     def _select_queue_based(self) -> dict[str, Any] | None:
         """
-    Queue-based Strategy: Fallback to queue if no workers available.
+        Queue-based Strategy.
 
-    Returns:
-        dict: Selected worker or None to trigger queueing
+        Returns:
+            Selected worker or None.
         """
 
-        worker = self.worker_registry.get_least_loaded_worker()
+        workers = self._get_valid_workers()
 
-        if not worker:
-            logger.debug("No workers available - task will be queued in Redis")
+        if not workers:
+            logger.debug("No valid workers available - task will be queued")
             return None
 
-        if not self._is_valid_worker(worker):
-            logger.debug("Invalid worker detected - task will be queued")
-            return None
+        worker = min(
+            workers,
+            key=lambda w: w["active_tasks"],
+        )
 
-        logger.debug(f"Queue-based selected worker: {worker['worker_id']}")
+        logger.debug(
+            "Queue-based selected worker: %s",
+            worker["worker_id"],
+        )
 
         return worker
 
-    def switch_strategy(self, strategy: BalancingStrategy) -> None:
+    def switch_strategy(
+        self,
+        strategy: BalancingStrategy,
+    ) -> None:
         """
-        Switch to a different load balancing strategy
+        Switch load balancing strategy.
+        """
 
-        Args:
-            strategy: New strategy to use
-        """
         self.strategy = strategy
-        logger.info(f"Switched to {strategy.value} strategy")
 
-    def get_best_worker_for_priority(self, priority: str) -> dict[str, Any] | None:
+        logger.info(
+            "Switched to %s strategy",
+            strategy.value,
+        )
+
+    def get_best_worker_for_priority(
+        self,
+        priority: str,
+    ) -> dict[str, Any] | None:
         """
-        Select worker considering task priority
+        Select worker considering task priority.
+        """
 
-    Args:
-        priority: Task priority ("low", "medium", "high")
+        workers = self._get_valid_workers()
 
-    Returns:
-        dict: Selected worker or None
-    """
-        available = self.worker_registry.get_available_workers()
-
-        if not available:
+        if not workers:
+            logger.warning("No workers with valid capacity available")
             return None
 
-        valid_workers = []
-
-        for worker in available:
-            if self._is_valid_worker(worker):
-                valid_workers.append(worker)
-
-        if not valid_workers:
-            logger.warning("No workers with valid capacity are available")
-            return None
-
-        # High priority -> least loaded valid worker
         if priority == "high":
-            return min(valid_workers, key=lambda w: w["active_tasks"])
+            return min(
+                workers,
+                key=lambda w: w["active_tasks"],
+            )
 
-        # Medium priority -> valid workers that are under 70% utilization
         if priority == "medium":
             underutilized = [
-                w
-                for w in valid_workers
-                if w["active_tasks"] < w["capacity"] * 0.7
+                worker for worker in workers if worker["active_tasks"] < worker["capacity"] * 0.7
             ]
 
             if underutilized:
                 return underutilized[0]
 
-            return valid_workers[0]
+            return workers[0]
 
-        # Low priority
-        return valid_workers[-1]
+        return workers[-1]
 
-    def is_system_overloaded(self, threshold: float = 0.9) -> bool:
+    def is_system_overloaded(
+        self,
+        threshold: float = 0.9,
+    ) -> bool:
         """
-        Check if system is overloaded
-
-        Args:
-            threshold: Utilization threshold (0-1)
-
-        Returns:
-            bool: True if system utilization exceeds threshold
+        Check if system utilization exceeds threshold.
         """
+
         stats = self.worker_registry.get_worker_statistics()
-        utilization = stats["capacity_utilization"] / 100  # Convert to 0-1 scale
 
-        is_overloaded = utilization >= threshold
+        utilization = stats["capacity_utilization"] / 100
 
-        if is_overloaded:
+        overloaded = utilization >= threshold
+
+        if overloaded:
             logger.warning(
-                f"System overloaded! Utilization: {stats['capacity_utilization']}% "
-                f"(threshold: {threshold * 100}%)"
+                "System overloaded! Utilization: %s%% (threshold: %s%%)",
+                stats["capacity_utilization"],
+                threshold * 100,
             )
 
-        return is_overloaded
+        return overloaded
 
     def get_load_status(self) -> dict[str, Any]:
-        """Get current system load status"""
+        """
+        Get current system load status.
+        """
+
         stats = self.worker_registry.get_worker_statistics()
-        available_workers = len(self.worker_registry.get_available_workers())
+
+        available_workers = len(self._get_valid_workers())
 
         return {
             "strategy": self.strategy.value,
