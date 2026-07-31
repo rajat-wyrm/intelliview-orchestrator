@@ -82,9 +82,11 @@ class Scheduler:
                 logger.error(f"Session {session_id} not found")
                 return False
 
-            # Select worker
-            worker = self.load_balancer.get_best_worker_for_priority(priority.name.lower())
+            # Get previously assigned worker
+            preferred_worker_id = session_data.get("assigned_node")
 
+            # Select worker using session affinity
+            worker = self.load_balancer.select_worker_with_affinity(preferred_worker_id=preferred_worker_id)
             if not worker:
                 logger.warning(f"No worker available for session {session_id} - queueing task")
                 # Queue task directly to Redis, it will be picked up by any available worker
