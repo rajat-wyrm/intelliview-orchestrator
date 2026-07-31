@@ -2,9 +2,9 @@
 
 Initialises Celery with the Redis broker, sensible reliability defaults,
 and a `session_failed` signal that lets us mark the DB session as
-FAILED only after Celery has exhausted its retries (rather than on
-every transient exception).
+FAILED only after Celery has exhausted its retries.
 """
+<<<<<<< HEAD
 
 # TODO:
 # Separate worker deployment is pending.
@@ -16,6 +16,8 @@ every transient exception).
 #
 # from celery import Celery, signals
 # from kombu import Queue
+=======
+>>>>>>> upstream/main
 
 from celery import Celery, signals
 
@@ -110,13 +112,35 @@ def _on_task_failure(sender, task_id, exception, args, kwargs, traceback, einfo,
         session_id = _extract_session_id(args, kwargs)
         if not session_id:
             return
+<<<<<<< HEAD
         SessionManager().mark_session_failed(session_id, f"Celery task exhausted retries: {exception!s}")
         # send_mock_email_alert.delay(session_id)
+=======
+        SessionManager().mark_session_failed(
+            session_id,
+            f"Celery task exhausted retries: {exception!s}",
+        )
+
+        from workers.tasks import send_mock_email_alert
+
+        send_mock_email_alert.delay(session_id)
+>>>>>>> upstream/main
     except Exception as exc:
         # Don't let a signal handler crash the worker.
         import logging
 
         logging.getLogger(__name__).warning("task_failure handler failed: %s", exc)
+
+
+@celery_app.task(name="workers.tasks.send_mock_email_alert")
+def send_mock_email_alert(session_id: str) -> None:
+    """Mock email alert task — logs the notification.
+
+    In production this would call SendGrid / SES / etc.
+    """
+    import logging
+
+    logging.getLogger(__name__).info("Mock email alert sent for session %s", session_id)
 
 
 if __name__ == "__main__":

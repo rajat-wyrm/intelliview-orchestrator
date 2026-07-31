@@ -17,7 +17,7 @@ import socket
 import time
 from datetime import datetime, timezone
 
-from celery import group
+from celery import chord, group
 from sqlalchemy import select
 
 from database.db import SessionLocal
@@ -35,6 +35,7 @@ from monitoring.prometheus_metrics import (
     RISK_SCORE,
     WORKERS_HEALTHY,
 )
+from orchestrator.redis_client import get_redis_client
 from orchestrator.session_manager import SessionManager
 from orchestrator.state_sync import StateSynchronizer
 from workers.celery_app import celery_app
@@ -125,9 +126,15 @@ def _run_audio(self, session_id: str) -> dict:
 
 
 @celery_app.task(bind=True, max_retries=3, name="workers.tasks._after_parallel")
-def _after_parallel(self, session_id: str, video_result: dict, audio_result: dict):
-    """Runs after video + audio group completes; then evaluation + risk."""
+def _after_parallel(self, results: list, session_id: str):
+    """Runs after video + audio group completes; then evaluation + risk.
+
+    Invoked by the chord once both ``_run_video`` and ``_run_audio``
+    succeed.  ``results`` is a two-element list from the group --
+    ``[video_result, audio_result]``.
+    """
     try:
+        video_result, audio_result = results  # unpack chord group results
         logger.info("Parallel video+audio done for %s - running evaluation", session_id)
         session_manager.update_session_status(session_id, session_manager.EVALUATING, {"stage": "evaluation"})
 
@@ -156,7 +163,7 @@ def _after_parallel(self, session_id: str, video_result: dict, audio_result: dic
             if interview:
                 interview.risk_score = final_risk_score
                 interview.video_analysis = video_result
-                interview.audio_analysis = audio_analysis
+                interview.audio_analysis = audio_result
                 interview.evaluation_analysis = evaluation_result
                 interview.end_time = now
                 interview.updated_at = now
@@ -273,12 +280,16 @@ def process_interview_session(self, session_id):
             session_id, session_manager.VIDEO_PROCESSING, {"stage": "parallel_video_audio"}
         )
 
-        parallel_group = group(
+        # Use chord to dispatch video + audio in parallel and chain into
+        # _after_parallel once both complete — avoids blocking the solo
+        # worker pool (group + result.get() would deadlock).
+        parallel_header = group(
             _run_video.s(session_id),
             _run_audio.s(session_id),
         )
-        result = parallel_group.apply_async()
+        chord(parallel_header)(_after_parallel.s(session_id))
 
+<<<<<<< HEAD
         from celery.result import allow_join_result
 
         with allow_join_result():
@@ -286,6 +297,9 @@ def process_interview_session(self, session_id):
 
         logger.info("Parallel video+audio completed for session %s", session_id)
         _after_parallel.delay(session_id, video_result, audio_result)
+=======
+        logger.info("Dispatched parallel video+audio for session %s", session_id)
+>>>>>>> upstream/main
 
         # Record total runtime metrics
         runtime = time.perf_counter() - start_time
@@ -298,8 +312,6 @@ def process_interview_session(self, session_id):
         return {
             "session_id": session_id,
             "status": "processing_parallel",
-            "video_result": video_result,
-            "audio_result": audio_result,
             "processed_by": worker_hostname,
         }
 

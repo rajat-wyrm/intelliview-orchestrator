@@ -40,8 +40,18 @@ from database.models import Base, Candidate, InterviewSession
 from monitoring.dashboard_api import create_dashboard_routes
 from monitoring.metrics_collector import MetricsCollector
 from monitoring.prometheus_metrics import (
+    POSTGRES_HEALTH,
+    REDIS_HEALTH,
     REQUEST_COUNT,
     REQUEST_DURATION,
+    SESSIONS_ACTIVE,
+    SESSIONS_CREATED,
+    WORKER_ACTIVE_TASKS,
+    WORKER_CAPACITY,
+    WORKER_HEARTBEAT_AGE_SECONDS,
+    WORKERS_HEALTHY,
+    WORKERS_REGISTERED,
+    WORKERS_UNHEALTHY,
 )
 from monitoring.websocket_manager import ws_manager
 from orchestrator import http_cache
@@ -66,6 +76,8 @@ from workers.bias_auditor import BiasAuditor
 # Configure logging after imports so startup messages are structured.
 configure_logging()
 logger = logging.getLogger(__name__)
+
+APP_START_TIME = datetime.now(timezone.utc)
 
 
 @asynccontextmanager
@@ -462,6 +474,7 @@ class CreateTemplateRequest(BaseModel):
 
 
 @app.get("/health")
+
 # ========== Deep Health & Probe Endpoints ==========
 
 
@@ -515,12 +528,19 @@ if ENABLE_PROMETHEUS:
 
     @app.get("/metrics")
     async def prometheus_metrics():
-        REDIS_HEALTH.set(...)
-        POSTGRES_HEALTH.set(...)
-        WORKERS_REGISTERED.set(...)
-        WORKERS_HEALTHY.set(...)
-        WORKERS_UNHEALTHY.set(...)
         """Prometheus metrics endpoint."""
+        # Dynamic check of dependency statuses
+        deps = health_monitor._check_all_dependencies()
+        REDIS_HEALTH.set(1 if deps.get("redis", {}).get("status") == "healthy" else 0)
+        POSTGRES_HEALTH.set(1 if deps.get("postgres", {}).get("status") == "healthy" else 0)
+
+        # Worker status gauges
+        all_workers = worker_registry.get_all_workers()
+        unhealthy = worker_registry.detect_unhealthy_workers()
+        WORKERS_REGISTERED.set(len(all_workers))
+        WORKERS_HEALTHY.set(len(all_workers) - len(unhealthy))
+        WORKERS_UNHEALTHY.set(len(unhealthy))
+
         return _Response(
             content=get_metrics_text(),
             media_type="text/plain; version=0.0.4; charset=utf-8",
@@ -587,6 +607,11 @@ async def start_interview(
             candidate_name=request.candidate_name,
             position=request.position,
         )
+
+        # Increment total interview sessions created
+        SESSIONS_CREATED.inc()
+        # Increase active interview session count
+        SESSIONS_ACTIVE.inc()
 
         logger.info(f"Session created: {session_id}")
 
@@ -1785,9 +1810,6 @@ async def retry_failed_session(session_id: str):
                 detail=f"Session {session_id} has exceeded maximum retry attempts",
             )
 
-        # Get retry info
-        retry_info = retry_manager.get_retry_info(session_id)
-
         # Schedule retry with exponential backoff
         # Schedule retry
         retry_scheduled = retry_manager.schedule_retry(session_id)
@@ -1803,7 +1825,10 @@ async def retry_failed_session(session_id: str):
         # -----------------------------
         from orchestrator.scheduler import TaskPriority
 
-        scheduler.schedule_task(session_id=session_id, priority=TaskPriority.MEDIUM)
+        scheduler.schedule_task(
+            session_id=session_id,
+            priority=TaskPriority.MEDIUM
+        )
 
         logger.info(
             "Session %s requeued successfully after retry scheduling.",

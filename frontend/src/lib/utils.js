@@ -34,19 +34,19 @@ function statusColor(status) {
 
   const s = status.toUpperCase();
 
-  if (["SAFE", "COMPLETED", "HEALTHY"].includes(s))
+  if (["SAFE", "COMPLETED", "HEALTHY", "SELECTED"].includes(s))
     return "success";
 
   if (["LOW"].includes(s))
     return "accent";
 
-  if (["WARNING", "CANCELLED", "DEGRADED"].includes(s))
+  if (["WARNING", "CANCELLED", "DEGRADED", "PENDING"].includes(s))
     return "warn";
 
   if (["FLAGGED"].includes(s))
     return "warn";
 
-  if (["HIGH", "FAILED", "TIMEOUT", "CRITICAL", "UNHEALTHY"].includes(s))
+  if (["HIGH", "FAILED", "TIMEOUT", "CRITICAL", "UNHEALTHY", "REJECTED"].includes(s))
     return "danger";
 
   return "muted";
