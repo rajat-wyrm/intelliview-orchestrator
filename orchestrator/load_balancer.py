@@ -38,6 +38,7 @@ class LoadBalancer:
         """
         self.worker_registry = WorkerRegistry()
         self.strategy = strategy
+        self.session_affinity_enabled = True
         self.round_robin_index = 0
         self.round_robin_lock = threading.Lock()
         logger.info(f"Load Balancer initialized with strategy: {strategy.value}")
