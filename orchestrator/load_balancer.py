@@ -53,7 +53,7 @@ class LoadBalancer:
             if self.strategy == BalancingStrategy.QUEUE_BASED:
                 return self._select_queue_based()
 
-            return None
+            return self._select_least_loaded()
 
     def select_worker_with_affinity(
         self,
