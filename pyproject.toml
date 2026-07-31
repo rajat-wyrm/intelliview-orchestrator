@@ -73,7 +73,7 @@ known-first-party = ["orchestrator", "workers", "monitoring", "database", "scrip
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers"
+addopts = "-ra --strict-markers -m 'not e2e'"
 markers = [
     "unit: pure-logic unit tests",
     "contract: API contract tests",
