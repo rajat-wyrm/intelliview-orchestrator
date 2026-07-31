@@ -45,22 +45,15 @@ class LoadBalancer:
         logger.info(f"Load Balancer initialized with strategy: {strategy.value}")
 
     def select_worker(self) -> dict[str, Any] | None:
-        with self._lock:
-            if self.strategy == BalancingStrategy.ROUND_ROBIN:
-                return self._select_round_robin()
-            if self.strategy == BalancingStrategy.LEAST_LOADED:
-                return self._select_least_loaded()
-            if self.strategy == BalancingStrategy.QUEUE_BASED:
-                return self._select_queue_based()
+            with self._lock:
+                if self.strategy == BalancingStrategy.ROUND_ROBIN:
+                    return self._select_round_robin()
+                if self.strategy == BalancingStrategy.LEAST_LOADED:
+                    return self._select_least_loaded()
+                if self.strategy == BalancingStrategy.QUEUE_BASED:
+                    return self._select_queue_based()
 
-        Returns:
-            dict: Selected worker details or None if no workers available
-        """
-
-        if self.strategy == BalancingStrategy.ROUND_ROBIN:
-            return self._select_round_robin()
-        if self.strategy == BalancingStrategy.LEAST_LOADED:
-            return self._select_least_loaded()
+                return None
 
     def select_worker_with_affinity(
         self,
@@ -87,18 +80,6 @@ class LoadBalancer:
         return self.select_worker()
 
     def _select_round_robin(self) -> dict[str, Any] | None:
-        """
-        Round Robin Strategy: Distribute tasks in sequence
-
-        Distributes tasks evenly across all available workers in a circular fashion.
-        Good for evenly distributed workloads.
-
-        Thread-safe: uses a lock around the read-and-increment of round_robin_index
-        so concurrent calls cannot read the same index value before it is updated.
-
-        Returns:
-            dict: Next worker in rotation or None if no workers available
-        """
         available = self.worker_registry.get_available_workers()
 
         if not available:
