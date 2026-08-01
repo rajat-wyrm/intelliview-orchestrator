@@ -363,10 +363,9 @@ class StartInterviewRequest(BaseModel):
 
 
 class WorkerRegistrationRequest(BaseModel):
-    """Request model for worker registration"""
-
     worker_id: str
     capacity: int = 4
+    tags: list[str] | None = None
 
 
 class WorkerHeartbeatRequest(BaseModel):
@@ -1531,13 +1530,23 @@ async def register_worker(request: WorkerRegistrationRequest):
         dict: Registration confirmation
     """
     try:
-        logger.info(f"Registering worker: {request.worker_id} with capacity {request.capacity}")
+        logger.info(
+            f"Registering worker: {request.worker_id} "
+            f"with capacity {request.capacity}"
+        )
 
         # Register worker in registry
-        worker_registry.register_worker(worker_id=request.worker_id, capacity=request.capacity)
+        worker_registry.register_worker(
+            worker_id=request.worker_id,
+            capacity=request.capacity,
+            tags=request.tags,
+        )
 
         # Log successful registration
-        logger.info(f"Worker registered successfully: {request.worker_id}")
+        logger.info(
+            f"Worker registered successfully: {request.worker_id}"
+        )
+
         WORKERS_REGISTERED.inc()
         WORKERS_HEALTHY.inc()
 
@@ -1548,9 +1557,13 @@ async def register_worker(request: WorkerRegistrationRequest):
             "capacity": request.capacity,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
+
     except Exception as e:
         logger.error(f"Error registering worker: {e!s}")
-        raise HTTPException(status_code=500, detail=f"Error registering worker: {e!s}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error registering worker: {e!s}",
+        )
 
 
 @app.post("/worker/heartbeat", dependencies=[Depends(require_token)])
