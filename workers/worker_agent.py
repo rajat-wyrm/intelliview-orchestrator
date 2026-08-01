@@ -126,8 +126,7 @@ class WorkerAgent:
 
         self.draining = True
         logger.info(
-            "Worker %s ENTERING DRAIN MODE (%d task(s) still in progress) — "
-            "no new tasks will be accepted",
+            "Worker %s ENTERING DRAIN MODE (%d task(s) still in progress) — no new tasks will be accepted",
             self.worker_id,
             self.active_tasks,
         )
@@ -141,8 +140,7 @@ class WorkerAgent:
             return
         self._drain_complete = True
         logger.info(
-            "Worker %s FINISHED DRAINING — all in-progress tasks complete, "
-            "safe to shut down now",
+            "Worker %s FINISHED DRAINING — all in-progress tasks complete, safe to shut down now",
             self.worker_id,
         )
         self._stop = True
@@ -158,8 +156,7 @@ class WorkerAgent:
             self.enter_drain_mode()
         else:
             logger.warning(
-                "Received signal %s again while draining — forcing immediate "
-                "shutdown of worker %s",
+                "Received signal %s again while draining — forcing immediate shutdown of worker %s",
                 signum,
                 self.worker_id,
             )
