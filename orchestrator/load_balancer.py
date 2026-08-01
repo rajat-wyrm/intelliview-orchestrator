@@ -1,10 +1,4 @@
-"""
 
-Strategies:
-1. Round Robin - Distribute tasks evenly in sequence
-2. Least Loaded - Assign to worker with fewest active tasks (recommended)
-3. Queue-based - Fallback to Redis queue if no workers available
-"""
 
 import logging
 import threading
