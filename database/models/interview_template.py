@@ -1,4 +1,4 @@
-﻿"""InterviewTemplate ORM model."""
+"""InterviewTemplate ORM model."""
 
 from sqlalchemy import JSON, Column, DateTime, Float, Integer, String
 from sqlalchemy.orm import relationship

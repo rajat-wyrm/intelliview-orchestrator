@@ -1,4 +1,4 @@
-﻿"""Candidate ORM model."""
+"""Candidate ORM model."""
 
 from sqlalchemy import JSON, Column, DateTime, Float, Integer, String
 from sqlalchemy.orm import relationship

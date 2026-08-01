@@ -1,4 +1,4 @@
-﻿"""Question ORM model."""
+"""Question ORM model."""
 
 from sqlalchemy import JSON, Column, DateTime, Float, Integer, String
 

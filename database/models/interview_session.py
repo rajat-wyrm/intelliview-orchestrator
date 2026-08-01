@@ -1,4 +1,4 @@
-﻿"""InterviewSession ORM model."""
+"""InterviewSession ORM model."""
 
 from sqlalchemy import (
     JSON,
@@ -49,9 +49,7 @@ class InterviewSession(Base):
     )
 
     session_id = Column(String(255), primary_key=True, index=True, nullable=False)
-    candidate_id = Column(
-        String(255), ForeignKey("candidates.candidate_id"), nullable=False, index=True
-    )
+    candidate_id = Column(String(255), ForeignKey("candidates.candidate_id"), nullable=False, index=True)
     status = Column(String(50), nullable=False, default="pending", index=True)
     assigned_node = Column(String(255), nullable=True)
     start_time = Column(DateTime, nullable=True, default=utcnow)

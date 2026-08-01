@@ -1,4 +1,4 @@
-﻿"""
+"""
 SQLAlchemy ORM Models for AI Interview Orchestrator.
 Re-exports everything from the split model modules so existing imports
 like `from database.models import InterviewSession` keep working.

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Shared base utilities for SQLAlchemy ORM models.
 """
 
