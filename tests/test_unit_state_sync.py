@@ -3,6 +3,7 @@
 import base64
 import binascii
 import json
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -46,6 +47,24 @@ class FakeRedis:
     def sadd(self, key, value):
         self.sets.setdefault(key, set()).add(value)
         return 1
+
+    def delete(self, key):
+        self.values.pop(key, None)
+        return 1
+
+    def srem(self, key, value):
+        if key in self.sets:
+            self.sets[key].discard(value)
+        return 1
+
+    def smembers(self, key):
+        return self.sets.get(key, set())
+
+    def info(self):
+        return {
+            "used_memory_human": "1MB",
+            "connected_clients": 1,
+        }
 
 
 def test_small_session_payload_stays_plain_json():
@@ -228,3 +247,171 @@ def test_fault_manager_skips_corrupted_compressed_session_scans():
     fault_manager.redis_client = redis
 
     assert fault_manager._get_worker_tasks("worker-1") == ["good"]
+
+
+def test_delete_session_state_removes_cached_session():
+    redis = FakeRedis()
+    sync = StateSynchronizer.__new__(StateSynchronizer)
+    sync.redis_client = redis
+
+    session_data = {"session_id": "s1", "status": "QUEUED"}
+
+    sync.set_session_state("s1", session_data)
+
+    assert "session:s1" in redis.values
+    assert "s1" in redis.sets["active_sessions"]
+
+    assert sync.delete_session_state("s1") is True
+
+    assert "session:s1" not in redis.values
+    assert "s1" not in redis.sets["active_sessions"]
+
+
+def test_get_active_sessions_returns_all_active_session_ids():
+    redis = FakeRedis()
+    sync = StateSynchronizer.__new__(StateSynchronizer)
+    sync.redis_client = redis
+
+    sync.set_session_state("s1", {"session_id": "s1"})
+    sync.set_session_state("s2", {"session_id": "s2"})
+
+    active_sessions = sync.get_active_sessions()
+
+    assert set(active_sessions) == {"s1", "s2"}
+
+
+def test_clear_cache_removes_all_cached_sessions():
+    redis = FakeRedis()
+    sync = StateSynchronizer.__new__(StateSynchronizer)
+    sync.redis_client = redis
+
+    sync.set_session_state("s1", {"session_id": "s1"})
+    sync.set_session_state("s2", {"session_id": "s2"})
+
+    assert "session:s1" in redis.values
+    assert "session:s2" in redis.values
+
+    assert sync.clear_cache() is True
+
+    assert "session:s1" not in redis.values
+    assert "session:s2" not in redis.values
+    assert "active_sessions" not in redis.values
+
+
+def test_get_cache_stats_returns_expected_information():
+    redis = FakeRedis()
+    sync = StateSynchronizer.__new__(StateSynchronizer)
+    sync.redis_client = redis
+
+    sync.set_session_state("s1", {"session_id": "s1"})
+    sync.set_session_state("s2", {"session_id": "s2"})
+
+    stats = sync.get_cache_stats()
+
+    assert stats["status"] == "connected"
+    assert stats["active_sessions_count"] == 2
+    assert stats["redis_memory_used"] == "1MB"
+    assert stats["redis_connected_clients"] == 1
+
+
+def test_sync_state_to_db_updates_database():
+    interview = MagicMock()
+
+    db_session = MagicMock()
+    db_session.execute.return_value.scalar_one_or_none.return_value = interview
+
+    sync = StateSynchronizer.__new__(StateSynchronizer)
+
+    session_data = {
+        "status": "COMPLETED",
+        "risk_score": 7.5,
+        "video_analysis": {"score": 90},
+        "audio_analysis": {"score": 85},
+        "evaluation_analysis": {"overall": 88},
+    }
+
+    with patch("database.db.SessionLocal", return_value=db_session):
+        assert sync.sync_state_to_db("session-1", session_data) is True
+
+    assert interview.status == "COMPLETED"
+    assert interview.risk_score == 7.5
+    assert interview.video_analysis == {"score": 90}
+
+    assert interview.audio_analysis == {"score": 85}
+    assert interview.evaluation_analysis == {"overall": 88}
+
+    db_session.commit.assert_called_once()
+    db_session.close.assert_called_once()
+
+
+def test_delete_session_state_handles_redis_exception():
+    redis = MagicMock()
+    redis.delete.side_effect = Exception("Redis error")
+
+    sync = StateSynchronizer.__new__(StateSynchronizer)
+    sync.redis_client = redis
+
+    assert sync.delete_session_state("s1") is False
+
+
+def test_get_active_sessions_handles_redis_exception():
+    redis = MagicMock()
+    redis.smembers.side_effect = Exception("Redis error")
+
+    sync = StateSynchronizer.__new__(StateSynchronizer)
+    sync.redis_client = redis
+
+    assert sync.get_active_sessions() == []
+
+
+def test_get_cache_stats_handles_redis_exception():
+    redis = MagicMock()
+    redis.smembers.side_effect = Exception("Redis error")
+
+    sync = StateSynchronizer.__new__(StateSynchronizer)
+    sync.redis_client = redis
+
+    stats = sync.get_cache_stats()
+
+    assert stats["status"] == "error"
+
+
+def test_get_session_state_returns_none_when_redis_fails():
+    sync = StateSynchronizer.__new__(StateSynchronizer)
+
+    redis = MagicMock()
+    redis.get.side_effect = Exception("Redis error")
+
+    sync.redis_client = redis
+
+    assert sync.get_session_state("s1") is None
+
+
+def test_set_session_state_returns_false_when_redis_unavailable():
+    sync = StateSynchronizer.__new__(StateSynchronizer)
+    sync.redis_client = None
+
+    assert sync.set_session_state("s1", {"status": "QUEUED"}) is False
+
+
+def test_set_session_state_handles_redis_exception():
+    redis = MagicMock()
+    redis.set.side_effect = Exception("Redis error")
+
+    sync = StateSynchronizer.__new__(StateSynchronizer)
+    sync.redis_client = redis
+
+    assert sync.set_session_state("s1", {"status": "QUEUED"}) is False
+
+
+def test_sync_state_to_db_handles_database_exception():
+    db_session = MagicMock()
+    db_session.execute.side_effect = Exception("DB error")
+
+    sync = StateSynchronizer.__new__(StateSynchronizer)
+
+    with patch("database.db.SessionLocal", return_value=db_session):
+        assert sync.sync_state_to_db("session-1", {"status": "COMPLETED"}) is False
+
+    db_session.rollback.assert_called_once()
+    db_session.close.assert_called_once()

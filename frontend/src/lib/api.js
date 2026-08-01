@@ -16,7 +16,7 @@ class ApiClient {
   }
   headers(extra = {}) {
     const h = { "Content-Type": "application/json", ...extra };
-    if (this.token) h["X-API-Token"] = this.token;
+    if (this.token) h["Authorization"] = `Bearer $(this.token)`;
     return h;
   }
   async request(method, path, body, init) {

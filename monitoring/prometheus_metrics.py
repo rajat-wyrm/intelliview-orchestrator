@@ -196,6 +196,52 @@ REDIS_HEALTH = Gauge(
     registry=registry,
 )
 
+# ---------------------------------------------------------------------------
+# Redis memory and space metrics
+# ---------------------------------------------------------------------------
+
+# Current memory used by Redis (in bytes)
+REDIS_MEMORY_USED = Gauge(
+    "intelliview_redis_memory_used_bytes",
+    "Current Redis memory usage in bytes",
+    registry=registry,
+)
+
+# Peak memory used by Redis since startup (in bytes)
+REDIS_MEMORY_PEAK = Gauge(
+    "intelliview_redis_memory_peak_bytes",
+    "Peak Redis memory usage in bytes",
+    registry=registry,
+)
+
+# Maximum memory configured for Redis (in bytes)
+REDIS_MEMORY_MAX = Gauge(
+    "intelliview_redis_memory_max_bytes",
+    "Maximum Redis memory limit in bytes",
+    registry=registry,
+)
+
+# Percentage of Redis memory currently being used
+REDIS_MEMORY_USAGE_PERCENT = Gauge(
+    "intelliview_redis_memory_usage_percent",
+    "Percentage of Redis memory currently in use",
+    registry=registry,
+)
+
+# Space occupied by the Redis dataset (in bytes)
+REDIS_SPACE_USED = Gauge(
+    "intelliview_redis_space_used_bytes",
+    "Redis dataset space usage in bytes",
+    registry=registry,
+)
+
+# Memory fragmentation ratio
+REDIS_MEMORY_FRAGMENTATION = Gauge(
+    "intelliview_redis_memory_fragmentation_ratio",
+    "Redis memory fragmentation ratio",
+    registry=registry,
+)
+
 POSTGRES_HEALTH = Gauge(
     "intelliview_postgres_health",
     "Postgres health (1=healthy, 0=unhealthy)",

@@ -124,15 +124,14 @@ export default function CandidatesPage() {
         </div>
       </div>
 
-      <StatsCards
-        data={{
-          totalCandidates: candidates.length,
-          pendingReview: candidates.reduce((a, c) => a + c.active_sessions, 0),
-          completed: candidates.reduce((a, c) => a + c.completed_sessions, 0),
-          activeNow: candidates.filter((c) => c.active_sessions > 0).length,
-        }}
-      />
-
+ <StatsCards
+  data={{
+    totalCandidates: candidates.length,
+    pendingReview: candidates.reduce((a, c) => a + c.active_sessions, 0),
+    completed: candidates.reduce((a, c) => a + c.completed_sessions, 0),
+    activeNow: candidates.filter((c) => c.active_sessions > 0).length,
+  }}
+/>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-1">
           <Card

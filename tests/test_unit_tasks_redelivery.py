@@ -83,6 +83,14 @@ def test_stale_active_session_is_recovered():
     long_ago = datetime.now(timezone.utc) - timedelta(hours=2)
     interview = _make_interview(tasks.session_manager.VIDEO_PROCESSING, long_ago)
     db_session = _wire_db_session(interview)
+    fake_result = _FakeGroupResult({"video": "ok"}, {"audio": "ok"})
+
+    with (
+        patch.object(tasks, "SessionLocal", return_value=db_session),
+        patch.object(tasks, "group") as fake_group,
+        patch.object(tasks, "_after_parallel") as fake_after_parallel,
+    ):
+        fake_group.return_value.apply_async.return_value = fake_result
 
     with (
         patch.object(tasks, "SessionLocal", return_value=db_session),
@@ -102,6 +110,14 @@ def test_stale_active_session_is_recovered():
 def test_fresh_queued_session_dispatches_normally():
     interview = _make_interview("QUEUED", None)
     db_session = _wire_db_session(interview)
+    fake_result = _FakeGroupResult({"video": "ok"}, {"audio": "ok"})
+
+    with (
+        patch.object(tasks, "SessionLocal", return_value=db_session),
+        patch.object(tasks, "group") as fake_group,
+        patch.object(tasks, "_after_parallel") as fake_after_parallel,
+    ):
+        fake_group.return_value.apply_async.return_value = fake_result
 
     with (
         patch.object(tasks, "SessionLocal", return_value=db_session),

@@ -82,11 +82,13 @@ def main() -> int:
     def _on_postrun(**_):
         agent.decrement_active()
 
-    # Start heartbeat thread
-    threading.Thread(
-        target=agent.heartbeat_loop,
-        daemon=True,
-    ).start()
+    # Start the heartbeat loop managed by WorkerAgent
+    threading.Thread(target=agent.heartbeat_loop, daemon=True).start()
+
+    @worker_shutdown.connect
+    def _on_worker_shutdown(**kwargs):
+        logger.info("Shutting down worker")
+        agent.deregister()
 
     logger.info("Worker entrypoint ready; starting Celery")
 
