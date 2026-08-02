@@ -218,16 +218,16 @@ class WorkerRegistry:
         tags: list[str] | None = None,
     ) -> bool:
         """
-        Register a new worker node
+    Register a new worker node.
 
-        Args:
-            worker_id: Unique worker identifier
-            capacity: Maximum concurrent tasks this worker can handle
-            tags: Optional worker capability tags   
+    Args:
+        worker_id: Unique worker identifier.
+        capacity: Maximum concurrent tasks this worker can handle.
+        tags: Optional worker capability tags.
 
-        Returns:
-            bool: True if successful
-        """
+    Returns:
+        bool: True if successful.
+    """
         try:
             worker_data = {
                 "worker_id": worker_id,
