@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import socket
+import time
 from datetime import datetime, timezone
 
 from celery import chord, group
@@ -59,6 +60,15 @@ ACTIVE_PROCESSING_STATUSES = {
 }
 
 
+def _resolve_priority_queue(priority: str | None) -> str:
+    """Map a priority string ("high"/"medium"/"low") to its queue name.
+    Anything unrecognized (typo, None) falls back to medium."""
+    priority_clean = str(priority).strip().lower() if priority else "medium"
+    if priority_clean not in ("high", "medium", "low"):
+        priority_clean = "medium"
+    return priority_clean, f"{priority_clean}_priority"
+
+
 # ---------------------------------------------------------------------------
 # Helper to set background infrastructure health states
 # ---------------------------------------------------------------------------
@@ -79,18 +89,44 @@ def _update_infra_health(healthy: bool = True):
 
 @celery_app.task(bind=True, max_retries=3, name="workers.tasks._run_video")
 def _run_video(self, session_id: str) -> dict:
-    """Video analysis stage."""
     from workers.video_pipeline import run_video_analysis
 
-    return run_video_analysis(session_id)
+    logger.info("Starting video analysis stage for session %s", session_id)
+    start = time.perf_counter()
+
+    # Dynamic health check update
+    _update_infra_health(True)
+
+    # Call the correct imported function
+    video_result = run_video_analysis(session_id)
+
+    # Observe pipeline stage latency
+    latency = time.perf_counter() - start
+    PIPELINE_LATENCY.labels(stage="video").observe(latency)
+    logger.info("Video analysis stage completed in %.2fs", latency)
+
+    return video_result
 
 
 @celery_app.task(bind=True, max_retries=3, name="workers.tasks._run_audio")
 def _run_audio(self, session_id: str) -> dict:
-    """Audio analysis stage."""
     from workers.audio_pipeline import run_audio_analysis
 
-    return run_audio_analysis(session_id)
+    logger.info("Starting audio analysis stage for session %s", session_id)
+    start = time.perf_counter()
+
+    # Dynamic health check update
+    _update_infra_health(True)
+
+    # Call the correct imported function
+    audio_result = run_audio_analysis(session_id)
+
+    # Observe pipeline stage latency
+    latency = time.perf_counter() - start
+    PIPELINE_LATENCY.labels(stage="audio").observe(latency)
+    logger.info("Audio analysis stage completed in %.2fs", latency)
+
+    return audio_result
 
 
 # ---------------------------------------------------------------------------
@@ -109,15 +145,21 @@ def _after_parallel(self, results: list, session_id: str):
     try:
         video_result, audio_result = results  # unpack chord group results
         logger.info("Parallel video+audio done for %s - running evaluation", session_id)
-
         session_manager.update_session_status(session_id, session_manager.EVALUATING, {"stage": "evaluation"})
+
+        start = time.perf_counter()
         evaluation_result = evaluate_answers(session_id)
-        logger.info("Answer evaluation completed for session %s", session_id)
+
+        latency = time.perf_counter() - start
+        PIPELINE_LATENCY.labels(stage="evaluation").observe(latency)
+        logger.info("Answer evaluation completed for session %s in %.2fs", session_id, latency)
 
         risk_report = RiskScoringEngine.generate_risk_report(
             session_id, video_result, audio_result, evaluation_result
         )
         final_risk_score = risk_report["final_risk_score"]
+        RISK_SCORE.observe(final_risk_score)
+
         risk_classification = risk_report["risk_classification"]
         logger.info("Risk report: %s (score: %s)", risk_classification, final_risk_score)
 
@@ -140,10 +182,11 @@ def _after_parallel(self, results: list, session_id: str):
 
         session_manager.mark_session_completed(session_id, final_risk_score)
         state_sync.delete_session_state(session_id)
-
         logger.info("Successfully completed processing for session %s", session_id)
+
     except Exception as exc:
         logger.error("Post-parallel stage failed for %s: %s", session_id, exc, exc_info=True)
+        FAILURE_COUNT.labels(failure_type="post_parallel_error").inc()
         session_manager.mark_session_failed(session_id, f"Post-parallel stage failed: {exc}")
 
 
@@ -155,12 +198,9 @@ def _after_parallel(self, results: list, session_id: str):
 @celery_app.task(bind=True, max_retries=3, name="workers.tasks.process_interview_session")
 def process_interview_session(self, session_id: str, priority: str = "medium"):
     logger.info("Session = %s | Priority = %s", session_id, priority)
-    
+
     # Determine priority queue for downstream child tasks
-    priority_clean = str(priority).lower() if priority else "medium"
-    if priority_clean not in ("high", "medium", "low"):
-        priority_clean = "medium"
-    target_queue = f"{priority_clean}_priority"
+    priority_clean, target_queue = _resolve_priority_queue(priority)
 
     task_name = self.name
     start_time = time.perf_counter()
@@ -172,6 +212,7 @@ def process_interview_session(self, session_id: str, priority: str = "medium"):
     _update_infra_health(True)
 
     try:
+        worker_hostname = socket.gethostname()
         logger.info("Worker %s starting interview session: %s", worker_hostname, session_id)
 
         db_session = SessionLocal()
@@ -182,9 +223,48 @@ def process_interview_session(self, session_id: str, priority: str = "medium"):
             if interview is None:
                 logger.error("Session %s not found in DB", session_id)
                 return {"session_id": session_id, "status": "missing"}
+
             if interview.status == "FAILED":
                 interview.status = "QUEUED"
                 db_session.commit()
+
+            elif interview.status in ACTIVE_PROCESSING_STATUSES:
+                # Possible redelivery: figure out if the previous attempt
+                # is still alive (skip) or dead past task_time_limit (recover).
+                existing_start = interview.start_time
+                age_seconds = None
+                if existing_start is not None:
+                    if existing_start.tzinfo is None:
+                        existing_start = existing_start.replace(tzinfo=timezone.utc)
+                    age_seconds = (datetime.now(timezone.utc) - existing_start).total_seconds()
+
+                if age_seconds is not None and age_seconds < REDELIVERY_STALE_AFTER_SECONDS:
+                    logger.warning(
+                        "Session %s is already %s (started %.0fs ago). Treating "
+                        "this delivery of task %s on worker %s as a redelivered "
+                        "duplicate - skipping re-dispatch of the video/audio group.",
+                        session_id,
+                        interview.status,
+                        age_seconds,
+                        self.request.id,
+                        worker_hostname,
+                    )
+                    return {
+                        "session_id": session_id,
+                        "status": "skipped_duplicate_delivery",
+                        "reason": f"session already {interview.status}, started {age_seconds:.0f}s ago",
+                        "processed_by": worker_hostname,
+                    }
+
+                logger.warning(
+                    "Session %s stuck in %s with no live heartbeat (age=%s) - "
+                    "previous attempt appears abandoned/crashed. Recovering by "
+                    "reprocessing on worker %s.",
+                    session_id,
+                    interview.status,
+                    age_seconds,
+                    worker_hostname,
+                )
         finally:
             db_session.close()
 
@@ -204,7 +284,7 @@ def process_interview_session(self, session_id: str, priority: str = "medium"):
         finally:
             db_session.close()
 
-        # Parallel: video + audio via Celery group
+        # Parallel execution group
         session_manager.update_session_status(
             session_id, session_manager.VIDEO_PROCESSING, {"stage": "parallel_video_audio"}
         )
@@ -221,6 +301,14 @@ def process_interview_session(self, session_id: str, priority: str = "medium"):
 
         logger.info("Dispatched parallel video+audio for session %s on queue %s", session_id, target_queue)
 
+        # Record total runtime metrics
+        runtime = time.perf_counter() - start_time
+        CELERY_TASK_RUNTIME.labels(task_name=task_name).observe(runtime)
+
+        # 🌟 Target custom metric incremented upon successful completion
+        CELERY_TASKS_PROCESSED_TOTAL.labels(task="process_interview_session").inc()
+        logger.info("Incremented processed metric for %s", task_name)
+
         return {
             "session_id": session_id,
             "status": "processing_parallel",
@@ -230,6 +318,10 @@ def process_interview_session(self, session_id: str, priority: str = "medium"):
 
     except Exception as exc:
         retry_delay = 2 ** (self.request.retries + 1)
+
+        # 🌟 Increments total failure counters explicitly
+        FAILURE_COUNT.labels(failure_type="celery_task_error").inc()
+
         logger.warning(
             "Task for session %s failed (attempt %d/3), retrying in %ds: %s",
             session_id,
@@ -238,7 +330,17 @@ def process_interview_session(self, session_id: str, priority: str = "medium"):
             exc,
             exc_info=True,
         )
-        raise self.retry(exc=exc, countdown=retry_delay)
+        RETRY_COUNT.inc()
+        # Retry on the same priority queue - otherwise a retried
+        # high-priority session silently falls back to task_default_queue.
+        raise self.retry(exc=exc, countdown=retry_delay, queue=target_queue)
+
+    finally:
+        # Decouple the active gauge count
+        CELERY_ACTIVE_TASKS.labels(task_name=task_name).dec()
+
+        # 🌟 Explicitly clear backlog gauge to show 0 execution depth remaining
+        QUEUE_DEPTH.set(0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -250,10 +352,9 @@ def process_interview_session(self, session_id: str, priority: str = "medium"):
 def scan_and_dispatch_retries():
     """Scan Redis for retry entries whose ``retry_after`` timestamp has
     passed and re-dispatch the corresponding session through the normal
-    scheduling path.  Runs every 60 s via Celery Beat.
+    scheduling path. Runs every 60 s via Celery Beat.
     """
     redis_client = get_redis_client()
-
     retry_scheduled_prefix = "retry_scheduled:"
 
     try:
@@ -281,14 +382,12 @@ def scan_and_dispatch_retries():
                     if not session_id:
                         continue
 
-                    # Dispatch via the normal scheduling path
                     from orchestrator.scheduler import Scheduler, TaskPriority
 
                     scheduler = Scheduler()
                     scheduler.schedule_task(session_id, priority=TaskPriority.MEDIUM)
                     dispatched += 1
 
-                    # Clean up the scheduled key
                     redis_client.delete(key)
                     logger.info("Dispatched retry for session %s", session_id)
 

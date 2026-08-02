@@ -13,7 +13,6 @@ from config import REDIS_URL
 
 celery_app = Celery("interview_tasks", broker=REDIS_URL, backend=REDIS_URL)
 CeleryInstrumentor().instrument()
-
 celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
@@ -21,6 +20,8 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     task_track_started=True,
+    worker_send_task_events=True,
+    task_send_sent_event=True,
     task_time_limit=30 * 60,  # 30 minutes hard limit
     task_soft_time_limit=25 * 60,  # 25 minutes soft limit
     task_acks_late=True,  # re-deliver if worker dies mid-task
@@ -28,13 +29,23 @@ celery_app.conf.update(
     # Long-running interview tasks should reserve only one task at a time
     worker_prefetch_multiplier=1,
     broker_connection_retry_on_startup=True,
-    # Priority queues setup for Issue 4
+    # Priority queues setup for Issue 4. Each queue needs its own explicit
+    # routing_key - otherwise Celery falls back to task_default_routing_key
+    # (= task_default_queue) for *all* queues, and they silently collapse
+    # onto a single binding: messages route correctly by name, but a
+    # worker listening on e.g. "high_priority" never actually consumes
+    # them because its binding key doesn't match what got published.
     task_default_queue="medium_priority",
     task_queues=(
-        Queue("high_priority"),
-        Queue("medium_priority"),
-        Queue("low_priority"),
+        Queue("high_priority", routing_key="high_priority"),
+        Queue("medium_priority", routing_key="medium_priority"),
+        Queue("low_priority", routing_key="low_priority"),
     ),
+    # Beat's own periodic scanner is routine housekeeping, not a session
+    # task - keep it off the priority lanes.
+    task_routes={
+        "workers.tasks.scan_and_dispatch_retries": {"queue": "low_priority"},
+    },
     # Periodic beat schedule — scan for due retries every 60 seconds
     beat_schedule={
         "scan-due-retries": {
@@ -46,6 +57,17 @@ celery_app.conf.update(
 
 # Auto-discover tasks from workers module
 celery_app.autodiscover_tasks(["workers"])
+
+
+# Worker allocation:
+#   celery -A workers.celery_app worker -Q high_priority   -c 4 -n high@%h
+#   celery -A workers.celery_app worker -Q medium_priority -c 3 -n medium@%h
+#   celery -A workers.celery_app worker -Q low_priority    -c 1 -n low@%h
+#
+# high: 4 workers, dedicated - urgent sessions must be picked up within
+#   seconds regardless of load elsewhere.
+# medium: 3 workers - default queue, carries the bulk of normal traffic.
+# low: 1 worker - background/non-urgent work, a few minutes of delay is fine.
 
 
 _SESSION_TASK_NAMES: frozenset[str] = frozenset(
@@ -80,18 +102,29 @@ def _extract_session_id(args: tuple, kwargs: dict) -> str | None:
 
 
 @signals.task_failure.connect
-def _on_task_failure(task_id, exception, args, kwargs, traceback, einfo, **_extra):
-    """When a task fails permanently (retries exhausted), mark the
-    session as FAILED so the dashboard reflects reality.
+def _on_task_failure(sender, task_id, exception, args, kwargs, traceback, einfo, **_extra):
+    """When a session-aware task fails permanently (retries exhausted), mark
+    the session as FAILED so the dashboard reflects reality.
 
-    `args[0]` is the session_id passed to `process_interview_session`.
+    The handler is scoped to :data:`_SESSION_TASK_NAMES` so that unrelated
+    periodic tasks (e.g. ``scan_and_dispatch_retries``) do not trigger a
+    spurious DB write.
+
+    ``session_id`` is resolved from *either* positional or keyword arguments
+    via :func:`_extract_session_id` so the handler is safe regardless of how
+    the task was dispatched.
+
     Imported lazily so importing this module doesn't pull in the DB stack
     before the worker process is ready.
     """
+    task_name: str = getattr(sender, "name", "") or ""
+    if task_name not in _SESSION_TASK_NAMES:
+        return
+
     try:
         from orchestrator.session_manager import SessionManager
 
-        session_id = args[0] if args else None
+        session_id = _extract_session_id(args, kwargs)
         if not session_id:
             return
         SessionManager().mark_session_failed(
