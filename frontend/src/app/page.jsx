@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/Badge";
 import { Skeleton, ErrorState, EmptyState } from "@/components/States";
 import Sparkline from "@/components/Sparkline";
 import { formatPercent, formatRelative } from "@/lib/utils";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const MAX_SAMPLES = 20;
 
@@ -46,7 +47,8 @@ export default function OverviewPage() {
   }, [workers.data?.workers]);
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <ErrorBoundary>
+      <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-zinc-50">Overview</h1>
@@ -211,6 +213,7 @@ export default function OverviewPage() {
           </div>
         )}
       </Card>
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }
