@@ -2,6 +2,10 @@
 Unit tests for the LoadBalancer selection strategies.
 """
 
+import threading
+import time
+from collections import Counter
+
 from orchestrator.load_balancer import BalancingStrategy, LoadBalancer
 
 
@@ -68,3 +72,69 @@ def test_full_capacity_workers_excluded():
     lb = LoadBalancer()
     lb.worker_registry = FakeRegistry(workers)
     assert lb.select_worker()["worker_id"] in {"w3"}
+
+
+def test_switch_strategy_during_selection():
+    lb = LoadBalancer(strategy=BalancingStrategy.LEAST_LOADED)
+    lb.worker_registry = FakeRegistry(_make_workers())
+
+    errors = []
+
+    def select():
+        try:
+            for _ in range(100):
+                lb.select_worker()
+                time.sleep(0.001)
+        except Exception as exc:
+            errors.append(exc)
+
+    def switch():
+        try:
+            for _ in range(100):
+                lb.switch_strategy(BalancingStrategy.ROUND_ROBIN)
+                lb.switch_strategy(BalancingStrategy.LEAST_LOADED)
+                time.sleep(0.001)
+        except Exception as exc:
+            errors.append(exc)
+
+    t1 = threading.Thread(target=select)
+    t2 = threading.Thread(target=switch)
+
+    t1.start()
+    t2.start()
+
+    t1.join()
+    t2.join()
+
+    assert not errors, f"Unexpected exceptions: {errors}"
+
+
+def test_round_robin_thread_safety():
+    """
+    Simulates many concurrent calls to select_worker() under ROUND_ROBIN
+    strategy and confirms tasks are distributed evenly with no lost or
+    duplicate increments, proving the round_robin_index update is atomic.
+    """
+    workers = _make_workers()
+    lb = LoadBalancer(strategy=BalancingStrategy.ROUND_ROBIN)
+    lb.worker_registry = FakeRegistry(workers)
+
+    results = []
+    results_lock = threading.Lock()
+
+    def call_select_worker():
+        worker = lb.select_worker()
+        with results_lock:
+            results.append(worker["worker_id"])
+
+    threads = [threading.Thread(target=call_select_worker) for _ in range(90)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    counts = Counter(results)
+    assert len(results) == 90
+    assert lb.round_robin_index == 90
+    for worker in workers:
+        assert counts[worker["worker_id"]] == 30

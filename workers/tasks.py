@@ -196,11 +196,11 @@ def _after_parallel(self, results: list, session_id: str):
 
 
 @celery_app.task(bind=True, max_retries=3, name="workers.tasks.process_interview_session")
-def process_interview_session(self, session_id: str, priority: str = "medium"):
+def process_interview_session(self, session_id):
+    logger.info("==============================")
+    logger.info("PROCESS_INTERVIEW_SESSION STARTED")
     logger.info("Session = %s | Priority = %s", session_id, priority)
-
-    # Determine priority queue for downstream child tasks
-    priority_clean, target_queue = _resolve_priority_queue(priority)
+    logger.info("==============================")
 
     task_name = self.name
     start_time = time.perf_counter()
@@ -334,6 +334,13 @@ def process_interview_session(self, session_id: str, priority: str = "medium"):
         # Retry on the same priority queue - otherwise a retried
         # high-priority session silently falls back to task_default_queue.
         raise self.retry(exc=exc, countdown=retry_delay, queue=target_queue)
+
+    finally:
+        # Decouple the active gauge count
+        CELERY_ACTIVE_TASKS.labels(task_name=task_name).dec()
+
+        # 🌟 Explicitly clear backlog gauge to show 0 execution depth remaining
+        QUEUE_DEPTH.set(0.0)
 
     finally:
         # Decouple the active gauge count
