@@ -6,8 +6,8 @@ from orchestrator.load_balancer import BalancingStrategy, LoadBalancer
 
 
 class FakeRegistry:
-    def __init__(self, workers, utilization=0):
-        self._workers = workers
+    def __init__(self, workers=None, utilization=0):
+        self._workers = workers if workers is not None else []
         self._utilization = utilization
 
     def get_available_workers(self):
@@ -107,6 +107,7 @@ def test_switch_strategy_during_selection():
 
 
 def test_round_robin_thread_safety():
+
     workers = _make_workers()
     lb = LoadBalancer(strategy=BalancingStrategy.ROUND_ROBIN)
     lb.worker_registry = FakeRegistry(workers)
@@ -132,31 +133,34 @@ def test_round_robin_thread_safety():
         assert counts[worker["worker_id"]] == 30
 
 
+
+
 def test_scaling_awaits_full_window_history():
+    """Verifies no recommendation is given until history matches window size."""
     lb = LoadBalancer(window_size=3)
     lb.worker_registry = FakeRegistry([], utilization=95.0)
-    
+
     lb.record_current_load()
     lb.record_current_load()
-    
+
     assert lb.get_scaling_recommendation() == "no_change"
 
 
 def test_sustained_heavy_load_triggers_scale_up():
     lb = LoadBalancer(window_size=3)
     lb.worker_registry = FakeRegistry([], utilization=90.0)
-    
+
     for _ in range(3):
         lb.record_current_load()
-        
+
     assert lb.get_scaling_recommendation(up_threshold=0.85) == "scale_up"
 
 
 def test_sustained_idle_load_triggers_scale_down():
     lb = LoadBalancer(window_size=3)
     lb.worker_registry = FakeRegistry([], utilization=20.0)
-    
+
     for _ in range(3):
         lb.record_current_load()
-        
+
     assert lb.get_scaling_recommendation(down_threshold=0.30) == "scale_down"
