@@ -15,13 +15,19 @@ HIGH/CRITICAL thresholds fire correctly without GPU dependencies.
 
 import logging
 import os
+import shutil
+import tempfile
 import time
+from pathlib import Path
 from typing import Any, TypedDict
 
 from workers._stubs import _seeded_unit
 
 logger = logging.getLogger(__name__)
 AUDIO_TEMP_DIR = os.getenv("AUDIO_TEMP_DIR", "/tmp")
+
+
+CHUNK_DURATION_MS = 5000
 
 
 # ---------------------------------------------------------------------------
@@ -58,9 +64,37 @@ class AudioAnalysisResult(TypedDict):
     risk_score: float
 
 
+def split_audio_into_chunks(
+    audio_path: str,
+    chunk_duration_ms: int = CHUNK_DURATION_MS,
+) -> tuple[list[str], str]:
+    """
+    Split an audio file into fixed-size chunks.
+    Returns chunk file paths and the temporary directory.
+    """
+    from pydub import AudioSegment
+
+    audio = AudioSegment.from_file(audio_path)
+
+    chunk_temp_dir = tempfile.mkdtemp(prefix="audio_chunks_")
+
+    chunk_paths = []
+
+    for i, start in enumerate(range(0, len(audio), chunk_duration_ms)):
+        chunk = audio[start : start + chunk_duration_ms]
+
+        chunk_path = Path(chunk_temp_dir) / f"chunk_{i}.wav"
+
+        chunk.export(chunk_path, format="wav")
+
+        chunk_paths.append(str(chunk_path))
+
+    return chunk_paths, chunk_temp_dir
+
+
 def _real_transcribe(session_id: str, audio_url: str | None = None) -> dict[str, Any] | None:
     """Transcribe audio using local Whisper model."""
-    import tempfile
+
     import urllib.request
 
     try:
@@ -90,8 +124,31 @@ def _real_transcribe(session_id: str, audio_url: str | None = None) -> dict[str,
                 )
                 return None
 
-            result = transcribe_audio_file(audio_path)
-            segments = result.get("segments", [])
+            chunk_paths, chunk_dir = split_audio_into_chunks(audio_path)
+
+            partial_results = []
+
+            try:
+                for chunk_path in chunk_paths:
+                    chunk_result = transcribe_audio_file(chunk_path)
+                    if chunk_result is not None:
+                        partial_results.append(chunk_result)
+
+            finally:
+                shutil.rmtree(chunk_dir, ignore_errors=True)
+
+            if not partial_results:
+                return None
+
+            texts = [item.get("text", "").strip() for item in partial_results if item.get("text", "").strip()]
+
+            segments = [segment for item in partial_results for segment in item.get("segments", [])]
+
+            result = {
+                "text": " ".join(texts),
+                "language": partial_results[-1].get("language", "en"),
+                "segments": segments,
+            }
 
             if segments:
                 avg_logprob = np.mean([s.get("avg_logprob", -1.0) for s in segments])

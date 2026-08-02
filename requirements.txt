@@ -42,3 +42,6 @@ opentelemetry-exporter-otlp
 python-jose[cryptography]
 passlib[bcrypt]
 python-multipart
+
+# === AI / Audio ===
+pydub==0.25.1
