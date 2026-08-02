@@ -282,9 +282,30 @@ class RiskScoringEngine:
         }
         return recommendations.get(risk_classification, "Review interview manually.")
 
+    @staticmethod
+    def _generate_explanation(
+        risk_classification: str,
+        risk_factors: list[str],
+    ) -> str:
+        """Generate a human-readable explanation for the final risk score."""
 
+        if not risk_factors:
+            return "Low risk with no significant suspicious activity detected."
 
-        
+        factors = ", ".join(risk_factors[:2])
+
+        explanations = {
+            "LOW": f"Low risk with minor indicators: {factors}.",
+            "MEDIUM": f"Medium risk because of {factors}.",
+            "HIGH": f"High risk due to {factors}.",
+            "CRITICAL": f"Critical risk due to {factors}. Immediate review recommended.",
+        }
+
+        return explanations.get(
+            risk_classification,
+            f"Risk detected because of {factors}.",
+        )
+    
 class RiskDecisionTree:
     """
     Decision tree for interview risk classification.

@@ -46,7 +46,6 @@ def test_video_risk_clean_signals_is_zero():
     )
     assert risk == 0.0
 
-
 def test_audio_risk_background_voices_increases_risk():
     base = RiskScoringEngine.calculate_audio_risk({"transcription": {"text": "ok"}})
     with_bg = RiskScoringEngine.calculate_audio_risk(
@@ -92,4 +91,5 @@ def test_generate_risk_report_shape():
     assert report["risk_classification"] in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
     assert "component_risks" in report
     assert "risk_factors" in report
+    assert "explanation" in report
     assert "recommendation" in report
