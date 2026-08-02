@@ -6,14 +6,13 @@ FAILED only after Celery has exhausted its retries.
 """
 
 from celery import Celery, signals
+from kombu import Queue
 from opentelemetry.instrumentation.celery import CeleryInstrumentor
 
 from config import REDIS_URL
 
 celery_app = Celery("interview_tasks", broker=REDIS_URL, backend=REDIS_URL)
 CeleryInstrumentor().instrument()
-
-
 celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
@@ -30,6 +29,23 @@ celery_app.conf.update(
     # Long-running interview tasks should reserve only one task at a time
     worker_prefetch_multiplier=1,
     broker_connection_retry_on_startup=True,
+    # Priority queues setup for Issue 4. Each queue needs its own explicit
+    # routing_key - otherwise Celery falls back to task_default_routing_key
+    # (= task_default_queue) for *all* queues, and they silently collapse
+    # onto a single binding: messages route correctly by name, but a
+    # worker listening on e.g. "high_priority" never actually consumes
+    # them because its binding key doesn't match what got published.
+    task_default_queue="medium_priority",
+    task_queues=(
+        Queue("high_priority", routing_key="high_priority"),
+        Queue("medium_priority", routing_key="medium_priority"),
+        Queue("low_priority", routing_key="low_priority"),
+    ),
+    # Beat's own periodic scanner is routine housekeeping, not a session
+    # task - keep it off the priority lanes.
+    task_routes={
+        "workers.tasks.scan_and_dispatch_retries": {"queue": "low_priority"},
+    },
     # Periodic beat schedule — scan for due retries every 60 seconds
     beat_schedule={
         "scan-due-retries": {
@@ -41,6 +57,17 @@ celery_app.conf.update(
 
 # Auto-discover tasks from workers module
 celery_app.autodiscover_tasks(["workers"])
+
+
+# Worker allocation:
+#   celery -A workers.celery_app worker -Q high_priority   -c 4 -n high@%h
+#   celery -A workers.celery_app worker -Q medium_priority -c 3 -n medium@%h
+#   celery -A workers.celery_app worker -Q low_priority    -c 1 -n low@%h
+#
+# high: 4 workers, dedicated - urgent sessions must be picked up within
+#   seconds regardless of load elsewhere.
+# medium: 3 workers - default queue, carries the bulk of normal traffic.
+# low: 1 worker - background/non-urgent work, a few minutes of delay is fine.
 
 
 _SESSION_TASK_NAMES: frozenset[str] = frozenset(
@@ -61,8 +88,8 @@ def _extract_session_id(args: tuple, kwargs: dict) -> str | None:
 
     Callers may invoke a task in any of the following equivalent ways::
 
-        task.delay("abc-123")               # positional  → args[0]
-        task.delay(session_id="abc-123")    # keyword     → kwargs["session_id"]
+        task.delay("abc-123")                # positional  → args[0]
+        task.delay(session_id="abc-123")    # keyword      → kwargs["session_id"]
         task.apply_async(args=["abc-123"])  # positional  → args[0]
         task.apply_async(kwargs={"session_id": "abc-123"})  # keyword
 
