@@ -70,7 +70,7 @@ def _real_transcribe(
     """Transcribe audio using local Whisper model."""
     import tempfile
     import urllib.request
-
+a
     vad_ran = False
     vad_segments = []
 
@@ -105,8 +105,8 @@ def _real_transcribe(
             result = transcribe_audio_file(audio_path)
             if not result:
                 return None
-
-            res_dict = {
+                
+                res_dict = {
                 "text": result.get("text", ""),
                 "confidence": result.get("confidence", 0.0),
                 "language": result.get("language", "en"),
@@ -115,6 +115,7 @@ def _real_transcribe(
             }
             if vad_ran or vad_config is not None:
                 res_dict["vad_executed"] = True
+                res_dict["speech_detected"] = bool(result.get("text"))
                 res_dict["vad_segments"] = vad_segments
             return res_dict
         finally:
@@ -281,11 +282,7 @@ def run_audio_analysis(session_id: str) -> AudioAnalysisResult:
     return results
 
 
-def transcribe_speech(
-    session_id: str,
-    audio_url: str | None = None,
-    vad_config: Any | None = None,
-) -> dict[str, Any]:
+def transcribe_speech(session_id: str,audio_url: str | None = None,vad_config: Any | None = None,) -> dict[str, Any]:
     """Convert speech to text — real Whisper with seeded stub fallback."""
     logger.info(f"Transcribing audio for session {session_id}")
 
@@ -312,8 +309,10 @@ def transcribe_speech(
 
     if vad_config is not None:
         stub_res["vad_executed"] = True
+        stub_res["speech_detected"] = bool(text)
 
     return stub_res
+
 
 
 def detect_background_voices(session_id: str) -> dict[str, Any]:
