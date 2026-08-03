@@ -16,7 +16,6 @@ class _CsvList(list):
     """Marker type that prevents pydantic-settings from JSON-parsing."""
 
 
-
 class Settings(BaseSettings):
     """Application configuration loaded from the environment."""
 
@@ -44,6 +43,10 @@ class Settings(BaseSettings):
 
     # --- API / Security ---
     api_token: str = "dev-token-change-me"
+    jwt_secret_key: str = "change-this-to-a-long-random-secret-key"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 30
+    jwt_refresh_token_expire_days: int = 7
     cors_allow_origins_raw: str = Field(default="*", alias="cors_allow_origins")
 
     # --- Request validation ---
@@ -79,21 +82,15 @@ class Settings(BaseSettings):
     @classmethod
     def validate_required_database_fields(cls, value: str) -> str:
         if not value or not value.strip():
-            raise ValueError(
-                "Database configuration values cannot be empty"
-            )
+            raise ValueError("Database configuration values cannot be empty")
         return value
-
 
     @field_validator("postgres_port")
     @classmethod
     def validate_database_port(cls, value: int) -> int:
         if value <= 0 or value > 65535:
-            raise ValueError(
-                "PostgreSQL port must be between 1 and 65535"
-            )
+            raise ValueError("PostgreSQL port must be between 1 and 65535")
         return value
-
 
     @field_validator("database_sslmode")
     @classmethod
@@ -108,9 +105,7 @@ class Settings(BaseSettings):
         }
 
         if value not in allowed_modes:
-            raise ValueError(
-                f"Invalid database SSL mode: {value}"
-            )
+            raise ValueError(f"Invalid database SSL mode: {value}")
 
         return value
 
@@ -158,6 +153,11 @@ REDIS_URL = settings.redis_url
 DATABASE_URL = settings.resolved_database_url
 WORKER_CONCURRENCY = settings.worker_concurrency
 API_TOKEN = settings.api_token
+JWT_SECRET_KEY = settings.jwt_secret_key
+JWT_ALGORITHM = settings.jwt_algorithm
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES = settings.jwt_access_token_expire_minutes
+JWT_REFRESH_TOKEN_EXPIRE_DAYS = settings.jwt_refresh_token_expire_days
+
 CORS_ALLOW_ORIGINS = ",".join(settings.cors_allow_origins)
 MAX_REQUEST_BODY_BYTES = settings.max_request_body_bytes
 ENABLE_PROMETHEUS = settings.enable_prometheus

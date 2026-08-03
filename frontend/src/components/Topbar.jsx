@@ -15,21 +15,9 @@ function Topbar() {
   const setMobile = useUIStore((s) => s.setMobileSidebar);
   const [draft, setDraft] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
   useEffect(() => {
     setDraft(token || "");
   }, [token]);
-  useEffect(() => {
-    const onPalette = () => setPaletteOpen(true);
-    const onHelp = () => setHelpOpen(true);
-    window.addEventListener("open-command-palette", onPalette);
-    window.addEventListener("open-shortcuts-help", onHelp);
-    return () => {
-      window.removeEventListener("open-command-palette", onPalette);
-      window.removeEventListener("open-shortcuts-help", onHelp);
-    };
-  }, []);
   const { connected } = useWebSocket({ path: "/monitoring/ws/metrics", enabled: !!token });
   const ThemeIcon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
   const themeLabel = theme === "dark" ? "Dark" : theme === "light" ? "Light" : "System";

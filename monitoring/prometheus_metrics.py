@@ -36,12 +36,14 @@ registry = CollectorRegistry()
 # Request metrics
 # ---------------------------------------------------------------------------
 
+
 REQUEST_COUNT = Counter(
     "intelliview_http_requests_total",
     "Total HTTP requests",
     ["method", "path", "status"],
     registry=registry,
 )
+REDIS_HEALTH = Gauge("redis_health", "Redis connection health status")
 
 REQUEST_DURATION = Histogram(
     "intelliview_http_request_duration_seconds",
@@ -158,7 +160,32 @@ PIPELINE_ERRORS = Counter(
     ["stage", "error_type"],
     registry=registry,
 )
+# ---------------------------------------------------------------------------
+# Celery Metrics
+# ---------------------------------------------------------------------------
 
+
+CELERY_TASKS_PROCESSED_TOTAL = Counter(
+    "intelliview_celery_tasks_processed_total",
+    "Total interview celery tasks processed",
+    ["task"],
+    registry=registry,
+)
+
+CELERY_TASK_RUNTIME = Histogram(
+    "intelliview_celery_task_runtime_seconds",
+    "Runtime of Celery tasks",
+    ["task_name"],
+    buckets=(0.1, 0.5, 1, 2, 5, 10, 30, 60, 120),
+    registry=registry,
+)
+
+CELERY_ACTIVE_TASKS = Gauge(
+    "intelliview_celery_active_tasks",
+    "Currently running Celery tasks",
+    ["task_name"],
+    registry=registry,
+)
 # ---------------------------------------------------------------------------
 # System health metrics
 # ---------------------------------------------------------------------------
@@ -166,6 +193,52 @@ PIPELINE_ERRORS = Counter(
 REDIS_HEALTH = Gauge(
     "intelliview_redis_health",
     "Redis health (1=healthy, 0=unhealthy)",
+    registry=registry,
+)
+
+# ---------------------------------------------------------------------------
+# Redis memory and space metrics
+# ---------------------------------------------------------------------------
+
+# Current memory used by Redis (in bytes)
+REDIS_MEMORY_USED = Gauge(
+    "intelliview_redis_memory_used_bytes",
+    "Current Redis memory usage in bytes",
+    registry=registry,
+)
+
+# Peak memory used by Redis since startup (in bytes)
+REDIS_MEMORY_PEAK = Gauge(
+    "intelliview_redis_memory_peak_bytes",
+    "Peak Redis memory usage in bytes",
+    registry=registry,
+)
+
+# Maximum memory configured for Redis (in bytes)
+REDIS_MEMORY_MAX = Gauge(
+    "intelliview_redis_memory_max_bytes",
+    "Maximum Redis memory limit in bytes",
+    registry=registry,
+)
+
+# Percentage of Redis memory currently being used
+REDIS_MEMORY_USAGE_PERCENT = Gauge(
+    "intelliview_redis_memory_usage_percent",
+    "Percentage of Redis memory currently in use",
+    registry=registry,
+)
+
+# Space occupied by the Redis dataset (in bytes)
+REDIS_SPACE_USED = Gauge(
+    "intelliview_redis_space_used_bytes",
+    "Redis dataset space usage in bytes",
+    registry=registry,
+)
+
+# Memory fragmentation ratio
+REDIS_MEMORY_FRAGMENTATION = Gauge(
+    "intelliview_redis_memory_fragmentation_ratio",
+    "Redis memory fragmentation ratio",
     registry=registry,
 )
 
@@ -225,3 +298,12 @@ DLQ_SIZE = Gauge(
 def get_metrics_text() -> bytes:
     """Return current metrics in Prometheus text exposition format."""
     return generate_latest(registry)
+
+
+def get_session_metrics():
+    return {
+        "created": SESSIONS_CREATED._value.get(),
+        "completed": SESSIONS_COMPLETED._value.get(),
+        "failed": SESSIONS_FAILED._value.get(),
+        "active": SESSIONS_ACTIVE._value.get(),
+    }

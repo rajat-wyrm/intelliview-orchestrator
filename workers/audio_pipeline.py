@@ -18,6 +18,7 @@ HIGH/CRITICAL thresholds fire correctly without GPU dependencies.
 import logging                 
 import os
 import time
+from pathlib import Path
 from typing import Any, TypedDict
 
 from workers._stubs import _seeded_unit
@@ -85,7 +86,20 @@ def _real_transcribe(
         logger.debug("VAD skipped: %s", exc)
 
     try:
+        import numpy as np
+
         from workers.ai_client import transcribe_audio_file
+        from workers.vad import VoiceActivityDetector
+
+        audio_path = f"{AUDIO_TEMP_DIR}/interview_{session_id}.wav"
+        if not os.path.exists(audio_path):
+            logger.warning("Audio file not found: %s", audio_path)
+            return None
+
+        # VAD Stage execution (run ONCE)
+        detector = VoiceActivityDetector(vad_config)
+        vad_segments = detector.process_audio(audio_path)
+        speech_detected = len(vad_segments) > 0
 
         url = audio_url or os.environ.get("AUDIO_STREAM_URL", "").strip()
         if not url and not vad_ran:
@@ -291,6 +305,11 @@ def transcribe_speech(session_id: str,audio_url: str | None = None,vad_config: A
     if real is not None:
         return real
 
+    from workers.vad import VADConfig
+
+    config = vad_config if isinstance(vad_config, VADConfig) else VADConfig.from_env()
+
+    # VAD pre-filtering in stub mode
     silence = _seeded_unit(session_id, "silence") > 0.92
     text = (
         ""
@@ -693,8 +712,13 @@ def transcribe_speech(session_id: str,audio_url: str | None = None,vad_config: A
         "text": text,
         "confidence": round(0.6 + _seeded_unit(session_id, "asr_conf") * 0.35, 3),
         "language": "en",
-        "duration_seconds": round(120 + _seeded_unit(session_id, "duration") * 600, 1),
+        "duration_seconds": total_duration,
         "timestamp": None,
+        "vad_executed": True,
+        "speech_detected": not silence,
+        "speech_duration_seconds": speech_duration,
+        "vad_segments": vad_segments,
+        "vad_config": vars(config),
     }
 
     if vad_config is not None:
