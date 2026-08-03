@@ -101,11 +101,7 @@ class AudioAnalysisResult(TypedDict):
     risk_score: float
 
 
-def _real_transcribe(
-    session_id: str,
-    audio_url: str | None = None,
-    vad_config: Any | None = None,
-) -> dict[str, Any] | None:    
+def _real_transcribe(session_id: str,audio_url: str | None = None,vad_config: Any | None = None,) -> TranscriptionResul| None:    
     """Transcribe audio using local Whisper model."""
     import tempfile
     import urllib.request
