@@ -58,7 +58,7 @@ class FaultManager:
         self.redis_client = redis.from_url()
         self.redis_client = self._create_redis_client()
         self.failure_log_prefix = "failure_log:"
-        self.recovery_queue_prefix = "recovery_queue:"
+        self.recovery_queue_prefix = "retry_scheduled:"
         self.dead_letter_queue = "dead_letter_queue"
 
         logger.info(f"FaultManager initialized with debounce_time={debounce_time}s")
@@ -225,7 +225,7 @@ class FaultManager:
                         session_data = self.redis_client.get(key)
                         if session_data:
                             session = deserialize_session_payload(session_data)
-                            if session.get("assigned_worker") == worker_id:
+                            if session.get("assigned_node") == worker_id:
                                 tasks.append(session.get("session_id"))
                     except Exception:
                         continue
@@ -315,6 +315,7 @@ class FaultManager:
 
             if self.redis_client:
                 self.redis_client.lpush(self.dead_letter_queue, json.dumps(dlq_entry))
+                self.redis_client.expire(self.dead_letter_queue, 604800)
                 logger.warning(f"Session {session_id} moved to dead letter queue: {reason}")
 
             return True

@@ -19,6 +19,18 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
+# Import Prometheus system health monitoring metrics
+from metrics.prometheus_metrics import (
+    POSTGRES_HEALTH,
+    QUEUE_DEPTH,
+    REDIS_HEALTH,
+    REDIS_MEMORY_FRAGMENTATION,
+    REDIS_MEMORY_MAX,
+    REDIS_MEMORY_PEAK,
+    REDIS_MEMORY_USAGE_PERCENT,
+    REDIS_MEMORY_USED,
+    REDIS_SPACE_USED,
+)
 from orchestrator.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -117,13 +129,13 @@ class HealthMonitor:
     # Readiness probe (Kubernetes-style)
     # ------------------------------------------------------------------
 
-    def readiness_check(self) -> dict[str, Any]:
-        """Return true readiness  all critical dependencies must be up.
+    async def readiness_check(self) -> dict[str, Any]:
+        """Return true readiness — all critical dependencies must be up.
 
         Use this for k8s readinessProbe: the service only receives
         traffic when this returns ready=True.
         """
-        deps = self._check_all_dependencies()
+        deps = await self._check_all_dependencies()
         ready = all(d["healthy"] for d in deps.values())
         return {
             "ready": ready,
@@ -139,7 +151,7 @@ class HealthMonitor:
     def liveness_check(self) -> dict[str, Any]:
         """Return whether the process itself is alive and responsive.
 
-        This only checks that the Python process can respond  it does
+        This only checks that the Python process can respond — it does
         NOT check downstream dependencies. Use for k8s livenessProbe.
         """
         return {
@@ -153,15 +165,17 @@ class HealthMonitor:
     # Deep dependency health checks
     # ------------------------------------------------------------------
 
-    def _check_all_dependencies(self) -> dict[str, dict[str, Any]]:
+    async def _check_all_dependencies(self) -> dict[str, dict[str, Any]]:
         """Check every critical dependency and return its status."""
+        import asyncio
+
         results: dict[str, dict[str, Any]] = {}
 
         # Redis
         results["redis"] = self._deep_check_redis()
 
-        # PostgreSQL
-        results["postgres"] = self._deep_check_postgres()
+        # PostgreSQL (wrapped in to_thread to prevent blocking event loop)
+        results["postgres"] = await asyncio.to_thread(self._deep_check_postgres)
 
         # Celery broker (Redis-backed)
         results["celery_broker"] = self._deep_check_celery_broker()
@@ -270,9 +284,14 @@ class HealthMonitor:
                 result = conn.execute(__import__("sqlalchemy").text("SELECT 1 AS ok"))
                 row = result.fetchone()
                 dep.healthy = row is not None and row[0] == 1
+
+                # Mark PostgreSQL as healthy in Prometheus
+                POSTGRES_HEALTH.set(1)
             dep.latency_ms = (time.monotonic() - start) * 1000
             dep.last_check = datetime.now(timezone.utc).isoformat()
         except Exception as exc:
+            # Mark PostgreSQL as unhealthy in Prometheus
+            POSTGRES_HEALTH.set(0)
             dep.healthy = False
             dep.error = str(exc)
             dep.latency_ms = (time.monotonic() - start) * 1000
@@ -320,6 +339,17 @@ class HealthMonitor:
             }
 
             redis_status = self._check_redis_health()
+
+            # Perform PostgreSQL health check
+            postgres_status = self._deep_check_postgres()
+
+            # Include PostgreSQL status in overall health report
+            health_status["components"]["postgres"] = postgres_status
+
+            # Mark system as critical if PostgreSQL is unavailable
+            if not postgres_status["healthy"]:
+                health_status["overall_status"] = HealthStatus.CRITICAL
+
             health_status["components"]["redis"] = redis_status
             if redis_status["status"] != HealthStatus.HEALTHY:
                 health_status["overall_status"] = HealthStatus.CRITICAL
@@ -352,7 +382,7 @@ class HealthMonitor:
 
             if self.redis_client:
                 self.redis_client.set(self.health_status_key, json.dumps(health_status), ex=300)
-                self.redis_client.set(self.last_check_key, datetime.now(timezone.utc).isoformat())
+                self.redis_client.set(self.last_check_key, datetime.now(timezone.utc).isoformat(), ex=300)
 
             logger.info("System health check complete: %s", health_status["overall_status"])
             return health_status
@@ -449,6 +479,8 @@ class HealthMonitor:
 
             queue_length = self.redis_client.llen("celery_queue") if self.redis_client else 0
 
+            # Update current Celery queue depth
+            QUEUE_DEPTH.set(queue_length)
             status = HealthStatus.HEALTHY
             if queue_length > self.queue_threshold:
                 status = HealthStatus.CRITICAL
@@ -475,9 +507,45 @@ class HealthMonitor:
                 return {"status": HealthStatus.UNHEALTHY, "error": "Redis client not initialized"}
 
             self.redis_client.ping()
+
+            # Mark Redis as healthy in Prometheus
+            REDIS_HEALTH.set(1)
+            # Get Redis server information
             info = self.redis_client.info()
+
+            # Fetch Redis memory statistics
+            used_memory = info.get("used_memory", 0)
+            peak_memory = info.get("used_memory_peak", 0)
+            max_memory = info.get("maxmemory", 0)
+            fragmentation = info.get("mem_fragmentation_ratio", 0)
             connected_clients = info.get("connected_clients", 0)
-            used_memory = info.get("used_memory_human", "unknown")
+
+            # ------------------------------------------------------------------
+            # Update Prometheus Redis memory and space metrics
+            # ------------------------------------------------------------------
+
+            # Current Redis memory usage
+            REDIS_MEMORY_USED.set(used_memory)
+
+            # Peak Redis memory usage
+            REDIS_MEMORY_PEAK.set(peak_memory)
+
+            # Maximum configured Redis memory
+            REDIS_MEMORY_MAX.set(max_memory)
+
+            # Redis dataset space usage
+            REDIS_SPACE_USED.set(used_memory)
+
+            # Redis memory fragmentation ratio
+            REDIS_MEMORY_FRAGMENTATION.set(fragmentation)
+
+            # Calculate memory usage percentage
+            if max_memory > 0:
+                REDIS_MEMORY_USAGE_PERCENT.set((used_memory / max_memory) * 100)
+            else:
+                REDIS_MEMORY_USAGE_PERCENT.set(0)
+
+            used_memory_human = info.get("used_memory_human", "unknown")
             fragmentation_info = self._evaluate_redis_fragmentation(info, context="basic_check")
 
             status = HealthStatus.HEALTHY
@@ -488,11 +556,14 @@ class HealthMonitor:
                 "status": status,
                 "connected": True,
                 "clients": connected_clients,
-                "memory": used_memory,
+                "memory": used_memory_human,
+                "memory_bytes": used_memory,
                 **fragmentation_info,
             }
 
         except Exception as e:
+            # Mark Redis as unhealthy in Prometheus
+            REDIS_HEALTH.set(0)
             logger.error("Error checking Redis health: %s", e)
             return {"status": HealthStatus.UNHEALTHY, "error": str(e)}
 
