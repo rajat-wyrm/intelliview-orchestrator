@@ -62,15 +62,19 @@ class AudioAnalysisResult(TypedDict):
     risk_score: float
 
 
-def _real_transcribe(session_id: str,audio_url: str | None = None, vad_config: Any | None = None,) -> dict[str, Any] | None:
-    """Transcribe audio using local Whisper model with VAD support."""
+def _real_transcribe(
+    session_id: str,
+    audio_url: str | None = None,
+    vad_config: Any | None = None,
+) -> dict[str, Any] | None:    
+    """Transcribe audio using local Whisper model."""
     import tempfile
     import urllib.request
 
     vad_ran = False
     vad_segments = []
 
-    # 1. Trigger Voice Activity Detection if available
+    # Process VAD if module is available
     try:
         from workers.vad import VoiceActivityDetector
 
@@ -78,34 +82,55 @@ def _real_transcribe(session_id: str,audio_url: str | None = None, vad_config: A
         vad_segments = detector.process_audio(session_id) or []
         vad_ran = True
     except (ImportError, AttributeError, Exception) as exc:
-        logger.debug(f"VAD processing skipped or unavailable: {exc}")
+        logger.debug("VAD skipped: %s", exc)
 
-    # 2. Proceed with transcription
     try:
-        from workers.ai_client import HAS_WHISPER, whisper_model
+        from workers.ai_client import transcribe_audio_file
 
-        if not HAS_WHISPER or whisper_model is None:
-            # Fallback stub if whisper model is not present, but retain vad_executed metadata
-            stub_res = _stub_transcribe(session_id)
-            if isinstance(stub_res, dict):
-                stub_res["vad_executed"] = vad_ran or (vad_config is not None)
-                if vad_segments:
-                    stub_res["vad_segments"] = vad_segments
-            return stub_res
+        url = audio_url or os.environ.get("AUDIO_STREAM_URL", "").strip()
+        if not url:
+            logger.debug("Transcription skipped: no audio URL configured.")
+            return None
 
-        res = whisper_model.transcribe(session_id, language="en", segments=[])
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav", dir=AUDIO_TEMP_DIR) as temp_file:
+            audio_path = temp_file.name
 
-        return {
-            "text": res.get("text", ""),
-            "language": res.get("language", "en"),
-            "segments": res.get("segments", []),
-            "confidence": 0.9,
-            "vad_executed": vad_ran or (vad_config is not None),
-            "vad_segments": vad_segments,
-        }
-    except Exception as exc:
-        logger.warning(f"Real transcription failed for session {session_id}: {exc}")
+        try:
+            urllib.request.urlretrieve(url, audio_path)
+
+            if os.path.getsize(audio_path) == 0:
+                logger.warning("Audio file is empty (0 bytes) for session %s: %s", session_id, audio_path)
+                return None
+
+            result = transcribe_audio_file(audio_path)
+            if not result:
+                return None
+
+            res_dict = {
+                "text": result.get("text", ""),
+                "confidence": result.get("confidence", 0.0),
+                "language": result.get("language", "en"),
+                "duration_seconds": result.get("duration_seconds", 0.0),
+                "timestamp": time.time(),
+            }
+            if vad_ran or vad_config is not None:
+                res_dict["vad_executed"] = True
+                res_dict["vad_segments"] = vad_segments
+            return res_dict
+        finally:
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
+
+    except ImportError:
+        logger.info("Whisper not installed, using stub fallback")
         return None
+    except FileNotFoundError:
+        logger.warning("Audio file not found for session %s", session_id)
+        return None
+    except Exception as exc:
+        logger.warning("Real transcription failed for session %s: %s", session_id, exc, exc_info=True)
+        return None
+
 
 def _real_detect_background_voices(session_id: str, audio_url: str | None = None) -> BackgroundVoiceResult | None:
     """Detect background voices using pyannote speaker diarisation."""
@@ -162,6 +187,7 @@ def _real_detect_background_voices(session_id: str, audio_url: str | None = None
             exc_info=True,
         )
         return None
+
 
 def _real_detect_suspicious(session_id: str) -> SuspiciousPatternResult | None:     
     """Use an LLM to detect suspicious conversation patterns."""
@@ -255,25 +281,17 @@ def run_audio_analysis(session_id: str) -> AudioAnalysisResult:
     return results
 
 
-def transcribe_speech(session_id: str,audio_url: str | None = None,vad_config: Any | None = None) -> dict[str, Any]:
+def transcribe_speech(
+    session_id: str,
+    audio_url: str | None = None,
+    vad_config: Any | None = None,
+) -> dict[str, Any]:
     """Convert speech to text — real Whisper with seeded stub fallback."""
     logger.info(f"Transcribing audio for session {session_id}")
 
-    # Try real transcription first
-    result = _real_transcribe(session_id, audio_url=audio_url, vad_config=vad_config)
-    if result is not None:
-        return result
-
-    # Fallback stub transcription
-    res = _stub_transcribe(session_id)
-    
-    # If returned as object or dict, ensure 'vad_executed' is set when vad_config is supplied
-    if isinstance(res, dict):
-        if vad_config is not None:
-            res["vad_executed"] = True
-        return res
-
-    return res
+    real = _real_transcribe(session_id, audio_url=audio_url, vad_config=vad_config)
+    if real is not None:
+        return real
 
     silence = _seeded_unit(session_id, "silence") > 0.92
     text = (
@@ -284,7 +302,7 @@ def transcribe_speech(session_id: str,audio_url: str | None = None,vad_config: A
             "Recently I led a migration from a monolith to Celery-backed workers."
         )
     )
-    return {
+    stub_res = {
         "text": text,
         "confidence": round(0.6 + _seeded_unit(session_id, "asr_conf") * 0.35, 3),
         "language": "en",
@@ -292,8 +310,13 @@ def transcribe_speech(session_id: str,audio_url: str | None = None,vad_config: A
         "timestamp": None,
     }
 
+    if vad_config is not None:
+        stub_res["vad_executed"] = True
 
-def detect_background_voices(session_id: str) -> TranscriptionResult:
+    return stub_res
+
+
+def detect_background_voices(session_id: str) -> dict[str, Any]:
     """Detect background voices — real diarisation with seeded stub fallback."""
     logger.info(f"Detecting background voices for session {session_id}")
 
@@ -343,7 +366,7 @@ def detect_suspicious_conversation(session_id: str) -> SuspiciousPatternResult:
     }
 
 
-def calculate_audio_risk_score(results:AudioAnalysisResult) -> float:
+def calculate_audio_risk_score(results: AudioAnalysisResult) -> float:
     """Calculate a 0–1 risk score from audio detection results."""
     from workers.risk_engine import RiskScoringEngine
 
