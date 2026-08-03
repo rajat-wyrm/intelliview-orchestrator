@@ -258,7 +258,7 @@ def run_audio_analysis(session_id: str) -> AudioAnalysisResult:
     return results
 
 
-def transcribe_speech(session_id: str) -> TranscriptionResult:
+def transcribe_speech(session_id: str,audio_url: str | None = None,vad_config: Any | None = None,) -> TranscriptionResult:
     """Convert speech to text — real Whisper with seeded stub fallback."""
     logger.info(f"Transcribing audio for session {session_id}")
 
