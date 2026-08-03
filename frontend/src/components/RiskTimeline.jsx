@@ -3,7 +3,10 @@
 import Card from "@/components/Card";
 import { Activity } from "lucide-react";
 
-export default function RiskTimeline({ moments = [] }) {
+export default function RiskTimeline({
+  moments = [],
+  onMarkerClick = (timestampSeconds) => console.log(timestampSeconds),
+}) {
   const sortedMoments = [...moments].sort(
     (a, b) => (a.startTime || 0) - (b.startTime || 0)
   );
@@ -123,21 +126,29 @@ export default function RiskTimeline({ moments = [] }) {
               </span>
             </div>
 
-            <div className="relative h-2 rounded-full bg-zinc-800 overflow-hidden">
+            <div className="relative h-2 overflow-hidden rounded-full bg-zinc-800">
               {sortedMoments.map((moment, index) => {
                 const left =
                   ((moment.startTime - sortedMoments[0].startTime) /
                     totalDuration) *
                   100;
 
+                const elapsedSeconds = Math.floor(
+                  (moment.startTime - sortedMoments[0].startTime) / 1000
+                );
+
                 return (
-                  <div
+                  <button
                     key={moment.id || index}
-                    className={`absolute h-full w-2 rounded-full ${getColor(
+                    type="button"
+                    title={`${getLabel(moment.type)} (${elapsedSeconds}s)`}
+                    aria-label={`${getLabel(moment.type)} at ${elapsedSeconds} seconds`}
+                    onClick={() => onMarkerClick(elapsedSeconds)}
+                    className={`absolute h-full w-2 -translate-x-1/2 cursor-pointer rounded-full ${getColor(
                       moment.type
                     )}`}
                     style={{
-                      left: `${Math.min(left, 98)}%`,
+                      left: `${Math.min(Math.max(left, 1), 99)}%`,
                     }}
                   />
                 );

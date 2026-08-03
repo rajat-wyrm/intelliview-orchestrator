@@ -99,7 +99,7 @@ export function useLazyLoad(options = {}) {
 
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [options]);
 
   return { ref, isVisible };
 }

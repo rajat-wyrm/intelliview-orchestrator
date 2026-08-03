@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 
 export function useWebSocket({ path, onMessage, enabled = true }) {
   const [connected, setConnected] = useState(false);
+  const [status, setStatus] = useState("disconnected");
   const [lastMessage, setLastMessage] = useState(null);
   const [reconnectCount, setReconnectCount] = useState(0);
   const wsRef = useRef(null);
@@ -62,6 +63,7 @@ export function useWebSocket({ path, onMessage, enabled = true }) {
             return;
           }
           setConnected(true);
+          setStatus("connected");
           retryRef.current = 0;
         };
 
@@ -76,10 +78,11 @@ export function useWebSocket({ path, onMessage, enabled = true }) {
           }
         };
 
-        ws.onerror = () => {};
+        ws.onerror = () => { };
 
         ws.onclose = () => {
           setConnected(false);
+          setStatus("reconnecting");
           wsRef.current = null;
           scheduleReconnect();
         };
@@ -101,7 +104,7 @@ export function useWebSocket({ path, onMessage, enabled = true }) {
     };
   }, [path, enabled, reconnectCount]);
 
-  return { connected, lastMessage, send, disconnect, reconnect };
+  return { connected,status, lastMessage, send, disconnect, reconnect };
 }
 
 export function useRealtimeSubscription(path, { enabled = true, onEvent } = {}) {
@@ -121,7 +124,7 @@ export function useRealtimeSubscription(path, { enabled = true, onEvent } = {}) 
     [onEvent],
   );
 
-  const { connected } = useWebSocket({ path, onMessage: handleMessage, enabled });
+  const { connected, lastMessage, send, disconnect, reconnect } = useWebSocket({ path, onMessage: handleMessage, enabled });
 
   const clearEvents = useCallback(() => setEvents([]), []);
 
@@ -141,13 +144,17 @@ export function useRealtimeSubscription(path, { enabled = true, onEvent } = {}) 
   );
 
   return {
-    connected,
-    isLive,
-    events,
-    clearEvents,
-    latestByType,
-    filterByType,
-  };
+  connected,
+  lastMessage,
+  send,
+  disconnect,
+  reconnect,
+  events,
+  isLive,
+  clearEvents,
+  latestByType,
+  filterByType,
+};
 }
 
 export default useWebSocket;
