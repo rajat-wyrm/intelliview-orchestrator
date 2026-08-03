@@ -1,6 +1,4 @@
 """
-Load Balancer
-Implements intelligent task distribution strategies across worker nodes
 
 Strategies:
 1. Round Robin - Distribute tasks evenly in sequence
@@ -9,6 +7,7 @@ Strategies:
 """
 
 import logging
+import threading
 from enum import Enum
 from typing import Any
 
@@ -39,24 +38,21 @@ class LoadBalancer:
         """
         self.worker_registry = WorkerRegistry()
         self.strategy = strategy
-        self.last_assigned_worker_id = None
+        self.round_robin_index = 0
+        self._lock = threading.Lock()
+        self.round_robin_lock = threading.Lock()
         logger.info(f"Load Balancer initialized with strategy: {strategy.value}")
 
     def select_worker(self) -> dict[str, Any] | None:
-        """
-        Select a worker for task execution based on current strategy
+        with self._lock:
+            if self.strategy == BalancingStrategy.ROUND_ROBIN:
+                return self._select_round_robin()
+            if self.strategy == BalancingStrategy.LEAST_LOADED:
+                return self._select_least_loaded()
+            if self.strategy == BalancingStrategy.QUEUE_BASED:
+                return self._select_queue_based()
 
-        Returns:
-            dict: Selected worker details or None if no workers available
-        """
-        if self.strategy == BalancingStrategy.ROUND_ROBIN:
-            return self._select_round_robin()
-        if self.strategy == BalancingStrategy.LEAST_LOADED:
             return self._select_least_loaded()
-        if self.strategy == BalancingStrategy.QUEUE_BASED:
-            return self._select_queue_based()
-        # Default to least loaded
-        return self._select_least_loaded()
 
     def _select_round_robin(self) -> dict[str, Any] | None:
         """
@@ -64,6 +60,9 @@ class LoadBalancer:
 
         Distributes tasks evenly across all available workers in a circular fashion.
         Good for evenly distributed workloads.
+
+        Thread-safe: uses a lock around the read-and-increment of round_robin_index
+        so concurrent calls cannot read the same index value before it is updated.
 
         Returns:
             dict: Next worker in rotation or None if no workers available
@@ -74,18 +73,10 @@ class LoadBalancer:
             logger.warning("No workers available for Round Robin selection")
             return None
 
-        # Sort for deterministic ordering
-        available.sort(key=lambda w: w["worker_id"])
-
-        idx = 0
-        if hasattr(self, "last_assigned_worker_id") and self.last_assigned_worker_id:
-            for i, w in enumerate(available):
-                if w["worker_id"] == self.last_assigned_worker_id:
-                    idx = (i + 1) % len(available)
-                    break
-
-        worker = available[idx]
-        self.last_assigned_worker_id = worker["worker_id"]
+        # Select using round robin index (thread-safe)
+        with self.round_robin_lock:
+            worker = available[self.round_robin_index % len(available)]
+            self.round_robin_index += 1
 
         logger.debug(f"Round Robin selected worker: {worker['worker_id']}")
         return worker
@@ -132,14 +123,9 @@ class LoadBalancer:
         return worker
 
     def switch_strategy(self, strategy: BalancingStrategy) -> None:
-        """
-        Switch to a different load balancing strategy
-
-        Args:
-            strategy: New strategy to use
-        """
-        self.strategy = strategy
-        logger.info(f"Switched to {strategy.value} strategy")
+        with self._lock:
+            self.strategy = strategy
+            logger.info(f"Switched to {strategy.value} strategy")
 
     def get_best_worker_for_priority(self, priority: str) -> dict[str, Any] | None:
         """
