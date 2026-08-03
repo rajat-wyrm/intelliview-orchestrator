@@ -177,8 +177,7 @@ def _real_transcribe(session_id: str, vad_config: Any | None = None) -> dict[str
             "language_match": detected_language == expected_language,
             "language_flagged": detected_language != expected_language,
             "duration_seconds": (
-                sum(s.get("end", 0) - s.get("start", 0) for s in segments)
-                or round(total_dur, 1)
+                sum(s.get("end", 0) - s.get("start", 0) for s in segments) or round(total_dur, 1)
             ),
             "timestamp": time.time(),
             "vad_executed": True,
@@ -191,6 +190,7 @@ def _real_transcribe(session_id: str, vad_config: Any | None = None) -> dict[str
     except Exception as exc:
         logger.debug("Real transcription unavailable: %s", exc)
         return None
+
 
 def _real_detect_background_voices(session_id: str) -> dict[str, Any] | None:
     """Detect background voices using pyannote speaker diarisation."""
