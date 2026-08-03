@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Shared pytest fixtures and configuration for the test suite.
 
@@ -29,6 +28,7 @@ import pathlib
 import sys
 
 import pytest
+from testcontainers.postgres import PostgresContainer
 
 # Make project root importable so `from config import ...` and
 # `from workers... import ...` work, regardless of the directory pytest
@@ -39,6 +39,19 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from workers.celery_app import celery_app  # noqa: E402 (must follow sys.path setup above)
+
+
+@pytest.fixture(scope="session")
+def postgres_container():
+    """Start a PostgreSQL Testcontainer for integration tests."""
+    with PostgresContainer("postgres:16") as postgres:
+        os.environ["POSTGRES_HOST"] = postgres.get_container_host_ip()
+        os.environ["POSTGRES_PORT"] = str(postgres.get_exposed_port(5432))
+        os.environ["POSTGRES_DB"] = postgres.dbname
+        os.environ["POSTGRES_USER"] = postgres.username
+        os.environ["POSTGRES_PASSWORD"] = postgres.password
+        os.environ["DATABASE_URL"] = postgres.get_connection_url()
+        yield postgres
 
 
 @pytest.fixture(scope="session")
