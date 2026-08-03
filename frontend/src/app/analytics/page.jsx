@@ -1,6 +1,9 @@
 "use client";
+
+
 import { useMemo, useState, useCallback } from "react";
 import useSWR from "swr";
+import MetricsDashboard from "@/components/analytics/MetricsDashboard";
 import {
   Bar,
   BarChart,
@@ -24,6 +27,7 @@ import { Skeleton, ErrorState } from "@/components/States";
 import { endpoints } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const RISK_BUCKETS = [
   { name: "Low (<0.3)", color: "#10b981" },
@@ -287,123 +291,129 @@ export default function AnalyticsPage() {
   }, [filteredSessions, dateRange]);
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-zinc-50">Analytics</h1>
-          <p className="text-sm text-muted">Risk distribution, failure modes, trends, and export.</p>
-        </div>
-        <button
-          onClick={handleExport}
-          className="flex items-center gap-1.5 rounded-md border border-border bg-bg-card px-3 py-1.5 text-xs text-muted hover:text-zinc-200"
-        >
-          <Download size={14} /> Export CSV
-        </button>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Calendar size={14} className="text-muted" />
-        {DATE_PRESETS.map((p) => (
+    <ErrorBoundary>
+      <div className="space-y-6 animate-fade-in">
+        <div className="flex items-end justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-zinc-50">Analytics</h1>
+            <p className="text-sm text-muted">Risk distribution, failure modes, trends, and export.</p>
+          </div>
           <button
-            key={p.value}
-            onClick={() => setDateRange(p.value)}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-xs font-medium",
-              dateRange === p.value
-                ? "bg-accent/15 text-accent-light"
-                : "text-muted hover:bg-bg-card hover:text-zinc-200"
-            )}
+            onClick={handleExport}
+            className="flex items-center gap-1.5 rounded-md border border-border bg-bg-card px-3 py-1.5 text-xs text-muted hover:text-zinc-200"
           >
-            {p.label}
+            <Download size={14} /> Export CSV
           </button>
-        ))}
-      </div>
+        </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat
-          label="Total sessions"
-          value={stats.data?.total_sessions ?? <Skeleton className="h-7 w-12" />}
-        />
-        <Stat
-          label="Avg risk"
-          value={
-            stats.data ? (
-              stats.data.risk_score_stats.average_risk_score.toFixed(3)
+        <div className="flex flex-wrap items-center gap-2">
+          <Calendar size={14} className="text-muted" />
+          {DATE_PRESETS.map((p) => (
+            <button
+              key={p.value}
+              onClick={() => setDateRange(p.value)}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-medium",
+                dateRange === p.value
+                  ? "bg-accent/15 text-accent-light"
+                  : "text-muted hover:bg-bg-card hover:text-zinc-200"
+              )}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Stat
+            label="Total sessions"
+            value={stats.data?.total_sessions ?? <Skeleton className="h-7 w-12" />}
+          />
+          <Stat
+            label="Avg risk"
+            value={
+              stats.data ? (
+                stats.data.risk_score_stats.average_risk_score.toFixed(3)
+              ) : (
+                <Skeleton className="h-7 w-16" />
+              )
+            }
+          />
+          <Stat
+            label="High risk"
+            value={
+              stats.data?.risk_score_stats.high_risk_sessions ?? (
+                <Skeleton className="h-7 w-12" />
+              )
+            }
+          />
+          <Stat
+            label="DLQ size"
+            value={dlq.data?.count ?? <Skeleton className="h-7 w-12" />}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Card title="Sessions by status" description="Distribution across the lifecycle states.">
+            {stats.error ? (
+              <ErrorState error={stats.error} onRetry={() => stats.mutate()} />
+            ) : !stats.data ? (
+              <Skeleton className="h-64 w-full" />
             ) : (
-              <Skeleton className="h-7 w-16" />
-            )
-          }
-        />
-        <Stat
-          label="High risk"
-          value={
-            stats.data?.risk_score_stats.high_risk_sessions ?? (
-              <Skeleton className="h-7 w-12" />
-            )
-          }
-        />
-        <Stat
-          label="DLQ size"
-          value={dlq.data?.count ?? <Skeleton className="h-7 w-12" />}
-        />
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={breakdown}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                  <XAxis dataKey="status" stroke="#71717a" fontSize={11} />
+                  <YAxis stroke="#71717a" fontSize={11} />
+                  <Tooltip {...TOOLTIP_STYLE} />
+                  <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </Card>
+
+          <Card title="Failure breakdown" description="Counts grouped by failure type.">
+            {faults.error ? (
+              <ErrorState error={faults.error} onRetry={() => faults.mutate()} />
+            ) : !faults.data ? (
+              <Skeleton className="h-64 w-full" />
+            ) : failureData.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted">No failures recorded.</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={failureData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                  <XAxis dataKey="type" stroke="#71717a" fontSize={11} />
+                  <YAxis stroke="#71717a" fontSize={11} />
+                  <Tooltip {...TOOLTIP_STYLE} />
+                  <Bar dataKey="count" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <RiskDistribution
+            sessions={filteredSessions}
+            loading={completed.isLoading && failed.isLoading}
+            onDrillDown={(type) => setDrillDown(type)}
+          />
+          <TrendChart sessions={filteredSessions} />
+        </div>
+
+        {drillDown && (
+          <DrillDownModal
+            type={drillDown}
+            sessions={filteredSessions}
+            onClose={() => setDrillDown(null)}
+          />
+        )}
+</div>
+
+      <div className="border-t border-border pt-6">
+        <MetricsDashboard />
       </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card title="Sessions by status" description="Distribution across the lifecycle states.">
-          {stats.error ? (
-            <ErrorState error={stats.error} onRetry={() => stats.mutate()} />
-          ) : !stats.data ? (
-            <Skeleton className="h-64 w-full" />
-          ) : (
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={breakdown}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-                <XAxis dataKey="status" stroke="#71717a" fontSize={11} />
-                <YAxis stroke="#71717a" fontSize={11} />
-                <Tooltip {...TOOLTIP_STYLE} />
-                <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </Card>
-
-        <Card title="Failure breakdown" description="Counts grouped by failure type.">
-          {faults.error ? (
-            <ErrorState error={faults.error} onRetry={() => faults.mutate()} />
-          ) : !faults.data ? (
-            <Skeleton className="h-64 w-full" />
-          ) : failureData.length === 0 ? (
-            <div className="py-8 text-center text-sm text-muted">No failures recorded.</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={failureData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-                <XAxis dataKey="type" stroke="#71717a" fontSize={11} />
-                <YAxis stroke="#71717a" fontSize={11} />
-                <Tooltip {...TOOLTIP_STYLE} />
-                <Bar dataKey="count" fill="#ef4444" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <RiskDistribution
-          sessions={filteredSessions}
-          loading={completed.isLoading && failed.isLoading}
-          onDrillDown={(type) => setDrillDown(type)}
-        />
-        <TrendChart sessions={filteredSessions} />
-      </div>
-
-      {drillDown && (
-        <DrillDownModal
-          type={drillDown}
-          sessions={filteredSessions}
-          onClose={() => setDrillDown(null)}
-        />
-      )}
-    </div>
+    </ErrorBoundary>
   );
 }

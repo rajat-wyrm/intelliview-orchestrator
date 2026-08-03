@@ -38,6 +38,10 @@ class WorkerAgent:
         # This is accurate only when running with the 'solo' pool.
         self.active_tasks = 0
 
+        self.tasks_completed = 0  # track total completed tasks
+        self.max_tasks_before_restart = int(os.getenv("MAX_TASKS_BEFORE_RESTART", "100"))  # restart limit
+        self._restart_requested = False  # restart flag
+
         self._stop = False
         self._headers = {
             "X-API-Token": API_TOKEN,
@@ -120,6 +124,27 @@ class WorkerAgent:
 
     def decrement_active(self) -> None:
         self.active_tasks = max(0, self.active_tasks - 1)
+        self.tasks_completed += 1  # count each completed task
+
+        if self.tasks_completed >= self.max_tasks_before_restart:
+            if not self._restart_requested:
+                self._restart_requested = True
+                logger.info(
+                    "Worker %s has processed %d tasks (limit: %d) — requesting graceful restart.",
+                    self.worker_id,
+                    self.tasks_completed,
+                    self.max_tasks_before_restart,
+                )
+                self._request_restart()
+
+    def _request_restart(self) -> None:
+        logger.info(
+            "Worker %s initiating graceful shutdown for restart (active tasks remaining: %d)",
+            self.worker_id,
+            self.active_tasks,
+        )
+        self.deregister()
+        os.kill(os.getpid(), signal.SIGTERM)
 
 
 if __name__ == "__main__":

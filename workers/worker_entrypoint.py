@@ -55,6 +55,14 @@ def main() -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
+    # Validate required configuration settings right at startup (Issue 1)
+    required_settings = ["API_URL", "API_TOKEN"]
+    missing_settings = [setting for setting in required_settings if not os.getenv(setting)]
+
+    if missing_settings:
+        logger.error(f"Startup failed: Missing required environment variables: {', '.join(missing_settings)}")
+        return 1
+
     start_worker_metrics()
 
     api_url = os.getenv("API_URL", "http://fastapi:8000")

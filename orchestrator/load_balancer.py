@@ -39,24 +39,20 @@ class LoadBalancer:
         self.worker_registry = WorkerRegistry()
         self.strategy = strategy
         self.round_robin_index = 0
+        self._lock = threading.Lock()
         self.round_robin_lock = threading.Lock()
         logger.info(f"Load Balancer initialized with strategy: {strategy.value}")
 
     def select_worker(self) -> dict[str, Any] | None:
-        """
-        Select a worker for task execution based on current strategy
+        with self._lock:
+            if self.strategy == BalancingStrategy.ROUND_ROBIN:
+                return self._select_round_robin()
+            if self.strategy == BalancingStrategy.LEAST_LOADED:
+                return self._select_least_loaded()
+            if self.strategy == BalancingStrategy.QUEUE_BASED:
+                return self._select_queue_based()
 
-        Returns:
-            dict: Selected worker details or None if no workers available
-        """
-        if self.strategy == BalancingStrategy.ROUND_ROBIN:
-            return self._select_round_robin()
-        if self.strategy == BalancingStrategy.LEAST_LOADED:
             return self._select_least_loaded()
-        if self.strategy == BalancingStrategy.QUEUE_BASED:
-            return self._select_queue_based()
-        # Default to least loaded
-        return self._select_least_loaded()
 
     def _select_round_robin(self) -> dict[str, Any] | None:
         """
@@ -127,14 +123,9 @@ class LoadBalancer:
         return worker
 
     def switch_strategy(self, strategy: BalancingStrategy) -> None:
-        """
-        Switch to a different load balancing strategy
-
-        Args:
-            strategy: New strategy to use
-        """
-        self.strategy = strategy
-        logger.info(f"Switched to {strategy.value} strategy")
+        with self._lock:
+            self.strategy = strategy
+            logger.info(f"Switched to {strategy.value} strategy")
 
     def get_best_worker_for_priority(self, priority: str) -> dict[str, Any] | None:
         """
