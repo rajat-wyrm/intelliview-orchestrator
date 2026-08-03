@@ -92,4 +92,40 @@ def test_generate_risk_report_shape():
     assert report["risk_classification"] in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
     assert "component_risks" in report
     assert "risk_factors" in report
+    assert "explanation" in report
     assert "recommendation" in report
+
+
+def test_generate_explanation_low():
+    explanation = RiskScoringEngine._generate_explanation(
+        "LOW",
+        [],
+    )
+    assert "Low risk" in explanation
+
+
+def test_generate_explanation_medium():
+    explanation = RiskScoringEngine._generate_explanation(
+        "MEDIUM",
+        ["Background voices detected"],
+    )
+    assert "Medium risk" in explanation
+    assert "Background voices detected" in explanation
+
+
+def test_generate_explanation_high():
+    explanation = RiskScoringEngine._generate_explanation(
+        "HIGH",
+        ["Phone detected"],
+    )
+    assert "High risk" in explanation
+    assert "Phone detected" in explanation
+
+
+def test_generate_explanation_critical():
+    explanation = RiskScoringEngine._generate_explanation(
+        "CRITICAL",
+        ["Multiple persons detected"],
+    )
+    assert "Critical risk" in explanation
+    assert "Multiple persons detected" in explanation
