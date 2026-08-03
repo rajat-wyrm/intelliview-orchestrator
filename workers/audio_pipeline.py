@@ -14,12 +14,7 @@ Pluggable contract — replace each detection helper with a real model
 deterministic per-session signals so end-to-end risk scoring and the
 HIGH/CRITICAL thresholds fire correctly without GPU dependencies.
 """
-import pytest
 
-# Add this line at the top of the file:
-pytestmark = pytest.mark.skip(
-    reason="Ignoring all VAD unit tests temporarily"
-)
 import logging                 
 import os
 import time
@@ -67,27 +62,10 @@ class AudioAnalysisResult(TypedDict):
     risk_score: float
 
 
-def _real_transcribe(
-    session_id: str,
-    audio_url: str | None = None,
-    vad_config: Any | None = None,
-) -> dict[str, Any] | None:    
+def _real_transcribe(session_id: str, audio_url: str | None = None) -> TranscriptionResult | None:    
     """Transcribe audio using local Whisper model."""
     import tempfile
     import urllib.request
-
-    vad_ran = False
-    vad_segments = []
-
-    # Process VAD if module is available
-    try:
-        from workers.vad import VoiceActivityDetector
-
-        detector = VoiceActivityDetector(cfg=vad_config)
-        vad_segments = detector.process_audio(session_id) or []
-        vad_ran = True
-    except (ImportError, AttributeError, Exception) as exc:
-        logger.debug("VAD skipped: %s", exc)
 
     try:
         from workers.ai_client import transcribe_audio_file
@@ -110,19 +88,14 @@ def _real_transcribe(
             result = transcribe_audio_file(audio_path)
             if not result:
                 return None
-                
-                res_dict = {
-                "text": result.get("text", ""),
-                "confidence": result.get("confidence", 0.0),
-                "language": result.get("language", "en"),
-                "duration_seconds": result.get("duration_seconds", 0.0),
-                "timestamp": time.time(),
-            }
-            if vad_ran or vad_config is not None:
-                res_dict["vad_executed"] = True
-                res_dict["speech_detected"] = bool(result.get("text"))
-                res_dict["vad_segments"] = vad_segments
-            return res_dict
+
+            return TranscriptionResult(
+                text=result.get("text", ""),
+                confidence=result.get("confidence", 0.0),
+                language=result.get("language", "en"),
+                duration_seconds=result.get("duration_seconds", 0.0),
+                timestamp=time.time(),
+            )
         finally:
             if os.path.exists(audio_path):
                 os.remove(audio_path)
@@ -136,7 +109,6 @@ def _real_transcribe(
     except Exception as exc:
         logger.warning("Real transcription failed for session %s: %s", session_id, exc, exc_info=True)
         return None
-
 
 def _real_detect_background_voices(session_id: str, audio_url: str | None = None) -> BackgroundVoiceResult | None:
     """Detect background voices using pyannote speaker diarisation."""
@@ -193,7 +165,6 @@ def _real_detect_background_voices(session_id: str, audio_url: str | None = None
             exc_info=True,
         )
         return None
-
 
 def _real_detect_suspicious(session_id: str) -> SuspiciousPatternResult | None:     
     """Use an LLM to detect suspicious conversation patterns."""
@@ -287,11 +258,11 @@ def run_audio_analysis(session_id: str) -> AudioAnalysisResult:
     return results
 
 
-def transcribe_speech(session_id: str,audio_url: str | None = None,vad_config: Any | None = None,) -> dict[str, Any]:
+def transcribe_speech(session_id: str) -> TranscriptionResult:
     """Convert speech to text — real Whisper with seeded stub fallback."""
     logger.info(f"Transcribing audio for session {session_id}")
 
-    real = _real_transcribe(session_id, audio_url=audio_url, vad_config=vad_config)
+    real = _real_transcribe(session_id)
     if real is not None:
         return real
 
@@ -304,7 +275,7 @@ def transcribe_speech(session_id: str,audio_url: str | None = None,vad_config: A
             "Recently I led a migration from a monolith to Celery-backed workers."
         )
     )
-    stub_res = {
+    return {
         "text": text,
         "confidence": round(0.6 + _seeded_unit(session_id, "asr_conf") * 0.35, 3),
         "language": "en",
@@ -312,15 +283,8 @@ def transcribe_speech(session_id: str,audio_url: str | None = None,vad_config: A
         "timestamp": None,
     }
 
-    if vad_config is not None:
-        stub_res["vad_executed"] = True
-        stub_res["speech_detected"] = bool(text)
 
-    return stub_res
-
-
-
-def detect_background_voices(session_id: str) -> dict[str, Any]:
+def detect_background_voices(session_id: str) -> TranscriptionResult:
     """Detect background voices — real diarisation with seeded stub fallback."""
     logger.info(f"Detecting background voices for session {session_id}")
 
@@ -370,7 +334,7 @@ def detect_suspicious_conversation(session_id: str) -> SuspiciousPatternResult:
     }
 
 
-def calculate_audio_risk_score(results: AudioAnalysisResult) -> float:
+def calculate_audio_risk_score(results:AudioAnalysisResult) -> float:
     """Calculate a 0–1 risk score from audio detection results."""
     from workers.risk_engine import RiskScoringEngine
 
