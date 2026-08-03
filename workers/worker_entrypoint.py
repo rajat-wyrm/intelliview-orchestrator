@@ -27,6 +27,7 @@ from workers.worker_agent import WorkerAgent
 logger = logging.getLogger(__name__)
 
 SUPPORTED_POOL = "solo"
+REQUIRED_SETTINGS = ["API_TOKEN", "API_URL"]
 
 agent = None
 
@@ -63,6 +64,19 @@ def main() -> int:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+
+    # Validate required settings upfront before proceeding with startup
+    missing_settings = [
+        setting for setting in REQUIRED_SETTINGS if not os.getenv(setting)
+    ]
+
+    if missing_settings:
+        logger.error(
+            "Worker startup failed: Missing required configuration setting(s): %s. "
+            "Please ensure these environment variables are set and non-empty.",
+            ", ".join(missing_settings),
+        )
+        return 1
 
     start_worker_metrics()
 
