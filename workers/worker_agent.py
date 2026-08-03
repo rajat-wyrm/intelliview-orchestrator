@@ -5,22 +5,58 @@ Responsibilities:
 - Register this worker with the orchestrator API on startup.
 - Periodically send heartbeats with the current active task count.
 - Deregister on graceful shutdown.
-- Support "drain mode": stop accepting new tasks while letting
-  in-progress tasks finish normally before shutting down.
 """
 
+import json
 import logging
 import os
 import signal
 import sys
 import time
 from threading import Thread
+from typing import Any
 
 import httpx
 
 from config import API_TOKEN, WORKER_CONCURRENCY
 
 logger = logging.getLogger(__name__)
+
+
+class JSONFormatter(logging.Formatter):
+    """Formats log records as structured JSON strings."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        log_record: dict[str, Any] = {
+            "timestamp": self.formatTime(record, self.datefmt),
+            "level": record.levelname,
+            "message": record.getMessage(),
+            "logger": record.name,
+        }
+        if hasattr(record, "worker_id"):
+            log_record["worker_id"] = record.worker_id
+        if hasattr(record, "session_id"):
+            log_record["session_id"] = record.session_id
+
+        return json.dumps(log_record)
+
+
+def setup_logging() -> None:
+    """Configure logging based on LOG_FORMAT environment variable."""
+    log_format = os.getenv("LOG_FORMAT", "text").lower()
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+
+    handler = logging.StreamHandler(sys.stdout)
+    if log_format == "json":
+        handler.setFormatter(JSONFormatter())
+    else:
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+
+    root_logger.addHandler(handler)
 
 
 class WorkerAgent:
@@ -45,12 +81,6 @@ class WorkerAgent:
             "X-API-Token": API_TOKEN,
             "Content-Type": "application/json",
         }
-
-        # --- Drain mode state ---
-        # When True, the worker stops accepting new tasks but keeps
-        # running any tasks already in progress until they finish.
-        self.draining = False
-        self._drain_complete = False
 
         # Read the configured Celery worker pool.
         # Default to 'solo' if not explicitly configured.
@@ -78,18 +108,40 @@ class WorkerAgent:
                 )
                 if r.status_code < 500:
                     return r.status_code < 400
-                logger.warning("API %s returned %s, retrying", path, r.status_code)
+                logger.warning(
+                    "API %s returned %s, retrying",
+                    path,
+                    r.status_code,
+                    extra={"worker_id": self.worker_id},
+                )
             except Exception as exc:
-                logger.warning("API %s failed (%s), retrying", path, exc)
+                logger.warning(
+                    "API %s failed (%s), retrying",
+                    path,
+                    exc,
+                    extra={"worker_id": self.worker_id},
+                )
             time.sleep(min(2**attempt, 15))
         return False
 
     def register(self) -> bool:
-        ok = self._post("/register-worker", {"worker_id": self.worker_id, "capacity": self.capacity})
+        ok = self._post(
+            "/register-worker",
+            {"worker_id": self.worker_id, "capacity": self.capacity},
+        )
         if ok:
-            logger.info("Worker %s registered with %s", self.worker_id, self.api_url)
+            logger.info(
+                "Worker %s registered with %s",
+                self.worker_id,
+                self.api_url,
+                extra={"worker_id": self.worker_id},
+            )
         else:
-            logger.error("Failed to register worker %s", self.worker_id)
+            logger.error(
+                "Failed to register worker %s",
+                self.worker_id,
+                extra={"worker_id": self.worker_id},
+            )
         return ok
 
     def deregister(self) -> None:
@@ -100,68 +152,32 @@ class WorkerAgent:
                 timeout=5.0,
             )
         except Exception as exc:
-            logger.debug("Deregister failed: %s", exc)
+            logger.debug(
+                "Deregister failed: %s",
+                exc,
+                extra={"worker_id": self.worker_id},
+            )
 
     def heartbeat_loop(self) -> None:
         while not self._stop:
-            # The orchestrator's heartbeat endpoint doesn't accept a
-            # "status" field, so a draining worker reports itself as
-            # already at full capacity. That's enough for the
-            # orchestrator's existing "active_tasks < capacity" check
-            # to stop routing new work here, without needing any
-            # orchestrator-side change.
-            reported_active_tasks = self.capacity if self.draining else self.active_tasks
-
             self._post(
                 "/worker/heartbeat",
-                {"worker_id": self.worker_id, "active_tasks": reported_active_tasks},
+                {
+                    "worker_id": self.worker_id,
+                    "active_tasks": self.active_tasks,
+                },
             )
             time.sleep(self.heartbeat_interval)
 
-    def enter_drain_mode(self) -> None:
-        """Stop accepting new tasks; let in-progress tasks finish normally."""
-        if self.draining:
-            logger.info("Worker %s is already draining", self.worker_id)
-            return
-
-        self.draining = True
+    def _handle_shutdown(self, signum, frame) -> None:
         logger.info(
-            "Worker %s ENTERING DRAIN MODE (%d task(s) still in progress) — no new tasks will be accepted",
+            "Received signal %s, shutting down worker %s",
+            signum,
             self.worker_id,
-            self.active_tasks,
-        )
-
-        if self.active_tasks == 0:
-            self._finish_draining()
-
-    def _finish_draining(self) -> None:
-        """Called once every in-progress task has completed."""
-        if self._drain_complete:
-            return
-        self._drain_complete = True
-        logger.info(
-            "Worker %s FINISHED DRAINING — all in-progress tasks complete, safe to shut down now",
-            self.worker_id,
+            extra={"worker_id": self.worker_id},
         )
         self._stop = True
         self.deregister()
-
-    def _handle_shutdown(self, signum, frame) -> None:
-        if not self.draining:
-            logger.info(
-                "Received signal %s — starting graceful drain for worker %s",
-                signum,
-                self.worker_id,
-            )
-            self.enter_drain_mode()
-        else:
-            logger.warning(
-                "Received signal %s again while draining — forcing immediate shutdown of worker %s",
-                signum,
-                self.worker_id,
-            )
-            self._stop = True
-            self.deregister()
 
     def start(self) -> None:
         signal.signal(signal.SIGTERM, self._handle_shutdown)
@@ -169,21 +185,21 @@ class WorkerAgent:
         if not self.register():
             sys.exit(1)
         Thread(target=self.heartbeat_loop, daemon=True).start()
-        logger.info("Worker agent started for %s", self.worker_id)
+        logger.info(
+            "Worker agent started for %s",
+            self.worker_id,
+            extra={"worker_id": self.worker_id},
+        )
 
     def increment_active(self) -> None:
         self.active_tasks += 1
 
     def decrement_active(self) -> None:
         self.active_tasks = max(0, self.active_tasks - 1)
-        # If we were waiting to drain and the last in-progress task
-        # just finished, drain is now complete.
-        if self.draining and self.active_tasks == 0:
-            self._finish_draining()
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    setup_logging()
 
     api_url = os.getenv("API_URL", "http://fastapi:8000")
     worker_id = os.getenv("WORKER_ID", f"worker-{os.getpid()}")
@@ -194,4 +210,8 @@ if __name__ == "__main__":
     while not agent._stop:
         time.sleep(1)
 
-    logger.info("Worker agent %s has shut down cleanly", agent.worker_id)
+    logger.info(
+        "Worker agent %s has shut down cleanly",
+        agent.worker_id,
+        extra={"worker_id": agent.worker_id},
+    )
