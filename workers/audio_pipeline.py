@@ -15,13 +15,47 @@ HIGH/CRITICAL thresholds fire correctly without GPU dependencies.
 
 import logging
 import os
+import shutil
+import tempfile
 import time
+from pathlib import Path
 from typing import Any, TypedDict
 
 from workers._stubs import _seeded_unit
 
 logger = logging.getLogger(__name__)
 AUDIO_TEMP_DIR = os.getenv("AUDIO_TEMP_DIR", "/tmp")
+
+CHUNK_DURATION_MS = 5000
+
+
+def split_audio_into_chunks(
+    audio_path: str,
+    chunk_duration_ms: int = CHUNK_DURATION_MS,
+) -> tuple[list[str], str]:
+    """
+    Split an audio file into fixed-size WAV chunks.
+    Returns:
+        chunk_paths, temp_directory
+    """
+    from pydub import AudioSegment
+
+    audio = AudioSegment.from_file(audio_path)
+
+    chunk_temp_dir = tempfile.mkdtemp(prefix="audio_chunks_")
+
+    chunk_paths = []
+
+    for i, start in enumerate(range(0, len(audio), chunk_duration_ms)):
+        chunk = audio[start : start + chunk_duration_ms]
+
+        chunk_path = Path(chunk_temp_dir) / f"chunk_{i}.wav"
+
+        chunk.export(chunk_path, format="wav")
+
+        chunk_paths.append(str(chunk_path))
+
+    return chunk_paths, chunk_temp_dir
 
 
 # ---------------------------------------------------------------------------
@@ -84,15 +118,44 @@ def _real_transcribe(session_id: str, vad_config: Any | None = None) -> dict[str
         vad_segments = detector.process_audio(audio_path)
         speech_detected = len(vad_segments) > 0
 
-        result = transcribe_audio_file(
-            audio_path,
-            vad_config=vad_config,
-            speech_segments=vad_segments,
-        )
-        if result is None:
+        chunk_paths, chunk_dir = split_audio_into_chunks(audio_path)
+
+        partial_results = []
+
+        try:
+            for chunk_path in chunk_paths:
+                chunk_result = transcribe_audio_file(chunk_path, vad_config=vad_config, raw_audio=True)
+
+                if chunk_result is not None:
+                    partial_results.append(chunk_result)
+
+        finally:
+            shutil.rmtree(chunk_dir, ignore_errors=True)
+
+        if not partial_results:
             return None
 
-        segments = result.get("segments", [])
+        texts = [item.get("text", "").strip() for item in partial_results if item.get("text", "").strip()]
+
+        segments = []
+
+        for chunk_index, item in enumerate(partial_results):
+            offset = chunk_index * (CHUNK_DURATION_MS / 1000)
+
+            for seg in item.get("segments", []):
+                aligned = dict(seg)
+
+                aligned["start"] += offset
+                aligned["end"] += offset
+
+                segments.append(aligned)
+
+        result = {
+            "text": " ".join(texts),
+            "language": partial_results[-1].get("language", "en"),
+            "segments": segments,
+        }
+
         if segments:
             avg_logprob = np.mean([s.get("avg_logprob", -1.0) for s in segments])
             confidence = round(max(0.0, min(1.0, 1.0 + avg_logprob)), 3)
