@@ -18,6 +18,7 @@ from celery import Celery, signals
 from kombu import Queue
 
 """
+from workers.tasks import send_mock_email_alert
 from celery import Celery, signals
 
 from config import REDIS_URL
