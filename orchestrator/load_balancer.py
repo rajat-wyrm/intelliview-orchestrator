@@ -1,4 +1,6 @@
 """
+Load Balancer
+Implements intelligent task distribution strategies across worker nodes
 
 Strategies:
 1. Round Robin - Distribute tasks evenly in sequence
@@ -6,11 +8,13 @@ Strategies:
 3. Queue-based - Fallback to Redis queue if no workers available
 """
 
+import json
 import logging
 import threading
 from enum import Enum
 from typing import Any
 
+from orchestrator.redis_client import get_redis_client
 from orchestrator.worker_registry import WorkerRegistry
 
 logger = logging.getLogger(__name__)
@@ -39,19 +43,29 @@ class LoadBalancer:
         self.worker_registry = WorkerRegistry()
         self.strategy = strategy
         self.round_robin_index = 0
+        self.redis_client = get_redis_client()
         self._lock = threading.Lock()
         self.round_robin_lock = threading.Lock()
         logger.info(f"Load Balancer initialized with strategy: {strategy.value}")
 
-    def select_worker(self) -> dict[str, Any] | None:
+    def select_worker(self, task: dict[str, Any] | None = None) -> dict[str, Any] | None:
+        """
+        Select a worker for task execution based on current strategy
+
+        Args:
+            task: Task payload dict (required for queue-based fallback)
+
+        Returns:
+            dict: Selected worker details or None if no workers available
+        """
         with self._lock:
             if self.strategy == BalancingStrategy.ROUND_ROBIN:
                 return self._select_round_robin()
             if self.strategy == BalancingStrategy.LEAST_LOADED:
                 return self._select_least_loaded()
             if self.strategy == BalancingStrategy.QUEUE_BASED:
-                return self._select_queue_based()
-
+                return self._select_queue_based(task=task)
+            # Default to least loaded
             return self._select_least_loaded()
 
     def _select_round_robin(self) -> dict[str, Any] | None:
@@ -60,9 +74,6 @@ class LoadBalancer:
 
         Distributes tasks evenly across all available workers in a circular fashion.
         Good for evenly distributed workloads.
-
-        Thread-safe: uses a lock around the read-and-increment of round_robin_index
-        so concurrent calls cannot read the same index value before it is updated.
 
         Returns:
             dict: Next worker in rotation or None if no workers available
@@ -73,7 +84,6 @@ class LoadBalancer:
             logger.warning("No workers available for Round Robin selection")
             return None
 
-        # Select using round robin index (thread-safe)
         with self.round_robin_lock:
             worker = available[self.round_robin_index % len(available)]
             self.round_robin_index += 1
@@ -103,12 +113,15 @@ class LoadBalancer:
         )
         return worker
 
-    def _select_queue_based(self) -> dict[str, Any] | None:
+    def _select_queue_based(self, task: dict[str, Any] | None = None) -> dict[str, Any] | None:
         """
-        Queue-based Strategy: Fallback to queue if no workers available
+        Queue-based Strategy: Fallback to Redis queue if no workers available
 
-        First tries to select a worker. If none available, returns None to signal
-        task should be queued in Redis for later processing.
+        First tries to select a worker. If none available and a task is provided,
+        enqueues the task in Redis for later processing.
+
+        Args:
+            task: Task payload dict to be enqueued if worker is unavailable
 
         Returns:
             dict: Selected worker or None to trigger queueing
@@ -116,16 +129,29 @@ class LoadBalancer:
         worker = self.worker_registry.get_least_loaded_worker()
 
         if not worker:
-            logger.debug("No workers available - task will be queued in Redis")
+            logger.debug("No workers available - fallback to Redis queue")
+            if task:
+                try:
+                    serialized_task = json.dumps(task)
+                    self.redis_client.rpush("task_queue", serialized_task)
+                    logger.info("Task successfully enqueued into Redis queue")
+                except Exception as e:
+                    logger.error(f"Failed to push task to Redis queue: {e}")
             return None
 
         logger.debug(f"Queue-based selected worker: {worker['worker_id']}")
         return worker
 
     def switch_strategy(self, strategy: BalancingStrategy) -> None:
+        """
+        Switch to a different load balancing strategy
+
+        Args:
+            strategy: New strategy to use
+        """
         with self._lock:
             self.strategy = strategy
-            logger.info(f"Switched to {strategy.value} strategy")
+        logger.info(f"Switched to {strategy.value} strategy")
 
     def get_best_worker_for_priority(self, priority: str) -> dict[str, Any] | None:
         """
@@ -148,14 +174,13 @@ class LoadBalancer:
 
         # For medium priority, select from least loaded
         if priority == "medium":
-            # Select a worker that's not overloaded
             underutilized = [w for w in available if w["active_tasks"] < w["capacity"] * 0.7]
             if underutilized:
-                return min(underutilized, key=lambda w: w["active_tasks"])
-            return min(available, key=lambda w: w["active_tasks"])
+                return underutilized[0]
+            return available[0]
 
         # For low priority, select any available
-        return max(available, key=lambda w: w["active_tasks"])  # Select the one with most load (fill it up)
+        return available[-1]
 
     def is_system_overloaded(self, threshold: float = 0.9) -> bool:
         """
@@ -168,7 +193,7 @@ class LoadBalancer:
             bool: True if system utilization exceeds threshold
         """
         stats = self.worker_registry.get_worker_statistics()
-        utilization = stats["capacity_utilization"] / 100  # Convert to 0-1 scale
+        utilization = stats["capacity_utilization"] / 100
 
         is_overloaded = utilization >= threshold
 
