@@ -2,6 +2,10 @@ import threading
 import time
 from collections import Counter
 
+import threading
+import time
+from collections import Counter
+
 from orchestrator.load_balancer import BalancingStrategy, LoadBalancer
 
 
@@ -107,6 +111,14 @@ def test_switch_strategy_during_selection():
 
 
 def test_round_robin_thread_safety():
+<<<<<<< HEAD
+=======
+    """
+    Simulates many concurrent calls to select_worker() under ROUND_ROBIN
+    strategy and confirms tasks are distributed evenly with no lost or
+    duplicate increments, proving the round_robin_index update is atomic.
+    """
+>>>>>>> main
     workers = _make_workers()
     lb = LoadBalancer(strategy=BalancingStrategy.ROUND_ROBIN)
     lb.worker_registry = FakeRegistry(workers)
@@ -130,6 +142,7 @@ def test_round_robin_thread_safety():
     assert lb.round_robin_index == 90
     for worker in workers:
         assert counts[worker["worker_id"]] == 30
+<<<<<<< HEAD
 
 
 def test_scaling_awaits_full_window_history():
@@ -160,3 +173,5 @@ def test_sustained_idle_load_triggers_scale_down():
         lb.record_current_load()
         
     assert lb.get_scaling_recommendation(down_threshold=0.30) == "scale_down"
+=======
+>>>>>>> main

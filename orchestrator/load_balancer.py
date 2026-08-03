@@ -1,3 +1,13 @@
+"""
+Load Balancer
+Implements intelligent task distribution strategies across worker nodes
+
+Strategies:
+1. Round Robin - Distribute tasks evenly in sequence
+2. Least Loaded - Assign to worker with fewest active tasks (recommended)
+3. Queue-based - Fallback to Redis queue if no workers available
+"""
+
 import logging
 import threading
 from enum import Enum
@@ -9,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class BalancingStrategy(Enum):
+    """Load balancing strategy enumeration"""
 
     ROUND_ROBIN = "round_robin"
     LEAST_LOADED = "least_loaded"
@@ -16,9 +27,14 @@ class BalancingStrategy(Enum):
 
 
 class LoadBalancer:
+    """
+    Implements load balancing for task distribution across worker nodes
+    """
 
     def __init__(self, strategy: BalancingStrategy = BalancingStrategy.LEAST_LOADED, window_size: int = 5):
-
+        """
+        Initialize load balancer
+        """
         self.worker_registry = WorkerRegistry()
         self.strategy = strategy
         self.round_robin_index = 0
@@ -26,6 +42,7 @@ class LoadBalancer:
         self.load_history = []
         self._lock = threading.Lock()
         self.round_robin_lock = threading.Lock()
+        self.last_assigned_worker_id = None
         logger.info(f"Load Balancer initialized with strategy: {strategy.value}")
 
     def select_worker(self) -> dict[str, Any] | None:
@@ -40,7 +57,12 @@ class LoadBalancer:
             return self._select_least_loaded()
 
     def _select_round_robin(self) -> dict[str, Any] | None:
+        """
+        Round Robin Strategy: Distribute tasks in sequence
 
+        Distributes tasks evenly across all available workers in a circular fashion.
+        Good for evenly distributed workloads.
+        """
         available = self.worker_registry.get_available_workers()
 
         if not available:
@@ -69,7 +91,6 @@ class LoadBalancer:
         return worker
 
     def _select_queue_based(self) -> dict[str, Any] | None:
-
         worker = self.worker_registry.get_least_loaded_worker()
 
         if not worker:
@@ -85,7 +106,6 @@ class LoadBalancer:
             logger.info(f"Switched to {strategy.value} strategy")
 
     def get_best_worker_for_priority(self, priority: str) -> dict[str, Any] | None:
-
         available = self.worker_registry.get_available_workers()
 
         if not available:
@@ -107,7 +127,6 @@ class LoadBalancer:
         return max(available, key=lambda w: w["active_tasks"])  # Select the one with most load (fill it up)
 
     def is_system_overloaded(self, threshold: float = 0.9) -> bool:
-
         stats = self.worker_registry.get_worker_statistics()
         utilization = stats["capacity_utilization"] / 100  # Convert to 0-1 scale
 
@@ -144,7 +163,6 @@ class LoadBalancer:
                 self.load_history = self.load_history[-self.window_size :]
 
     def get_scaling_recommendation(self, up_threshold: float = 0.85, down_threshold: float = 0.30) -> str:
-
         with self._lock:
             if len(self.load_history) < self.window_size:
                 return "no_change"
