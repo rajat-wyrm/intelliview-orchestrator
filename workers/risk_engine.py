@@ -4,17 +4,25 @@ Combines signals from all pipelines to calculate final interview risk score
 
 Responsibilities:
 - Normalize signals from different pipelines
-- Generate weighted risk score (for reporting)
-- Classify interview risk using a decision tree
+- Apply weighted scoring
+- Generate final risk score (0-1 scale)
+- Provide risk classification (static or adaptive thresholds & decision tree)
 - Generate final interview risk report
 
 All weights and thresholds are configurable via RISK_CONFIG, a single
 source of truth for every numeric constant in the scoring pipeline.
 """
 
+from __future__ import annotations
+
 import logging
 import os
 from typing import Any
+
+from workers.adaptive_thresholds import (
+    AdaptiveThresholdManager,
+    RiskThresholds,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -24,15 +32,25 @@ logger = logging.getLogger(__name__)
 #   RISK_VIDEO_WEIGHT=0.5 RISK_LOW_RISK_THRESHOLD=0.25
 # ---------------------------------------------------------------------------
 
-RISK_CONFIG: dict[str, float] = {
+RISK_CONFIG: dict[str, Any] = {
     # Pipeline weights (must sum to 1.0)
     "video_weight": float(os.getenv("RISK_VIDEO_WEIGHT", "0.4")),
     "audio_weight": float(os.getenv("RISK_AUDIO_WEIGHT", "0.3")),
     "evaluation_weight": float(os.getenv("RISK_EVALUATION_WEIGHT", "0.3")),
-    # Thresholds
+    # Static Thresholds (Fallback)
     "low_risk_threshold": float(os.getenv("RISK_LOW_RISK_THRESHOLD", "0.3")),
     "medium_risk_threshold": float(os.getenv("RISK_MEDIUM_RISK_THRESHOLD", "0.6")),
     "high_risk_threshold": float(os.getenv("RISK_HIGH_RISK_THRESHOLD", "0.8")),
+    # Adaptive Threshold Config
+    "adaptive_thresholds_enabled": os.getenv("RISK_ADAPTIVE_THRESHOLDS_ENABLED", "true").lower()
+    in ("true", "1", "yes"),
+    "threshold_strategy": os.getenv("RISK_THRESHOLD_STRATEGY", "percentile"),
+    "min_historical_samples": int(os.getenv("RISK_MIN_HISTORICAL_SAMPLES", "10")),
+    "low_percentile": float(os.getenv("RISK_LOW_PERCENTILE", "0.60")),
+    "medium_percentile": float(os.getenv("RISK_MEDIUM_PERCENTILE", "0.85")),
+    "high_percentile": float(os.getenv("RISK_HIGH_PERCENTILE", "0.95")),
+    "rolling_window_size": int(os.getenv("RISK_ROLLING_WINDOW_SIZE", "100")),
+    "recalc_interval": int(os.getenv("RISK_RECALC_INTERVAL", "1")),
     # Video factors
     "video_multiple_persons": float(os.getenv("RISK_VIDEO_MULTIPLE_PERSONS", "0.35")),
     "video_phone_detected": float(os.getenv("RISK_VIDEO_PHONE_DETECTED", "0.25")),
@@ -48,6 +66,20 @@ RISK_CONFIG: dict[str, float] = {
     "eval_poor_communication": float(os.getenv("RISK_EVAL_POOR_COMMUNICATION", "0.20")),
 }
 
+# Global adaptive threshold manager singleton
+adaptive_threshold_manager = AdaptiveThresholdManager(
+    strategy_name=str(RISK_CONFIG["threshold_strategy"]),
+    min_samples=int(RISK_CONFIG["min_historical_samples"]),
+    fixed_low=float(RISK_CONFIG["low_risk_threshold"]),
+    fixed_medium=float(RISK_CONFIG["medium_risk_threshold"]),
+    fixed_high=float(RISK_CONFIG["high_risk_threshold"]),
+    low_percentile=float(RISK_CONFIG["low_percentile"]),
+    medium_percentile=float(RISK_CONFIG["medium_percentile"]),
+    high_percentile=float(RISK_CONFIG["high_percentile"]),
+    rolling_window_size=int(RISK_CONFIG["rolling_window_size"]),
+    recalc_interval=int(RISK_CONFIG["recalc_interval"]),
+)
+
 
 class RiskScoringEngine:
     """
@@ -56,33 +88,33 @@ class RiskScoringEngine:
     """
 
     # Pipeline weights
-    VIDEO_WEIGHT = RISK_CONFIG["video_weight"]
-    AUDIO_WEIGHT = RISK_CONFIG["audio_weight"]
-    EVALUATION_WEIGHT = RISK_CONFIG["evaluation_weight"]
+    VIDEO_WEIGHT = float(RISK_CONFIG["video_weight"])
+    AUDIO_WEIGHT = float(RISK_CONFIG["audio_weight"])
+    EVALUATION_WEIGHT = float(RISK_CONFIG["evaluation_weight"])
 
-    # Risk thresholds
-    LOW_RISK_THRESHOLD = RISK_CONFIG["low_risk_threshold"]
-    MEDIUM_RISK_THRESHOLD = RISK_CONFIG["medium_risk_threshold"]
-    HIGH_RISK_THRESHOLD = RISK_CONFIG["high_risk_threshold"]
+    # Risk thresholds (static fallback values)
+    LOW_RISK_THRESHOLD = float(RISK_CONFIG["low_risk_threshold"])
+    MEDIUM_RISK_THRESHOLD = float(RISK_CONFIG["medium_risk_threshold"])
+    HIGH_RISK_THRESHOLD = float(RISK_CONFIG["high_risk_threshold"])
 
     # Factor weights
     VIDEO_FACTORS = {
-        "multiple_persons": RISK_CONFIG["video_multiple_persons"],
-        "phone_detected": RISK_CONFIG["video_phone_detected"],
-        "suspicious_head_movement": RISK_CONFIG["video_suspicious_head_movement"],
-        "no_face_detected": RISK_CONFIG["video_no_face_detected"],
+        "multiple_persons": float(RISK_CONFIG["video_multiple_persons"]),
+        "phone_detected": float(RISK_CONFIG["video_phone_detected"]),
+        "suspicious_head_movement": float(RISK_CONFIG["video_suspicious_head_movement"]),
+        "no_face_detected": float(RISK_CONFIG["video_no_face_detected"]),
     }
 
     AUDIO_FACTORS = {
-        "background_voices": RISK_CONFIG["audio_background_voices"],
-        "suspicious_pattern": RISK_CONFIG["audio_suspicious_pattern"],
-        "no_transcription": RISK_CONFIG["audio_no_transcription"],
+        "background_voices": float(RISK_CONFIG["audio_background_voices"]),
+        "suspicious_pattern": float(RISK_CONFIG["audio_suspicious_pattern"]),
+        "no_transcription": float(RISK_CONFIG["audio_no_transcription"]),
     }
 
     EVALUATION_FACTORS = {
-        "low_quality_answers": RISK_CONFIG["eval_low_quality"],
-        "low_accuracy": RISK_CONFIG["eval_low_accuracy"],
-        "poor_communication": RISK_CONFIG["eval_poor_communication"],
+        "low_quality_answers": float(RISK_CONFIG["eval_low_quality"]),
+        "low_accuracy": float(RISK_CONFIG["eval_low_accuracy"]),
+        "poor_communication": float(RISK_CONFIG["eval_poor_communication"]),
     }
 
     @staticmethod
@@ -160,13 +192,54 @@ class RiskScoringEngine:
         return final_risk
 
     @staticmethod
-    def classify_risk(risk_score: float) -> str:
-        """Classify risk level based on score."""
-        if risk_score < RiskScoringEngine.LOW_RISK_THRESHOLD:
+    def calculate_confidence(
+        video_result: dict[str, Any],
+        audio_result: dict[str, Any],
+        evaluation_result: dict[str, Any],
+    ) -> float:
+        """
+        Calculate confidence based on completeness of available signals.
+        Returns a value between 0.0 and 1.0.
+        """
+        total_signals = 3
+        available_signals = 0
+
+        if video_result:
+            available_signals += 1
+        if audio_result:
+            available_signals += 1
+        if evaluation_result:
+            available_signals += 1
+
+        confidence = available_signals / total_signals
+        return round(confidence, 2)
+
+    @staticmethod
+    def classify_risk(
+        risk_score: float,
+        thresholds: RiskThresholds | dict[str, float] | None = None,
+    ) -> str:
+        """Classify risk level based on score using dynamic or static thresholds."""
+        if thresholds is not None:
+            if isinstance(thresholds, RiskThresholds):
+                low, medium, high = thresholds.low, thresholds.medium, thresholds.high
+            else:
+                low = thresholds.get("low", RiskScoringEngine.LOW_RISK_THRESHOLD)
+                medium = thresholds.get("medium", RiskScoringEngine.MEDIUM_RISK_THRESHOLD)
+                high = thresholds.get("high", RiskScoringEngine.HIGH_RISK_THRESHOLD)
+        elif RISK_CONFIG.get("adaptive_thresholds_enabled", True):
+            active_t = adaptive_threshold_manager.get_current_thresholds()
+            low, medium, high = active_t.low, active_t.medium, active_t.high
+        else:
+            low = RiskScoringEngine.LOW_RISK_THRESHOLD
+            medium = RiskScoringEngine.MEDIUM_RISK_THRESHOLD
+            high = RiskScoringEngine.HIGH_RISK_THRESHOLD
+
+        if risk_score < low:
             return "LOW"
-        if risk_score < RiskScoringEngine.MEDIUM_RISK_THRESHOLD:
+        if risk_score < medium:
             return "MEDIUM"
-        if risk_score < RiskScoringEngine.HIGH_RISK_THRESHOLD:
+        if risk_score < high:
             return "HIGH"
         return "CRITICAL"
 
@@ -176,6 +249,7 @@ class RiskScoringEngine:
         video_result: dict[str, Any],
         audio_result: dict[str, Any],
         evaluation_result: dict[str, Any],
+        db_session: Any = None,
     ) -> dict[str, Any]:
         """Generate comprehensive risk report from all analysis results."""
         logger.info(f"Generating risk report for session {session_id}")
@@ -188,25 +262,44 @@ class RiskScoringEngine:
             audio_risk,
             evaluation_risk,
         )
-        risk_classification = RiskDecisionTree.classify(
+        dt_classification = RiskDecisionTree.classify(
             video_result,
             audio_result,
             evaluation_result,
         )
-        final_risk = RiskScoringEngine._apply_critical_rule_overrides(final_risk, risk_classification)
-        weighted_classification = RiskScoringEngine.classify_risk(final_risk)
-        logger.info(
-            "Weighted=%s (%.2f), DecisionTree=%s",
-            weighted_classification,
-            final_risk,
-            risk_classification,
-        )
-        risk_factors = RiskScoringEngine._identify_risk_factors(video_result, audio_result, evaluation_result)
+        final_risk = RiskScoringEngine._apply_critical_rule_overrides(final_risk, dt_classification)
 
+        # Record score into historical store and update adaptive thresholds if enabled
+        if RISK_CONFIG.get("adaptive_thresholds_enabled", True):
+            current_thresholds = adaptive_threshold_manager.record_and_update(
+                session_id=session_id,
+                risk_score=final_risk,
+                db_session=db_session,
+            )
+        else:
+            current_thresholds = RiskThresholds(
+                low=RiskScoringEngine.LOW_RISK_THRESHOLD,
+                medium=RiskScoringEngine.MEDIUM_RISK_THRESHOLD,
+                high=RiskScoringEngine.HIGH_RISK_THRESHOLD,
+            )
+
+        risk_classification = RiskScoringEngine.classify_risk(final_risk, thresholds=current_thresholds)
+        confidence = RiskScoringEngine.calculate_confidence(
+            video_result,
+            audio_result,
+            evaluation_result,
+        )
+
+        risk_factors = RiskScoringEngine._identify_risk_factors(
+            video_result,
+            audio_result,
+            evaluation_result,
+        )
         report = {
             "session_id": session_id,
             "final_risk_score": final_risk,
             "risk_classification": risk_classification,
+            "confidence": confidence,
             "component_risks": {
                 "video_risk": video_risk,
                 "audio_risk": audio_risk,
@@ -214,6 +307,7 @@ class RiskScoringEngine:
             },
             "risk_factors": risk_factors,
             "recommendation": RiskScoringEngine._generate_recommendation(risk_classification),
+            "thresholds_used": current_thresholds.as_dict(),
         }
 
         logger.info(f"Risk report generated: {risk_classification} (score: {final_risk})")

@@ -93,3 +93,29 @@ def test_generate_risk_report_shape():
     assert "component_risks" in report
     assert "risk_factors" in report
     assert "recommendation" in report
+    assert "confidence" in report
+    assert 0.0 <= report["confidence"] <= 1.0
+
+
+def test_calculate_confidence_all_signals():
+    confidence = RiskScoringEngine.calculate_confidence(
+        {"face_detected": {"faces_found": True}},
+        {"transcription": {"text": "hello"}},
+        {
+            "answer_quality_score": {"overall_quality_score": 80},
+        },
+    )
+
+    assert confidence == 1.0
+
+
+def test_calculate_confidence_missing_signal():
+    confidence = RiskScoringEngine.calculate_confidence(
+        {"face_detected": {"faces_found": True}},
+        {},
+        {
+            "answer_quality_score": {"overall_quality_score": 80},
+        },
+    )
+
+    assert confidence == 0.67

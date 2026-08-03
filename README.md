@@ -89,6 +89,10 @@ All settings via environment variables (or `.env`):
 | `GROK_API_KEY` | — | xAI Grok API key |
 | `API_TOKEN` | `dev-token-change-me` | Auth token for mutations |
 | `SCREEN_LOCK_PIN` | `1234` | Dashboard screen lock PIN |
+| `RISK_ADAPTIVE_THRESHOLDS_ENABLED` | `true` | Enable dynamic threshold adaptation |
+| `RISK_THRESHOLD_STRATEGY` | `percentile` | Threshold strategy (`percentile`, `moving_average`, `rolling_window`, `fixed`) |
+| `RISK_MIN_HISTORICAL_SAMPLES` | `10` | Minimum historical samples before adapting |
+
 
 ## API Reference
 

@@ -11,6 +11,7 @@ from database.models.candidate import Candidate
 from database.models.interview_session import InterviewSession
 from database.models.interview_template import InterviewTemplate
 from database.models.question import Question
+from database.models.risk_score_history import RiskScoreHistory
 
 __all__ = [
     "Base",
@@ -18,5 +19,6 @@ __all__ = [
     "InterviewSession",
     "InterviewTemplate",
     "Question",
+    "RiskScoreHistory",
     "utcnow",
 ]

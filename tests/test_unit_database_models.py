@@ -8,6 +8,7 @@ from database.models import (
     InterviewSession,
     InterviewTemplate,
     Question,
+    RiskScoreHistory,
 )
 
 
@@ -121,3 +122,22 @@ def test_interview_session_repr():
 
     assert "InterviewSession" in repr(session)
     assert "pending" in repr(session)
+
+
+def test_create_risk_score_history(db_session):
+    history = RiskScoreHistory(session_id="s1", risk_score=0.45)
+
+    db_session.add(history)
+    db_session.commit()
+
+    saved = db_session.query(RiskScoreHistory).filter_by(session_id="s1").first()
+
+    assert saved is not None
+    assert saved.risk_score == 0.45
+
+
+def test_risk_score_history_repr():
+    history = RiskScoreHistory(id=1, session_id="s1", risk_score=0.45)
+
+    assert "RiskScoreHistory" in repr(history)
+    assert "s1" in repr(history)
