@@ -80,9 +80,14 @@ class WorkerAgent:
             )
             time.sleep(self.heartbeat_interval)
 
+    def _handle_shutdown(self, signum, frame) -> None:
+        logger.info("Received signal %s, shutting down worker %s", signum, self.worker_id)
+        self._stop = True
+        self.deregister()
+
     def start(self) -> None:
-        signal.signal(signal.SIGTERM, lambda *_: self._stop or self.deregister())
-        signal.signal(signal.SIGINT, lambda *_: self._stop or self.deregister())
+        signal.signal(signal.SIGTERM, self._handle_shutdown)
+        signal.signal(signal.SIGINT, self._handle_shutdown)
         if not self.register():
             sys.exit(1)
         Thread(target=self.heartbeat_loop, daemon=True).start()
@@ -103,6 +108,8 @@ if __name__ == "__main__":
     agent = WorkerAgent(api_url=api_url, worker_id=worker_id)
     agent.start()
 
-    # Block main thread
-    while True:
-        time.sleep(60)
+    # Block main thread until shutdown signal is received
+    while not agent._stop:
+        time.sleep(1)
+
+    logger.info("Worker agent %s has shut down cleanly", agent.worker_id)

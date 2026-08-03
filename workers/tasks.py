@@ -33,6 +33,18 @@ logger = logging.getLogger(__name__)
 session_manager = SessionManager()
 state_sync = StateSynchronizer()
 
+# Redelivered tasks (task_acks_late + task_reject_on_worker_lost) re-run
+# from the top with the same session_id while the DB row may still be
+# active. task_time_limit tells us when a stuck attempt is provably dead.
+REDELIVERY_STALE_AFTER_SECONDS = celery_app.conf.task_time_limit + 60
+
+ACTIVE_PROCESSING_STATUSES = {
+    session_manager.PROCESSING,
+    session_manager.VIDEO_PROCESSING,
+    getattr(session_manager, "AUDIO_PROCESSING", "AUDIO_PROCESSING"),
+    session_manager.EVALUATING,
+}
+
 
 # ---------------------------------------------------------------------------
 # Individual stage tasks
@@ -128,9 +140,48 @@ def process_interview_session(self, session_id):
             if interview is None:
                 logger.error("Session %s not found in DB", session_id)
                 return {"session_id": session_id, "status": "missing"}
+
             if interview.status == "FAILED":
                 interview.status = "QUEUED"
                 db_session.commit()
+
+            elif interview.status in ACTIVE_PROCESSING_STATUSES:
+                # Possible redelivery: figure out if the previous attempt
+                # is still alive (skip) or dead past task_time_limit (recover).
+                existing_start = interview.start_time
+                age_seconds = None
+                if existing_start is not None:
+                    if existing_start.tzinfo is None:
+                        existing_start = existing_start.replace(tzinfo=timezone.utc)
+                    age_seconds = (datetime.now(timezone.utc) - existing_start).total_seconds()
+
+                if age_seconds is not None and age_seconds < REDELIVERY_STALE_AFTER_SECONDS:
+                    logger.warning(
+                        "Session %s is already %s (started %.0fs ago). Treating "
+                        "this delivery of task %s on worker %s as a redelivered "
+                        "duplicate - skipping re-dispatch of the video/audio group.",
+                        session_id,
+                        interview.status,
+                        age_seconds,
+                        self.request.id,
+                        worker_hostname,
+                    )
+                    return {
+                        "session_id": session_id,
+                        "status": "skipped_duplicate_delivery",
+                        "reason": f"session already {interview.status}, started {age_seconds:.0f}s ago",
+                        "processed_by": worker_hostname,
+                    }
+
+                logger.warning(
+                    "Session %s stuck in %s with no live heartbeat (age=%s) - "
+                    "previous attempt appears abandoned/crashed. Recovering by "
+                    "reprocessing on worker %s.",
+                    session_id,
+                    interview.status,
+                    age_seconds,
+                    worker_hostname,
+                )
         finally:
             db_session.close()
 
