@@ -72,6 +72,9 @@ class InterviewSession(Base):
     audio_analysis = Column(JSON, nullable=True)
     evaluation_analysis = Column(JSON, nullable=True)
 
+    # Token & cost usage tracking stored as JSON
+    llm_usage = Column(JSON, nullable=True, default=dict)
+
     # Interview Q&A tracking
     questions_asked = Column(JSON, nullable=True, default=list)
     answers_provided = Column(JSON, nullable=True, default=list)
@@ -150,4 +153,9 @@ class InterviewTemplate(Base):
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
     def __repr__(self):
-        return f"<InterviewTemplate(template_id='{self.template_id}', name='{self.name}', type='{self.interview_type}')>"
+        return (
+            f"<Notification(id={self.id}, "
+            f"user_id='{self.user_id}', "
+            f"message='{self.message}', "
+            f"read={self.read})>"
+        )

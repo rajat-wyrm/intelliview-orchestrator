@@ -2,11 +2,12 @@
 AI Client Module
 Provides pluggable clients for OpenAI, Whisper, and MediaPipe/OpenCV
 with automatic fallback to mocks when API keys or libraries are absent.
+Includes token usage tracking for OpenAI, Gemini, and Grok calls.
 """
 
 import logging
 import os
-from typing import Any
+from typing import Any, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,31 @@ except ImportError:
 
 
 # ---------------------------------------------------------------------------
+# Helper function to construct standard usage dictionary
+# ---------------------------------------------------------------------------
+
+
+def _build_usage_dict(
+    provider: str,
+    model: str,
+    prompt_tokens: int = 0,
+    completion_tokens: int = 0,
+    total_tokens: int = 0,
+) -> dict[str, Any]:
+    """Helper to structure token usage and estimated cost metadata."""
+    if not total_tokens:
+        total_tokens = prompt_tokens + completion_tokens
+
+    return {
+        "provider": provider,
+        "model": model,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+    }
+
+
+# ---------------------------------------------------------------------------
 # OpenAI helpers
 # ---------------------------------------------------------------------------
 
@@ -104,10 +130,13 @@ def chat_completion(
     model: str = "gpt-4o",
     temperature: float = 0.7,
     max_tokens: int = 1024,
-) -> str | None:
-    """Send a chat completion request; returns the assistant text or None."""
+) -> Tuple[str | None, dict[str, Any]]:
+    """
+    Send a chat completion request to OpenAI.
+    Returns a tuple: (content_text or None, usage_dict).
+    """
     if not HAS_OPENAI:
-        return None
+        return None, _build_usage_dict("openai", model)
     try:
         resp = openai_client.chat.completions.create(
             model=model,
@@ -115,10 +144,29 @@ def chat_completion(
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        return resp.choices[0].message.content
+        content = resp.choices[0].message.content
+
+        usage = _build_usage_dict("openai", model)
+        if getattr(resp, "usage", None):
+            usage = _build_usage_dict(
+                provider="openai",
+                model=model,
+                prompt_tokens=getattr(resp.usage, "prompt_tokens", 0),
+                completion_tokens=getattr(resp.usage, "completion_tokens", 0),
+                total_tokens=getattr(resp.usage, "total_tokens", 0),
+            )
+
+        logger.info(
+            "OpenAI call finished [%s] — Tokens: Prompt=%d, Completion=%d, Total=%d",
+            model,
+            usage["prompt_tokens"],
+            usage["completion_tokens"],
+            usage["total_tokens"],
+        )
+        return content, usage
     except Exception as exc:
         logger.warning("OpenAI chat completion failed: %s", exc)
-        return None
+        return None, _build_usage_dict("openai", model)
 
 
 # ---------------------------------------------------------------------------
@@ -131,10 +179,14 @@ def gemini_generate(
     *,
     temperature: float = 0.7,
     max_output_tokens: int = 1024,
-) -> str | None:
-    """Generate text using Gemini; returns the text or None."""
+) -> Tuple[str | None, dict[str, Any]]:
+    """
+    Generate text using Gemini.
+    Returns a tuple: (content_text or None, usage_dict).
+    """
+    model_name = "gemini-2.0-flash"
     if not HAS_GEMINI:
-        return None
+        return None, _build_usage_dict("google", model_name)
     try:
         response = gemini_model.generate_content(
             prompt,
@@ -143,10 +195,36 @@ def gemini_generate(
                 max_output_tokens=max_output_tokens,
             ),
         )
-        return response.text
+        content = response.text
+
+        prompt_tokens = 0
+        completion_tokens = 0
+        total_tokens = 0
+
+        if hasattr(response, "usage_metadata") and response.usage_metadata:
+            prompt_tokens = getattr(response.usage_metadata, "prompt_token_count", 0)
+            completion_tokens = getattr(response.usage_metadata, "candidates_token_count", 0)
+            total_tokens = getattr(response.usage_metadata, "total_token_count", 0)
+
+        usage = _build_usage_dict(
+            provider="google",
+            model=model_name,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+        )
+
+        logger.info(
+            "Gemini generation finished [%s] — Tokens: Prompt=%d, Completion=%d, Total=%d",
+            model_name,
+            usage["prompt_tokens"],
+            usage["completion_tokens"],
+            usage["total_tokens"],
+        )
+        return content, usage
     except Exception as exc:
         logger.warning("Gemini generation failed: %s", exc)
-        return None
+        return None, _build_usage_dict("google", model_name)
 
 
 def gemini_chat(
@@ -154,21 +232,53 @@ def gemini_chat(
     *,
     temperature: float = 0.7,
     max_output_tokens: int = 1024,
-) -> str | None:
-    """Multi-turn chat with Gemini; returns the response text or None."""
+) -> Tuple[str | None, dict[str, Any]]:
+    """
+    Multi-turn chat with Gemini.
+    Returns a tuple: (response_text or None, usage_dict).
+    """
+    model_name = "gemini-2.0-flash"
     if not HAS_GEMINI:
-        return None
+        return None, _build_usage_dict("google", model_name)
     try:
         chat = gemini_model.start_chat(history=[])
+        response = None
         for msg in messages:
             if msg["role"] == "user":
-                chat.send_message(msg["content"])
+                response = chat.send_message(msg["content"])
             elif msg["role"] == "assistant":
                 pass
-        return chat.last.text if chat.last else None
+
+        content = chat.last.text if chat.last else None
+
+        prompt_tokens = 0
+        completion_tokens = 0
+        total_tokens = 0
+
+        if response and hasattr(response, "usage_metadata") and response.usage_metadata:
+            prompt_tokens = getattr(response.usage_metadata, "prompt_token_count", 0)
+            completion_tokens = getattr(response.usage_metadata, "candidates_token_count", 0)
+            total_tokens = getattr(response.usage_metadata, "total_token_count", 0)
+
+        usage = _build_usage_dict(
+            provider="google",
+            model=model_name,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+        )
+
+        logger.info(
+            "Gemini chat finished [%s] — Tokens: Prompt=%d, Completion=%d, Total=%d",
+            model_name,
+            usage["prompt_tokens"],
+            usage["completion_tokens"],
+            usage["total_tokens"],
+        )
+        return content, usage
     except Exception as exc:
         logger.warning("Gemini chat failed: %s", exc)
-        return None
+        return None, _build_usage_dict("google", model_name)
 
 
 # ---------------------------------------------------------------------------
@@ -182,10 +292,13 @@ def grok_completion(
     model: str = "grok-2-1212",
     temperature: float = 0.7,
     max_tokens: int = 1024,
-) -> str | None:
-    """Send a chat completion request to Grok; returns the assistant text or None."""
+) -> Tuple[str | None, dict[str, Any]]:
+    """
+    Send a chat completion request to Grok.
+    Returns a tuple: (content_text or None, usage_dict).
+    """
     if not HAS_GROK:
-        return None
+        return None, _build_usage_dict("grok", model)
     try:
         resp = grok_client.chat.completions.create(
             model=model,
@@ -193,10 +306,29 @@ def grok_completion(
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        return resp.choices[0].message.content
+        content = resp.choices[0].message.content
+
+        usage = _build_usage_dict("grok", model)
+        if getattr(resp, "usage", None):
+            usage = _build_usage_dict(
+                provider="grok",
+                model=model,
+                prompt_tokens=getattr(resp.usage, "prompt_tokens", 0),
+                completion_tokens=getattr(resp.usage, "completion_tokens", 0),
+                total_tokens=getattr(resp.usage, "total_tokens", 0),
+            )
+
+        logger.info(
+            "Grok completion finished [%s] — Tokens: Prompt=%d, Completion=%d, Total=%d",
+            model,
+            usage["prompt_tokens"],
+            usage["completion_tokens"],
+            usage["total_tokens"],
+        )
+        return content, usage
     except Exception as exc:
         logger.warning("Grok completion failed: %s", exc)
-        return None
+        return None, _build_usage_dict("grok", model)
 
 
 # ---------------------------------------------------------------------------
