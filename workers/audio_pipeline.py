@@ -17,7 +17,7 @@ HIGH/CRITICAL thresholds fire correctly without GPU dependencies.
 """
 # fmt: off
 # ruff: noqa
-
+# fmt: skip
 import logging                 
 import os
 import time
@@ -349,4 +349,5 @@ def calculate_audio_risk_score(results:AudioAnalysisResult) -> float:
     if not results.get("transcription", {}).get("text"):
         score += RiskScoringEngine.AUDIO_FACTORS["no_transcription"]
     return round(min(score, 1.0), 3)
+    
 
