@@ -29,12 +29,12 @@ class SessionTracker:
     def __init__(self):
         """Initialize session tracker"""
     def get_active_sessions(
-        self,
-        status=None,
-        since=None,
-        sort_by="start_time",
-        order="desc",
-    ) -> list[dict[str, Any]]:
+    self,
+    status: str | None = None,
+    since: str | None = None,
+    sort_by: str | None = "start_time",
+    order: str | None = "desc",
+) -> list[dict[str, Any]]:
         """
         Get all currently active sessions (CREATED, QUEUED, PROCESSING)
 
