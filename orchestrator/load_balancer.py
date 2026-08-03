@@ -39,7 +39,6 @@ class LoadBalancer:
         """
         self.worker_registry = WorkerRegistry()
         self.strategy = strategy
-
         self.round_robin_index = 0
         self._lock = threading.Lock()
 

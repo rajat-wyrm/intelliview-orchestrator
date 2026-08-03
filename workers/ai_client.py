@@ -208,6 +208,7 @@ def transcribe_audio_file(
     audio_path: str,
     vad_config: Any | None = None,
     speech_segments: list[Any] | None = None,
+    raw_audio: bool = False,
 ) -> dict[str, Any] | None:
     """Transcribe an audio file using VAD pre-filtering and local Whisper.
 
@@ -221,9 +222,21 @@ def transcribe_audio_file(
     try:
         from workers.vad import VoiceActivityDetector
 
+        # Run VAD ONCE if speech_segments not provided
         detector = VoiceActivityDetector(vad_config)
 
-        # Run VAD ONCE if speech_segments not provided
+        if raw_audio:
+            result = whisper_model.transcribe(audio_path)
+
+            return {
+                "text": result.get("text", "").strip(),
+                "language": result.get("language", "en"),
+                "segments": result.get("segments", []),
+                "silence_only": False,
+                "vad_segments": [],
+                "total_speech_duration": 0.0,
+            }
+
         if speech_segments is None:
             speech_segments = detector.process_audio(audio_path)
 

@@ -5,8 +5,6 @@ Responsibilities:
 - Register this worker with the orchestrator API on startup.
 - Periodically send heartbeats with the current active task count.
 - Deregister on graceful shutdown.
-- Support "drain mode": stop accepting new tasks while letting
-  in-progress tasks finish normally before shutting down.
 """
 
 import logging
@@ -40,17 +38,15 @@ class WorkerAgent:
         # This is accurate only when running with the 'solo' pool.
         self.active_tasks = 0
 
+        self.tasks_completed = 0  # track total completed tasks
+        self.max_tasks_before_restart = int(os.getenv("MAX_TASKS_BEFORE_RESTART", "100"))  # restart limit
+        self._restart_requested = False  # restart flag
+
         self._stop = False
         self._headers = {
             "X-API-Token": API_TOKEN,
             "Content-Type": "application/json",
         }
-
-        # --- Drain mode state ---
-        # When True, the worker stops accepting new tasks but keeps
-        # running any tasks already in progress until they finish.
-        self.draining = False
-        self._drain_complete = False
 
         # Read the configured Celery worker pool.
         # Default to 'solo' if not explicitly configured.
@@ -104,64 +100,16 @@ class WorkerAgent:
 
     def heartbeat_loop(self) -> None:
         while not self._stop:
-            # The orchestrator's heartbeat endpoint doesn't accept a
-            # "status" field, so a draining worker reports itself as
-            # already at full capacity. That's enough for the
-            # orchestrator's existing "active_tasks < capacity" check
-            # to stop routing new work here, without needing any
-            # orchestrator-side change.
-            reported_active_tasks = self.capacity if self.draining else self.active_tasks
-
             self._post(
                 "/worker/heartbeat",
-                {"worker_id": self.worker_id, "active_tasks": reported_active_tasks},
+                {"worker_id": self.worker_id, "active_tasks": self.active_tasks},
             )
             time.sleep(self.heartbeat_interval)
 
-    def enter_drain_mode(self) -> None:
-        """Stop accepting new tasks; let in-progress tasks finish normally."""
-        if self.draining:
-            logger.info("Worker %s is already draining", self.worker_id)
-            return
-
-        self.draining = True
-        logger.info(
-            "Worker %s ENTERING DRAIN MODE (%d task(s) still in progress) — no new tasks will be accepted",
-            self.worker_id,
-            self.active_tasks,
-        )
-
-        if self.active_tasks == 0:
-            self._finish_draining()
-
-    def _finish_draining(self) -> None:
-        """Called once every in-progress task has completed."""
-        if self._drain_complete:
-            return
-        self._drain_complete = True
-        logger.info(
-            "Worker %s FINISHED DRAINING — all in-progress tasks complete, safe to shut down now",
-            self.worker_id,
-        )
+    def _handle_shutdown(self, signum, frame) -> None:
+        logger.info("Received signal %s, shutting down worker %s", signum, self.worker_id)
         self._stop = True
         self.deregister()
-
-    def _handle_shutdown(self, signum, frame) -> None:
-        if not self.draining:
-            logger.info(
-                "Received signal %s — starting graceful drain for worker %s",
-                signum,
-                self.worker_id,
-            )
-            self.enter_drain_mode()
-        else:
-            logger.warning(
-                "Received signal %s again while draining — forcing immediate shutdown of worker %s",
-                signum,
-                self.worker_id,
-            )
-            self._stop = True
-            self.deregister()
 
     def start(self) -> None:
         signal.signal(signal.SIGTERM, self._handle_shutdown)
@@ -176,10 +124,27 @@ class WorkerAgent:
 
     def decrement_active(self) -> None:
         self.active_tasks = max(0, self.active_tasks - 1)
-        # If we were waiting to drain and the last in-progress task
-        # just finished, drain is now complete.
-        if self.draining and self.active_tasks == 0:
-            self._finish_draining()
+        self.tasks_completed += 1  # count each completed task
+
+        if self.tasks_completed >= self.max_tasks_before_restart:
+            if not self._restart_requested:
+                self._restart_requested = True
+                logger.info(
+                    "Worker %s has processed %d tasks (limit: %d) — requesting graceful restart.",
+                    self.worker_id,
+                    self.tasks_completed,
+                    self.max_tasks_before_restart,
+                )
+                self._request_restart()
+
+    def _request_restart(self) -> None:
+        logger.info(
+            "Worker %s initiating graceful shutdown for restart (active tasks remaining: %d)",
+            self.worker_id,
+            self.active_tasks,
+        )
+        self.deregister()
+        os.kill(os.getpid(), signal.SIGTERM)
 
 
 if __name__ == "__main__":
