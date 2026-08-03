@@ -196,11 +196,13 @@ def _after_parallel(self, results: list, session_id: str):
 
 
 @celery_app.task(bind=True, max_retries=3, name="workers.tasks.process_interview_session")
-def process_interview_session(self, session_id: str, priority: str = "medium"):
-    logger.info("Session = %s | Priority = %s", session_id, priority)
-
-    # Determine priority queue for downstream child tasks
+def process_interview_session(self, session_id, priority="medium"):
     priority_clean, target_queue = _resolve_priority_queue(priority)
+
+    logger.info("==============================")
+    logger.info("PROCESS_INTERVIEW_SESSION STARTED")
+    logger.info("Session = %s | Priority = %s", session_id, priority_clean)
+    logger.info("==============================")
 
     task_name = self.name
     start_time = time.perf_counter()

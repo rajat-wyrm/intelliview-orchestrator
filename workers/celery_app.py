@@ -13,6 +13,8 @@ from config import REDIS_URL
 
 celery_app = Celery("interview_tasks", broker=REDIS_URL, backend=REDIS_URL)
 CeleryInstrumentor().instrument()
+
+
 celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
@@ -59,17 +61,6 @@ celery_app.conf.update(
 celery_app.autodiscover_tasks(["workers"])
 
 
-# Worker allocation:
-#   celery -A workers.celery_app worker -Q high_priority   -c 4 -n high@%h
-#   celery -A workers.celery_app worker -Q medium_priority -c 3 -n medium@%h
-#   celery -A workers.celery_app worker -Q low_priority    -c 1 -n low@%h
-#
-# high: 4 workers, dedicated - urgent sessions must be picked up within
-#   seconds regardless of load elsewhere.
-# medium: 3 workers - default queue, carries the bulk of normal traffic.
-# low: 1 worker - background/non-urgent work, a few minutes of delay is fine.
-
-
 _SESSION_TASK_NAMES: frozenset[str] = frozenset(
     {
         "workers.tasks.process_interview_session",
@@ -88,8 +79,8 @@ def _extract_session_id(args: tuple, kwargs: dict) -> str | None:
 
     Callers may invoke a task in any of the following equivalent ways::
 
-        task.delay("abc-123")                # positional  → args[0]
-        task.delay(session_id="abc-123")    # keyword      → kwargs["session_id"]
+        task.delay("abc-123")               # positional  → args[0]
+        task.delay(session_id="abc-123")    # keyword     → kwargs["session_id"]
         task.apply_async(args=["abc-123"])  # positional  → args[0]
         task.apply_async(kwargs={"session_id": "abc-123"})  # keyword
 
