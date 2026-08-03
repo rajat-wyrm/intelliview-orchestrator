@@ -1,6 +1,3 @@
-# fmt: off
-# ruff: noqa
-
 """
 Audio Analysis Pipeline
 Handles speech and audio monitoring.         
@@ -15,7 +12,6 @@ Pluggable contract — replace each detection helper with a real model
 deterministic per-session signals so end-to-end risk scoring and the
 HIGH/CRITICAL thresholds fire correctly without GPU dependencies.
 """
-# fmt: off
 # ruff: noqa
 # fmt: skip
 import logging                 
@@ -350,4 +346,3 @@ def calculate_audio_risk_score(results:AudioAnalysisResult) -> float:
         score += RiskScoringEngine.AUDIO_FACTORS["no_transcription"]
     return round(min(score, 1.0), 3)
     
-
