@@ -70,7 +70,7 @@ def _real_transcribe(
     """Transcribe audio using local Whisper model."""
     import tempfile
     import urllib.request
-a
+
     vad_ran = False
     vad_segments = []
 
