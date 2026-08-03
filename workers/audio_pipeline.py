@@ -31,6 +31,10 @@ class TranscriptionResult(TypedDict, total=False):
     text: str
     confidence: float
     language: str
+    language_confidence: float
+    expected_language: str
+    language_match: bool
+    language_flagged: bool
     duration_seconds: float
     timestamp: float | None
     vad_executed: bool
@@ -76,13 +80,15 @@ def _real_transcribe(session_id: str, vad_config: Any | None = None) -> dict[str
             logger.warning("Audio file not found: %s", audio_path)
             return None
 
-        # VAD Stage execution (run ONCE)
         detector = VoiceActivityDetector(vad_config)
         vad_segments = detector.process_audio(audio_path)
         speech_detected = len(vad_segments) > 0
 
-        # Pass pre-computed vad_segments so VAD is not executed twice
-        result = transcribe_audio_file(audio_path, vad_config=vad_config, speech_segments=vad_segments)
+        result = transcribe_audio_file(
+            audio_path,
+            vad_config=vad_config,
+            speech_segments=vad_segments,
+        )
         if result is None:
             return None
 
@@ -96,12 +102,20 @@ def _real_transcribe(session_id: str, vad_config: Any | None = None) -> dict[str
         speech_dur = sum(s.duration for s in vad_segments)
         total_dur = result.get("total_speech_duration", speech_dur)
 
+        expected_language = os.getenv("EXPECTED_LANGUAGE", "en")
+        detected_language = result.get("language", "en")
+
         return {
             "text": result.get("text", ""),
             "confidence": confidence,
-            "language": result.get("language", "en"),
+            "language": detected_language,
+            "language_confidence": 1.0,
+            "expected_language": expected_language,
+            "language_match": detected_language == expected_language,
+            "language_flagged": detected_language != expected_language,
             "duration_seconds": (
-                sum(s.get("end", 0) - s.get("start", 0) for s in segments) or round(total_dur, 1)
+                sum(s.get("end", 0) - s.get("start", 0) for s in segments)
+                or round(total_dur, 1)
             ),
             "timestamp": time.time(),
             "vad_executed": True,
@@ -114,7 +128,6 @@ def _real_transcribe(session_id: str, vad_config: Any | None = None) -> dict[str
     except Exception as exc:
         logger.debug("Real transcription unavailable: %s", exc)
         return None
-
 
 def _real_detect_background_voices(session_id: str) -> dict[str, Any] | None:
     """Detect background voices using pyannote speaker diarisation."""
@@ -237,7 +250,6 @@ def transcribe_speech(session_id: str, vad_config: Any | None = None) -> dict[st
 
     config = vad_config if isinstance(vad_config, VADConfig) else VADConfig.from_env()
 
-    # VAD pre-filtering in stub mode
     silence = _seeded_unit(session_id, "silence") > 0.92
     text = (
         ""
@@ -247,9 +259,9 @@ def transcribe_speech(session_id: str, vad_config: Any | None = None) -> dict[st
             "Recently I led a migration from a monolith to Celery-backed workers."
         )
     )
+
     total_duration = round(120 + _seeded_unit(session_id, "duration") * 600, 1)
 
-    # Simulated timestamp-aligned VAD segments for stub mode
     vad_segments = []
     if not silence:
         speech_start = round(1.5 + _seeded_unit(session_id, "start") * 2.0, 3)
@@ -259,17 +271,27 @@ def transcribe_speech(session_id: str, vad_config: Any | None = None) -> dict[st
                 "start": speech_start,
                 "end": speech_end,
                 "duration": round(speech_end - speech_start, 3),
-                "confidence": round(0.85 + _seeded_unit(session_id, "vad_conf") * 0.1, 3),
+                "confidence": round(
+                    0.85 + _seeded_unit(session_id, "vad_conf") * 0.1,
+                    3,
+                ),
                 "segment_index": 0,
             }
         ]
 
     speech_duration = sum(s["duration"] for s in vad_segments)
 
+    expected_language = os.getenv("EXPECTED_LANGUAGE", "en")
+    detected_language = "en"
+
     return {
         "text": text,
         "confidence": round(0.6 + _seeded_unit(session_id, "asr_conf") * 0.35, 3),
-        "language": "en",
+        "language": detected_language,
+        "language_confidence": 0.98,
+        "expected_language": expected_language,
+        "language_match": detected_language == expected_language,
+        "language_flagged": detected_language != expected_language,
         "duration_seconds": total_duration,
         "timestamp": None,
         "vad_executed": True,
