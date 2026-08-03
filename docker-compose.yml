@@ -1,11 +1,10 @@
 services:
   redis:
-    image: redis:latest
+    image: redis:7-alpine
     container_name: ai-interview-redis
     ports:
       - "6379:6379"
-    environment:
-      - REDIS_REPLICATION_MODE=master
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes", "--loglevel", "warning"]
     volumes:
       - redis_data:/data
     networks:
@@ -29,7 +28,7 @@ services:
     environment:
       POSTGRES_DB: ai_interview_db
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -58,8 +57,8 @@ services:
       POSTGRES_PORT: "5432"
       POSTGRES_DB: ai_interview_db
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      API_TOKEN: "${API_TOKEN:-dev-token-change-me}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      API_TOKEN: "${API_TOKEN}"
       CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-*}"
       ENABLE_PROMETHEUS: "${ENABLE_PROMETHEUS:-true}"
       AUDIT_LOG_FILE: "${AUDIT_LOG_FILE:-}"
@@ -68,16 +67,14 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
-    volumes:
-      - .:/app
     networks:
       - ai-interview-network
-    command: uvicorn orchestrator.main:app --host 0.0.0.0 --port 8000
+    command: uvicorn orchestrator.main:app --host 0.0.0.0 --port 8000 --workers 2
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
-      interval: 15s
-      timeout: 5s
-      start_period: 20s
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=8)"]
+      interval: 20s
+      timeout: 10s
+      start_period: 40s
       retries: 3
     deploy:
       resources:
@@ -98,9 +95,9 @@ services:
       POSTGRES_PORT: "5432"
       POSTGRES_DB: ai_interview_db
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
       API_URL: "http://fastapi:8000"
-      API_TOKEN: "${API_TOKEN:-dev-token-change-me}"
+      API_TOKEN: "${API_TOKEN}"
       WORKER_CONCURRENCY: "4"
       WORKER_ID: "${WORKER_ID:-worker-1}"
     depends_on:
@@ -110,8 +107,6 @@ services:
         condition: service_healthy
       fastapi:
         condition: service_healthy
-    volumes:
-      - .:/app
     networks:
       - ai-interview-network
     command: python -m workers.worker_entrypoint
@@ -139,13 +134,11 @@ services:
       - "5555:5555"
     environment:
       REDIS_URL: "redis://redis:6379/0"
-      API_TOKEN: "${API_TOKEN:-dev-token-change-me}"
+      API_TOKEN: "${API_TOKEN}"
       PYTHONPATH: "/app"
     depends_on:
       redis:
         condition: service_healthy
-    volumes:
-      - .:/app
     working_dir: /app
     networks:
       - ai-interview-network
@@ -208,11 +201,20 @@ services:
       - "3001:3000"
     environment:
       GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_PASSWORD:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_PASSWORD}"
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: ai-interview-jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"
+      - "4317:4317"
     networks:
       - ai-interview-network
     depends_on:
@@ -229,6 +231,47 @@ services:
         limits:
           memory: 256M
           cpus: "0.5"
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ai-interview-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+    depends_on:
+      fastapi:
+        condition: service_started
+    networks:
+      - ai-interview-network
+    restart: unless-stopped          
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ai-interview-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL:-http://localhost:8000}"
+    depends_on:
+      fastapi:
+        condition: service_healthy
+    networks:
+      - ai-interview-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
 
 volumes:
   redis_data:

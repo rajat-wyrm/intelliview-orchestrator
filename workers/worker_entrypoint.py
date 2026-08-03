@@ -55,6 +55,14 @@ def main() -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
+    # Validate required configuration settings right at startup (Issue 1)
+    required_settings = ["API_URL", "API_TOKEN"]
+    missing_settings = [setting for setting in required_settings if not os.getenv(setting)]
+
+    if missing_settings:
+        logger.error(f"Startup failed: Missing required environment variables: {', '.join(missing_settings)}")
+        return 1
+
     start_worker_metrics()
 
     api_url = os.getenv("API_URL", "http://fastapi:8000")
@@ -82,11 +90,23 @@ def main() -> int:
     def _on_postrun(**_):
         agent.decrement_active()
 
-    # Start heartbeat thread
-    threading.Thread(
+    # Start the heartbeat loop managed by WorkerAgent
+    heartbeat_thread = threading.Thread(
         target=agent.heartbeat_loop,
         daemon=True,
-    ).start()
+    )
+    heartbeat_thread.start()
+
+    @worker_shutdown.connect
+    def _on_worker_shutdown(**kwargs):
+        logger.info("Shutting down worker")
+
+        agent.deregister()
+
+        heartbeat_thread.join(timeout=5)
+
+        if heartbeat_thread.is_alive():
+            logger.warning("Heartbeat thread did not stop within timeout.")
 
     logger.info("Worker entrypoint ready; starting Celery")
 
