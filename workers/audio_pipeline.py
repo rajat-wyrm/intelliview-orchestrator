@@ -15,6 +15,8 @@ Pluggable contract — replace each detection helper with a real model
 deterministic per-session signals so end-to-end risk scoring and the
 HIGH/CRITICAL thresholds fire correctly without GPU dependencies.
 """
+# fmt: off
+# ruff: noqa
 
 import logging                 
 import os
