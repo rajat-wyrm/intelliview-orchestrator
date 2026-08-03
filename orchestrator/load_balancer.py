@@ -1,6 +1,4 @@
 """
-Load Balancer
-Implements intelligent task distribution strategies across worker nodes
 
 Strategies:
 1. Round Robin - Distribute tasks evenly in sequence
@@ -8,13 +6,11 @@ Strategies:
 3. Queue-based - Fallback to Redis queue if no workers available
 """
 
-import json
 import logging
 import threading
 from enum import Enum
 from typing import Any
 
-from orchestrator.redis_client import get_redis_client
 from orchestrator.worker_registry import WorkerRegistry
 
 logger = logging.getLogger(__name__)
@@ -42,61 +38,31 @@ class LoadBalancer:
         """
         self.worker_registry = WorkerRegistry()
         self.strategy = strategy
-        self.session_affinity_enabled = True
         self.round_robin_index = 0
-        self.redis_client = get_redis_client()
         self._lock = threading.Lock()
         self.round_robin_lock = threading.Lock()
         logger.info(f"Load Balancer initialized with strategy: {strategy.value}")
 
-    def select_worker(self, task: dict[str, Any] | None = None) -> dict[str, Any] | None:
-        """
-        Select a worker for task execution based on current strategy
-
-        Args:
-            task: Task payload dict (required for queue-based fallback)
-
-        Returns:
-            dict: Selected worker details or None if no workers available
-        """
+    def select_worker(self) -> dict[str, Any] | None:
         with self._lock:
             if self.strategy == BalancingStrategy.ROUND_ROBIN:
                 return self._select_round_robin()
             if self.strategy == BalancingStrategy.LEAST_LOADED:
                 return self._select_least_loaded()
             if self.strategy == BalancingStrategy.QUEUE_BASED:
-                return self._select_queue_based(task=task)
-            # Default to least loaded
+                return self._select_queue_based()
+
             return self._select_least_loaded()
-
-    def select_worker_with_affinity(
-        self,
-        preferred_worker_id: str | None = None,
-    ) -> dict[str, Any] | None:
-        """
-        Select a worker using session affinity.
-
-        If the preferred worker is healthy and has available capacity,
-        use it. Otherwise, fall back to the configured load balancing
-        strategy.
-        """
-        if self.session_affinity_enabled and preferred_worker_id:
-            worker = self.worker_registry.get_worker(preferred_worker_id)
-
-            if worker and worker["status"] == "healthy" and worker["active_tasks"] < worker["capacity"]:
-                logger.debug(
-                    "Session affinity selected worker %s",
-                    preferred_worker_id,
-                )
-                return worker
-
-        return self.select_worker()
 
     def _select_round_robin(self) -> dict[str, Any] | None:
         """
-        Round Robin Strategy: Distribute tasks evenly in sequence
+        Round Robin Strategy: Distribute tasks in sequence
 
-        Cycles through available workers in order, regardless of current load.
+        Distributes tasks evenly across all available workers in a circular fashion.
+        Good for evenly distributed workloads.
+
+        Thread-safe: uses a lock around the read-and-increment of round_robin_index
+        so concurrent calls cannot read the same index value before it is updated.
 
         Returns:
             dict: Next worker in rotation or None if no workers available
@@ -107,6 +73,7 @@ class LoadBalancer:
             logger.warning("No workers available for Round Robin selection")
             return None
 
+        # Select using round robin index (thread-safe)
         with self.round_robin_lock:
             worker = available[self.round_robin_index % len(available)]
             self.round_robin_index += 1
@@ -136,15 +103,12 @@ class LoadBalancer:
         )
         return worker
 
-    def _select_queue_based(self, task: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    def _select_queue_based(self) -> dict[str, Any] | None:
         """
-        Queue-based Strategy: Fallback to Redis queue if no workers available
+        Queue-based Strategy: Fallback to queue if no workers available
 
-        First tries to select a worker. If none available and a task is provided,
-        enqueues the task in Redis for later processing.
-
-        Args:
-            task: Task payload dict to be enqueued if worker is unavailable
+        First tries to select a worker. If none available, returns None to signal
+        task should be queued in Redis for later processing.
 
         Returns:
             dict: Selected worker or None to trigger queueing
@@ -152,58 +116,93 @@ class LoadBalancer:
         worker = self.worker_registry.get_least_loaded_worker()
 
         if not worker:
-            logger.debug("No workers available - fallback to Redis queue")
-            if task:
-                try:
-                    serialized_task = json.dumps(task)
-                    self.redis_client.rpush("task_queue", serialized_task)
-                    logger.info("Task successfully enqueued into Redis queue")
-                except Exception as e:
-                    logger.error(f"Failed to push task to Redis queue: {e}")
+            logger.debug("No workers available - task will be queued in Redis")
             return None
 
         logger.debug(f"Queue-based selected worker: {worker['worker_id']}")
         return worker
 
     def switch_strategy(self, strategy: BalancingStrategy) -> None:
-        """
-        Switch to a different load balancing strategy
-
-        Args:
-            strategy: New strategy to use
-        """
         with self._lock:
             self.strategy = strategy
-        logger.info(f"Switched to {strategy.value} strategy")
+            logger.info(f"Switched to {strategy.value} strategy")
 
     def get_best_worker_for_priority(self, priority: str) -> dict[str, Any] | None:
-        """
-        Select worker considering task priority
+     
+     """Select worker considering task priority while respecting self.strategy.
+     How priority and strategy work together:
+     - Step 1 (Priority Filter): Narrow down the candidate worker pool based
+       on task priority level:
+        * high   → all available workers are candidates (no restriction)
+        * medium → exclude workers above 70% capacity utilization
+        * low    → only workers below 50% capacity utilization
+     - Step 2 (Strategy Selection): From the filtered candidate pool, apply
+       self.strategy (round_robin / least_loaded / queue_based) via
+       select_worker() to pick the final worker — exactly the same way a
+       normal task would be routed.
 
-        Args:
-            priority: Task priority ("low", "medium", "high")
+     This ensures priority-aware routing stays consistent with the configured
+     strategy instead of running a separate, disconnected selection logic.
 
-        Returns:
-            dict: Selected worker or None
-        """
-        available = self.worker_registry.get_available_workers()
+     Args:
+        priority: Task priority — "high", "medium", or "low" (case-insensitive)
 
-        if not available:
-            return None
+     Returns:
+        dict: Selected worker or None if no workers available
+     """
+     available = self.worker_registry.get_available_workers()
 
-        # For high priority, select least loaded
-        if priority == "high":
-            return min(available, key=lambda w: w["active_tasks"])
+     if not available:
+        logger.warning("No workers available for priority-based selection")
+        return None
 
-        # For medium priority, select from least loaded
-        if priority == "medium":
-            underutilized = [w for w in available if w["active_tasks"] < w["capacity"] * 0.7]
-            if underutilized:
-                return underutilized[0]
-            return available[0]
+     # Normalize priority to lowercase so "High"/"high"/"HIGH" all work
+     priority = priority.lower()
 
-        # For low priority, select any available
-        return available[-1]
+     # ── Step 1: Filter candidate pool by priority ─────────────────────────
+     if priority == "high":
+        # High priority: all workers are candidates — no filtering
+        candidates = available
+
+     elif priority == "medium":
+        # Medium priority: skip workers above 70% capacity
+        candidates = [
+            w for w in available
+            if w["active_tasks"] < w["capacity"] * 0.7
+        ]
+        # Fallback: if all workers are busy, consider everyone
+        if not candidates:
+            logger.debug("Medium priority fallback: all workers above 70% — using full pool")
+            candidates = available
+
+     else:
+        # Low priority: only workers below 50% capacity (spare capacity)
+        candidates = [
+            w for w in available
+            if w["active_tasks"] < w["capacity"] * 0.5
+        ]
+        # Fallback: if no spare-capacity worker found, use least loaded one
+        if not candidates:
+            logger.debug("Low priority fallback: no spare-capacity workers — using least loaded")
+            candidates = [min(available, key=lambda w: w["active_tasks"])]
+
+     # ── Step 2: Apply configured strategy on the filtered pool ────────────
+     # Temporarily swap the registry's worker pool so select_worker() picks
+     # only from our filtered candidates, then restore it afterward.
+     original_get = self.worker_registry.get_available_workers
+
+     self.worker_registry.get_available_workers = lambda: candidates
+     try:
+        selected = self.select_worker()
+     finally:
+        # Always restore original method — even if select_worker() raises
+        self.worker_registry.get_available_workers = original_get
+
+     logger.debug(
+        f"Priority '{priority}' + strategy '{self.strategy.value}' "
+        f"→ selected worker: {selected['worker_id'] if selected else None}"
+        )
+     return selected
 
     def is_system_overloaded(self, threshold: float = 0.9) -> bool:
         """
@@ -216,7 +215,7 @@ class LoadBalancer:
             bool: True if system utilization exceeds threshold
         """
         stats = self.worker_registry.get_worker_statistics()
-        utilization = stats["capacity_utilization"] / 100
+        utilization = stats["capacity_utilization"] / 100  # Convert to 0-1 scale
 
         is_overloaded = utilization >= threshold
 
