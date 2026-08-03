@@ -91,12 +91,22 @@ def main() -> int:
         agent.decrement_active()
 
     # Start the heartbeat loop managed by WorkerAgent
-    threading.Thread(target=agent.heartbeat_loop, daemon=True).start()
+    heartbeat_thread = threading.Thread(
+        target=agent.heartbeat_loop,
+        daemon=True,
+    )
+    heartbeat_thread.start()
 
     @worker_shutdown.connect
     def _on_worker_shutdown(**kwargs):
         logger.info("Shutting down worker")
+
         agent.deregister()
+
+        heartbeat_thread.join(timeout=5)
+
+        if heartbeat_thread.is_alive():
+            logger.warning("Heartbeat thread did not stop within timeout.")
 
     logger.info("Worker entrypoint ready; starting Celery")
 
