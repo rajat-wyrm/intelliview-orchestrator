@@ -56,7 +56,7 @@ const CARD_CONFIG = [
     iconBg: "bg-blue-500/15",
     iconColor: "text-blue-400",
     valueColor: "text-blue-50",
-    glowColor: "rgba(59, 130, 246, 0.15)",
+    glowColor: "glow-accent",
     accentDot: "bg-blue-400",
     tagline: "All registered candidates",
     emptyLabel: "No candidates yet",
@@ -71,7 +71,7 @@ const CARD_CONFIG = [
     iconBg: "bg-amber-500/15",
     iconColor: "text-amber-400",
     valueColor: "text-amber-50",
-    glowColor: "rgba(245, 158, 11, 0.15)",
+    glowColor: "glow-warning",
     accentDot: "bg-amber-400",
     tagline: "Awaiting assessment",
     emptyLabel: "All reviewed!",
@@ -86,7 +86,7 @@ const CARD_CONFIG = [
     iconBg: "bg-emerald-500/15",
     iconColor: "text-emerald-400",
     valueColor: "text-emerald-50",
-    glowColor: "rgba(16, 185, 129, 0.15)",
+    glowColor: "glow-success",
     accentDot: "bg-emerald-400",
     tagline: "Successfully evaluated",
     emptyLabel: "None completed",
@@ -101,7 +101,7 @@ const CARD_CONFIG = [
     iconBg: "bg-violet-500/15",
     iconColor: "text-violet-400",
     valueColor: "text-violet-50",
-    glowColor: "rgba(139, 92, 246, 0.15)",
+    glowColor: "glow-accent",
     accentDot: "bg-violet-400",
     tagline: "Currently in interview",
     emptyLabel: "No active sessions",
@@ -154,9 +154,11 @@ function StatCard({ config, value }) {
     >
       {/* Glow effect on hover */}
       <div
-        className="pointer-events-none absolute -inset-px rounded-xl opacity-0 blur-xl transition-opacity duration-500 group-hover:opacity-100"
-        style={{ background: glowColor }}
-      />
+  className={cn(
+    "pointer-events-none absolute -inset-px rounded-xl opacity-0 blur-xl transition-opacity duration-500 group-hover:opacity-100",
+    glowColor
+  )}
+/>
 
       <div
         className={cn(

@@ -17,21 +17,27 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from database.db import Base
-from database.models import InterviewSession
+from database.models import Candidate, InterviewSession
 from orchestrator.session_manager import SessionManager
 from orchestrator.session_tracker import SessionTracker
 
 
 @pytest.fixture
-def db_session():
-    engine = create_engine("sqlite:///:memory:", future=True)
+def db_session(postgres_container):
+    engine = create_engine(
+        postgres_container.get_connection_url(),
+        future=True,
+    )
     Base.metadata.create_all(engine)
+
     TestingSessionLocal = sessionmaker(bind=engine)
     session = TestingSessionLocal()
+
     try:
         yield session
     finally:
         session.close()
+        Base.metadata.drop_all(engine)
         engine.dispose()
 
 
@@ -57,6 +63,16 @@ def _make_session(
 def test_session_tracker_active_sessions(db_session):
     db_session.add_all(
         [
+            Candidate(candidate_id="cand-s1", name="Test 1", email="test1@example.com"),
+            Candidate(candidate_id="cand-s2", name="Test 2", email="test2@example.com"),
+            Candidate(candidate_id="cand-s3", name="Test 3", email="test3@example.com"),
+            Candidate(candidate_id="cand-s4", name="Test 4", email="test4@example.com"),
+        ]
+    )
+    db_session.commit()
+
+    db_session.add_all(
+        [
             _make_session("s1", "QUEUED"),
             _make_session("s2", "PROCESSING"),
             _make_session("s3", "COMPLETED", risk=0.1),
@@ -77,6 +93,14 @@ def test_session_tracker_active_sessions(db_session):
 def test_session_tracker_high_risk(db_session):
     db_session.add_all(
         [
+            Candidate(candidate_id="cand-s1", name="Test 1", email="test1@example.com"),
+            Candidate(candidate_id="cand-s2", name="Test 2", email="test2@example.com"),
+            Candidate(candidate_id="cand-s3", name="Test 3", email="test3@example.com"),
+        ]
+    )
+    db_session.commit()
+    db_session.add_all(
+        [
             _make_session("s1", "COMPLETED", risk=0.9),
             _make_session("s2", "COMPLETED", risk=0.5),
             _make_session("s3", "COMPLETED", risk=0.1),
@@ -93,6 +117,15 @@ def test_session_tracker_high_risk(db_session):
 
 
 def test_session_tracker_statistics(db_session):
+    db_session.add_all(
+        [
+            Candidate(candidate_id="cand-s1", name="Test 1", email="test1@example.com"),
+            Candidate(candidate_id="cand-s2", name="Test 2", email="test2@example.com"),
+            Candidate(candidate_id="cand-s3", name="Test 3", email="test3@example.com"),
+            Candidate(candidate_id="cand-s4", name="Test 4", email="test4@example.com"),
+        ]
+    )
+    db_session.commit()
     db_session.add_all(
         [
             _make_session("s1", "COMPLETED", risk=0.1, started_minutes_ago=10),
@@ -122,6 +155,14 @@ def test_session_manager_state_machine(db_session):
     smod.SessionLocal = lambda: db_session
 
     db_session.add(
+        Candidate(
+            candidate_id="c1",
+            name="Test Candidate",
+            email="c1@example.com",
+        )
+    )
+    db_session.commit()
+    db_session.add(
         InterviewSession(
             session_id="s1",
             candidate_id="c1",
@@ -144,6 +185,15 @@ def test_session_manager_rejects_invalid_transition(db_session):
     import orchestrator.session_manager as smod
 
     smod.SessionLocal = lambda: db_session
+
+    db_session.add(
+        Candidate(
+            candidate_id="c2",
+            name="Test Candidate",
+            email="c2@example.com",
+        )
+    )
+    db_session.commit()
 
     db_session.add(
         InterviewSession(

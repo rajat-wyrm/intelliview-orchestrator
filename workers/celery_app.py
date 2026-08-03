@@ -6,6 +6,7 @@ FAILED only after Celery has exhausted its retries.
 """
 
 from celery import Celery, signals
+from kombu import Queue
 from opentelemetry.instrumentation.celery import CeleryInstrumentor
 
 from config import REDIS_URL
@@ -30,6 +31,23 @@ celery_app.conf.update(
     # Long-running interview tasks should reserve only one task at a time
     worker_prefetch_multiplier=1,
     broker_connection_retry_on_startup=True,
+    # Priority queues setup for Issue 4. Each queue needs its own explicit
+    # routing_key - otherwise Celery falls back to task_default_routing_key
+    # (= task_default_queue) for *all* queues, and they silently collapse
+    # onto a single binding: messages route correctly by name, but a
+    # worker listening on e.g. "high_priority" never actually consumes
+    # them because its binding key doesn't match what got published.
+    task_default_queue="medium_priority",
+    task_queues=(
+        Queue("high_priority", routing_key="high_priority"),
+        Queue("medium_priority", routing_key="medium_priority"),
+        Queue("low_priority", routing_key="low_priority"),
+    ),
+    # Beat's own periodic scanner is routine housekeeping, not a session
+    # task - keep it off the priority lanes.
+    task_routes={
+        "workers.tasks.scan_and_dispatch_retries": {"queue": "low_priority"},
+    },
     # Periodic beat schedule — scan for due retries every 60 seconds
     beat_schedule={
         "scan-due-retries": {

@@ -15,6 +15,7 @@ Integrates:
 import io
 import json
 import logging
+import os
 import re
 import time
 import time as _time
@@ -161,15 +162,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-logging.getLogger("opentelemetry.exporter.otlp.proto.grpc.exporter").setLevel(logging.DEBUG)
-logging.basicConfig(level=logging.DEBUG)
+if os.getenv("ENABLE_TRACING", "").lower() in ("1", "true", "yes"):
+    try:
+        logging.getLogger("opentelemetry.exporter.otlp.proto.grpc.exporter").setLevel(logging.DEBUG)
 
-trace.set_tracer_provider(TracerProvider())
-tracer_provider = trace.get_tracer_provider()
-otlp_exporter = OTLPSpanExporter(endpoint="http://jaeger:4317", insecure=True)
-tracer_provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
+        trace.set_tracer_provider(TracerProvider())
+        tracer_provider = trace.get_tracer_provider()
+        otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://jaeger:4317")
+        otlp_exporter = OTLPSpanExporter(endpoint=otlp_endpoint, insecure=True)
+        tracer_provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
 
-FastAPIInstrumentor.instrument_app(app)
+        FastAPIInstrumentor.instrument_app(app)
+    except Exception as exc:
+        logger.debug("Tracing initialization skipped or unavailable: %s", exc)
 
 
 @app.middleware("http")

@@ -204,16 +204,91 @@ def grok_completion(
 # ---------------------------------------------------------------------------
 
 
-def transcribe_audio_file(audio_path: str) -> dict[str, Any] | None:
-    """Transcribe an audio file using local Whisper; returns dict or None."""
+def transcribe_audio_file(
+    audio_path: str,
+    vad_config: Any | None = None,
+    speech_segments: list[Any] | None = None,
+) -> dict[str, Any] | None:
+    """Transcribe an audio file using VAD pre-filtering and local Whisper.
+
+    Executes VAD pre-filtering and sends ONLY extracted speech segments to Whisper:
+    - Silent or near-silent audio files skip Whisper execution completely to conserve compute.
+    - Mid-file silence is trimmed out; only speech chunk arrays are passed to Whisper.
+    - Preserves timestamps aligned with the original recording.
+    """
     if not HAS_WHISPER:
         return None
     try:
-        result = whisper_model.transcribe(audio_path)
+        from workers.vad import VoiceActivityDetector
+
+        detector = VoiceActivityDetector(vad_config)
+
+        # Run VAD ONCE if speech_segments not provided
+        if speech_segments is None:
+            speech_segments = detector.process_audio(audio_path)
+
+        # Skip transcription completely if audio is silent
+        if len(speech_segments) == 0:
+            logger.info("VAD detected silence only in %s — skipping Whisper transcription.", audio_path)
+            return {
+                "text": "",
+                "language": "en",
+                "segments": [],
+                "silence_only": True,
+                "vad_segments": [],
+                "total_speech_duration": 0.0,
+            }
+
+        # Transcribe ONLY the extracted speech segments to trim out mid-file silence
+        all_texts = []
+        aligned_whisper_segments = []
+        detected_language = "en"
+
+        for seg in speech_segments:
+            samples = getattr(seg, "audio_samples", None)
+            if samples is None and os.path.exists(audio_path):
+                raw_samples, sr = detector._load_samples(audio_path, detector.config.sample_rate)
+                if len(raw_samples) > 0:
+                    start_sec = getattr(seg, "start", seg.get("start", 0.0) if isinstance(seg, dict) else 0.0)
+                    end_sec = getattr(seg, "end", seg.get("end", 0.0) if isinstance(seg, dict) else 0.0)
+                    start_idx = int(start_sec * sr)
+                    end_idx = min(len(raw_samples), int(end_sec * sr))
+                    samples = raw_samples[start_idx:end_idx]
+
+            if samples is None or len(samples) == 0:
+                continue
+
+            seg_result = whisper_model.transcribe(samples)
+            if seg_result is None:
+                continue
+
+            seg_text = seg_result.get("text", "").strip()
+            if seg_text:
+                all_texts.append(seg_text)
+
+            detected_language = seg_result.get("language", detected_language)
+            seg_start = getattr(seg, "start", seg.get("start", 0.0) if isinstance(seg, dict) else 0.0)
+
+            for w_seg in seg_result.get("segments", []):
+                aligned_w_seg = dict(w_seg)
+                aligned_w_seg["start"] = round(seg_start + w_seg.get("start", 0.0), 3)
+                aligned_w_seg["end"] = round(seg_start + w_seg.get("end", 0.0), 3)
+                aligned_whisper_segments.append(aligned_w_seg)
+
+        combined_text = " ".join(all_texts).strip()
+        vad_summary = [s.to_dict() if hasattr(s, "to_dict") else s for s in speech_segments]
+        speech_duration = sum(
+            getattr(s, "duration", s.get("duration", 0.0) if isinstance(s, dict) else 0.0)
+            for s in speech_segments
+        )
+
         return {
-            "text": result.get("text", ""),
-            "language": result.get("language", "en"),
-            "segments": result.get("segments", []),
+            "text": combined_text,
+            "language": detected_language,
+            "segments": aligned_whisper_segments,
+            "silence_only": False,
+            "vad_segments": vad_summary,
+            "total_speech_duration": round(speech_duration, 3),
         }
     except Exception as exc:
         logger.warning("Whisper transcription failed: %s", exc)
