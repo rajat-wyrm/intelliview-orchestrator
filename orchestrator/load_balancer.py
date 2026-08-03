@@ -122,7 +122,7 @@ class LoadBalancer:
 
         return worker
 
-    def _select_least_loaded(self, task: dict[str, Any] | None = None,) -> dict[str, Any] | None:
+    def _select_least_loaded(self) -> dict[str, Any] | None:
         """
         Least Loaded Strategy.
 
@@ -133,21 +133,7 @@ class LoadBalancer:
         workers = self._get_valid_workers()
 
         if not workers:
-            logger.debug("No valid workers available")
-
-            if task:
-                try:
-                    serialized_task = json.dumps(task)
-                    self.redis_client.rpush(
-                        "task_queue",
-                        serialized_task,
-                    )
-
-                    logger.info("Task queued in Redis")
-
-                except Exception as e:
-                    logger.error("Failed to queue task: %s", e)
-
+            logger.warning("No workers with valid capacity available")
             return None
 
         worker = min(
@@ -164,7 +150,10 @@ class LoadBalancer:
 
         return worker
 
-    def _select_queue_based(self) -> dict[str, Any] | None:
+    def _select_queue_based(
+        self,
+        task: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
         """
         Queue-based Strategy.
 
@@ -176,6 +165,22 @@ class LoadBalancer:
 
         if not workers:
             logger.debug("No valid workers available - task will be queued")
+
+            if task:
+                try:
+                    serialized_task = json.dumps(task)
+                    self.redis_client.rpush(
+                        "task_queue",
+                        serialized_task,
+                    )
+
+                    logger.info("Task queued in Redis")
+                except Exception as e:
+                    logger.error(
+                        "Failed to queue task: %s",
+                        e,
+                    )
+
             return None
 
         worker = min(
@@ -190,7 +195,10 @@ class LoadBalancer:
 
         return worker
 
-    def switch_strategy( self, strategy: BalancingStrategy,) -> None:
+    def switch_strategy(
+        self,
+        strategy: BalancingStrategy,
+    ) -> None:
         """
         Switch load balancing strategy.
         """
@@ -204,9 +212,9 @@ class LoadBalancer:
         )
 
     def get_best_worker_for_priority(
-    self,
-    priority: str,
-) -> dict[str, Any] | None:
+        self,
+        priority: str,
+    ) -> dict[str, Any] | None:
         """
     Select worker considering task priority.
 
@@ -257,9 +265,9 @@ class LoadBalancer:
 
 
     def is_system_overloaded(
-    self,
-    threshold: float = 0.9,
-) -> bool:
+        self,
+        threshold: float = 0.9,
+    ) -> bool:
         """
     Check if system utilization exceeds threshold.
 
