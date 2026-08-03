@@ -83,8 +83,18 @@ export function ClientProviders({ children }) {
         setPaletteOpen((o) => !o);
       }
     };
+    const onPalette = () => setPaletteOpen(true);
+    const onHelp = () => setHelpOpen(true);
+    
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    window.addEventListener("open-command-palette", onPalette);
+    window.addEventListener("open-shortcuts-help", onHelp);
+    
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("open-command-palette", onPalette);
+      window.removeEventListener("open-shortcuts-help", onHelp);
+    };
   }, []);
 
   useEffect(() => {

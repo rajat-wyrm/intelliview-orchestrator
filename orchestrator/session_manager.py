@@ -119,7 +119,7 @@ class SessionManager:
 
             session_db.add(interview_session)
 
-            from monitoring.prometheus_metrics import (
+            from metrics.prometheus_metrics import (
                 SESSIONS_ACTIVE,
                 SESSIONS_CREATED,
             )
@@ -198,7 +198,7 @@ class SessionManager:
             interview.status = new_status
             interview.updated_at = _utcnow()
             session_db.commit()
-            from monitoring.prometheus_metrics import (
+            from metrics.prometheus_metrics import (
                 SESSIONS_ACTIVE,
                 SESSIONS_COMPLETED,
                 SESSIONS_FAILED,
@@ -303,7 +303,7 @@ class SessionManager:
         Returns:
             bool: True if successful
         """
-        from monitoring.prometheus_metrics import (
+        from metrics.prometheus_metrics import (
             SESSIONS_ACTIVE,
             SESSIONS_FAILED,
         )
@@ -342,7 +342,7 @@ class SessionManager:
             interview.end_time = _utcnow()
             interview.updated_at = _utcnow()
 
-            from monitoring.prometheus_metrics import (
+            from metrics.prometheus_metrics import (
                 RISK_SCORE,
                 SESSION_PROCESSING_DURATION,
                 SESSIONS_ACTIVE,
