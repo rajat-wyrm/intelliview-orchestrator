@@ -12,7 +12,6 @@ from enum import Enum
 from typing import Any
 
 from metrics.prometheus_metrics import SYSTEM_UTILIZATION
-from orchestrator.redis_client import get_redis_client
 from orchestrator.worker_registry import WorkerRegistry
 
 logger = logging.getLogger(__name__)
