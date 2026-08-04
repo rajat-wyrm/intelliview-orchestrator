@@ -95,6 +95,7 @@ class WorkerRegistry:
                     "status": raw.get("status", "healthy"),
                     "active_tasks": int(raw.get("active_tasks", 0)),
                     "capacity": int(raw.get("capacity", 4)),
+                    "tags": json.loads(raw.get("tags", "[]")),
                     "registered_at": raw.get("registered_at", ""),
                     "last_heartbeat": raw.get("last_heartbeat", ""),
                     "total_tasks_processed": int(raw.get("total_tasks_processed", 0)),
@@ -178,14 +179,15 @@ class WorkerRegistry:
             if raw:
                 with self.lock:
                     self.local_workers[worker_id] = {
-                        "worker_id": worker_id,
-                        "status": raw.get("status", "healthy"),
-                        "active_tasks": int(raw.get("active_tasks", 0)),
-                        "capacity": int(raw.get("capacity", 4)),
-                        "registered_at": raw.get("registered_at", ""),
-                        "last_heartbeat": raw.get("last_heartbeat", ""),
-                        "total_tasks_processed": int(raw.get("total_tasks_processed", 0)),
-                        "failed_tasks": int(raw.get("failed_tasks", 0)),
+                         "worker_id": worker_id,
+                         "status": raw.get("status", "healthy"),
+                         "active_tasks": int(raw.get("active_tasks", 0)),
+                         "capacity": int(raw.get("capacity", 4)),
+                         "tags": json.loads(raw.get("tags", "[]")),
+                         "registered_at": raw.get("registered_at", ""),
+                         "last_heartbeat": raw.get("last_heartbeat", ""),
+                         "total_tasks_processed": int(raw.get("total_tasks_processed", 0)),
+                         "failed_tasks": int(raw.get("failed_tasks", 0)),
                     }
                 logger.debug(f"Synchronized worker {worker_id} map state locally.")
         elif worker_id and action == "deregister":
@@ -211,24 +213,30 @@ class WorkerRegistry:
                 )
             except Exception as e:
                 logger.error(f"Failed to publish sync broadcast: {e!s}")
-
-    def register_worker(self, worker_id: str, capacity: int = 4) -> bool:
+    def register_worker(
+        self,
+        worker_id: str,
+        capacity: int = 4,
+        tags: list[str] | None = None,
+    ) -> bool:
         """
-        Register a new worker node
+    Register a new worker node.
 
-        Args:
-            worker_id: Unique worker identifier
-            capacity: Maximum concurrent tasks this worker can handle
+    Args:
+        worker_id: Unique worker identifier.
+        capacity: Maximum concurrent tasks this worker can handle.
+        tags: Optional worker capability tags.
 
-        Returns:
-            bool: True if successful
-        """
+    Returns:
+        bool: True if successful.
+    """
         try:
             worker_data = {
                 "worker_id": worker_id,
                 "status": "healthy",
                 "active_tasks": 0,
                 "capacity": capacity,
+                "tags": tags or [],
                 "registered_at": datetime.now(timezone.utc).isoformat(),
                 "last_heartbeat": datetime.now(timezone.utc).isoformat(),
                 "total_tasks_processed": 0,
@@ -238,44 +246,57 @@ class WorkerRegistry:
             with self.lock:
                 self.local_workers[worker_id] = worker_data
 
-            # Store in Redis
             if self.redis_client:
                 key = f"{self.WORKER_KEY_PREFIX}{worker_id}"
-                # hset expects native int/bool/str values; coerce ints explicitly.
-                payload = {
-                    k: (
-                        int(v)
-                        if isinstance(v, (int, float))
-                        and k
-                        in {
-                            "capacity",
-                            "active_tasks",
-                            "total_tasks_processed",
-                            "failed_tasks",
-                        }
-                        else str(v)
-                    )
-                    for k, v in worker_data.items()
-                }
+
+                payload = {}
+
+                for k, v in worker_data.items():
+                    if k == "tags":
+                        payload[k] = json.dumps(v)
+                    elif k in {
+                        "capacity",
+                        "active_tasks",
+                        "total_tasks_processed",
+                        "failed_tasks",
+                    }:
+                        payload[k] = int(v)
+                    else:
+                        payload[k] = str(v)
+
                 self.redis_client.hset(key, mapping=payload)
                 self.redis_client.sadd(self.WORKER_SET_KEY, worker_id)
-                self.redis_client.expire(key, int(timedelta(hours=24).total_seconds()))
+                self.redis_client.expire(
+                    key,
+                    int(timedelta(hours=24).total_seconds()),
+                )
 
-                # Broadcast modification to other running cluster instances
                 self._trigger_sync_broadcast(worker_id)
 
-            logger.info(f"Registered worker: {worker_id} with capacity {capacity}")
+            logger.info(
+                f"Registered worker: {worker_id} "
+                f"with capacity {capacity}"
+            )
 
-            # Update total registered workers metric
             WORKERS_REGISTERED.set(len(self.local_workers))
-            CURRENT_WORKERS.set(len(self.local_workers))
-            # Update healthy worker count
-            WORKERS_HEALTHY.set(sum(1 for w in self.local_workers.values() if w["status"] == "healthy"))
-            # Update unhealthy worker count
-            WORKERS_UNHEALTHY.set(sum(1 for w in self.local_workers.values() if w["status"] == "unhealthy"))
-            # Store capacity allocated to this worker
+
+            WORKERS_HEALTHY.set(
+                sum(
+                    1
+                    for worker in self.local_workers.values()
+                    if worker["status"] == "healthy"
+                )
+            )
+
+            WORKERS_UNHEALTHY.set(
+                sum(
+                    1
+                    for worker in self.local_workers.values()
+                    if worker["status"] == "unhealthy"
+                )
+            )
+
             WORKER_CAPACITY.labels(worker_id=worker_id).set(capacity)
-            # Initialize active task metric for the new worker
             WORKER_ACTIVE_TASKS.labels(worker_id=worker_id).set(0)
 
             return True
