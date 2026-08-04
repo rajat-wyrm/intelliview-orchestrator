@@ -28,11 +28,18 @@ class WorkerAgent:
         worker_id: str,
         capacity: int = WORKER_CONCURRENCY,
         heartbeat_interval: int = 15,
+        tags: list[str] | None = None,
     ):
         self.api_url = api_url.rstrip("/")
         self.worker_id = worker_id
         self.capacity = capacity
         self.heartbeat_interval = heartbeat_interval
+
+        # Optional capability tags (e.g. ["gpu", "video"]) used by the
+        # load balancer to route tasks to workers that can handle them.
+        # Defaults to an empty list — a worker with no tags is treated
+        # as a general-purpose worker eligible for untagged tasks.
+        self.tags = list(tags) if tags else []
 
         # Process-local counter used for worker heartbeats.
         # This is accurate only when running with the 'solo' pool.
@@ -81,9 +88,21 @@ class WorkerAgent:
         return False
 
     def register(self) -> bool:
-        ok = self._post("/register-worker", {"worker_id": self.worker_id, "capacity": self.capacity})
+        ok = self._post(
+            "/register-worker",
+            {
+                "worker_id": self.worker_id,
+                "capacity": self.capacity,
+                "tags": self.tags,
+            },
+        )
         if ok:
-            logger.info("Worker %s registered with %s", self.worker_id, self.api_url)
+            logger.info(
+                "Worker %s registered with %s (tags=%s)",
+                self.worker_id,
+                self.api_url,
+                self.tags,
+            )
         else:
             logger.error("Failed to register worker %s", self.worker_id)
         return ok
@@ -152,7 +171,8 @@ if __name__ == "__main__":
 
     api_url = os.getenv("API_URL", "http://fastapi:8000")
     worker_id = os.getenv("WORKER_ID", f"worker-{os.getpid()}")
-    agent = WorkerAgent(api_url=api_url, worker_id=worker_id)
+    tags = [t.strip() for t in os.getenv("WORKER_TAGS", "").split(",") if t.strip()]
+    agent = WorkerAgent(api_url=api_url, worker_id=worker_id, tags=tags)
     agent.start()
 
     # Block main thread until shutdown signal is received

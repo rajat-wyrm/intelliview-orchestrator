@@ -78,6 +78,21 @@ class WorkerRegistry:
         """Create the shared Redis client used by the orchestrator."""
         return get_redis_client()
 
+    @staticmethod
+    def _parse_tags(raw_tags: Any) -> list[str]:
+        """
+        Safely decode the 'tags' field as stored in Redis (a JSON string)
+        back into a Python list. Falls back to an empty list for missing,
+        malformed, or legacy (pre-tags) worker records.
+        """
+        if not raw_tags:
+            return []
+        try:
+            parsed = json.loads(raw_tags)
+            return parsed if isinstance(parsed, list) else []
+        except (json.JSONDecodeError, TypeError):
+            return []
+
     def _hydrate_from_redis(self) -> None:
         """Populate `local_workers` from Redis on first use so workers
         registered in another process (worker agent / seed script) are
@@ -95,6 +110,7 @@ class WorkerRegistry:
                     "status": raw.get("status", "healthy"),
                     "active_tasks": int(raw.get("active_tasks", 0)),
                     "capacity": int(raw.get("capacity", 4)),
+                    "tags": self._parse_tags(raw.get("tags")),
                     "registered_at": raw.get("registered_at", ""),
                     "last_heartbeat": raw.get("last_heartbeat", ""),
                     "total_tasks_processed": int(raw.get("total_tasks_processed", 0)),
@@ -182,6 +198,7 @@ class WorkerRegistry:
                         "status": raw.get("status", "healthy"),
                         "active_tasks": int(raw.get("active_tasks", 0)),
                         "capacity": int(raw.get("capacity", 4)),
+                        "tags": self._parse_tags(raw.get("tags")),
                         "registered_at": raw.get("registered_at", ""),
                         "last_heartbeat": raw.get("last_heartbeat", ""),
                         "total_tasks_processed": int(raw.get("total_tasks_processed", 0)),
@@ -212,23 +229,29 @@ class WorkerRegistry:
             except Exception as e:
                 logger.error(f"Failed to publish sync broadcast: {e!s}")
 
-    def register_worker(self, worker_id: str, capacity: int = 4) -> bool:
+    def register_worker(self, worker_id: str, capacity: int = 4, tags: list[str] | None = None) -> bool:
         """
         Register a new worker node
 
         Args:
             worker_id: Unique worker identifier
             capacity: Maximum concurrent tasks this worker can handle
+            tags: Optional list of capability tags (e.g. ["gpu", "video"])
+                  used by the load balancer to route tasks to workers
+                  that can actually handle them.
 
         Returns:
             bool: True if successful
         """
         try:
+            normalized_tags = list(tags) if tags else []
+
             worker_data = {
                 "worker_id": worker_id,
                 "status": "healthy",
                 "active_tasks": 0,
                 "capacity": capacity,
+                "tags": normalized_tags,
                 "registered_at": datetime.now(timezone.utc).isoformat(),
                 "last_heartbeat": datetime.now(timezone.utc).isoformat(),
                 "total_tasks_processed": 0,
@@ -241,22 +264,21 @@ class WorkerRegistry:
             # Store in Redis
             if self.redis_client:
                 key = f"{self.WORKER_KEY_PREFIX}{worker_id}"
-                # hset expects native int/bool/str values; coerce ints explicitly.
-                payload = {
-                    k: (
-                        int(v)
-                        if isinstance(v, (int, float))
-                        and k
-                        in {
-                            "capacity",
-                            "active_tasks",
-                            "total_tasks_processed",
-                            "failed_tasks",
-                        }
-                        else str(v)
-                    )
-                    for k, v in worker_data.items()
-                }
+                # hset expects native int/bool/str values; coerce ints explicitly
+                # and serialize the tags list to a JSON string.
+                payload = {}
+                for k, v in worker_data.items():
+                    if k == "tags":
+                        payload[k] = json.dumps(v)
+                    elif isinstance(v, (int, float)) and k in {
+                        "capacity",
+                        "active_tasks",
+                        "total_tasks_processed",
+                        "failed_tasks",
+                    }:
+                        payload[k] = int(v)
+                    else:
+                        payload[k] = str(v)
                 self.redis_client.hset(key, mapping=payload)
                 self.redis_client.sadd(self.WORKER_SET_KEY, worker_id)
                 self.redis_client.expire(key, int(timedelta(hours=24).total_seconds()))
@@ -264,7 +286,7 @@ class WorkerRegistry:
                 # Broadcast modification to other running cluster instances
                 self._trigger_sync_broadcast(worker_id)
 
-            logger.info(f"Registered worker: {worker_id} with capacity {capacity}")
+            logger.info(f"Registered worker: {worker_id} with capacity {capacity} tags={normalized_tags}")
 
             # Update total registered workers metric
             WORKERS_REGISTERED.set(len(self.local_workers))
@@ -436,29 +458,49 @@ class WorkerRegistry:
         with self.lock:
             return dict(self.local_workers)
 
-    def get_available_workers(self) -> list[dict[str, Any]]:
+    def get_available_workers(self, required_tag: str | None = None) -> list[dict[str, Any]]:
         """
-        Get workers that are healthy and have capacity
+        Get workers that are healthy and have capacity, optionally
+        restricted to workers advertising a specific capability tag.
+
+        Args:
+            required_tag: If provided, only healthy workers with capacity
+                that also have this tag in their 'tags' list are returned.
+                If None, tag is ignored entirely (existing behavior).
 
         Returns:
-            list: Available worker details
+            list: Available worker details. If required_tag is given and
+            no worker currently has it, this returns an empty list rather
+            than silently falling back to unrelated workers — callers that
+            want a "pick anyone" fallback should call this again without
+            required_tag.
         """
         available = []
         with self.lock:
             for worker in self.local_workers.values():
-                if worker["status"] == "healthy" and worker["active_tasks"] < worker["capacity"]:
-                    available.append(worker)
+                if worker["status"] != "healthy" or worker["active_tasks"] >= worker["capacity"]:
+                    continue
+                if required_tag is not None and required_tag not in worker.get("tags", []):
+                    continue
+                available.append(worker)
 
         return available
 
-    def get_least_loaded_worker(self) -> dict[str, Any] | None:
+    def get_least_loaded_worker(self, required_tag: str | None = None) -> dict[str, Any] | None:
         """
-        Get the worker with the lowest active task count
+        Get the worker with the lowest active task count, optionally
+        restricted to workers that have a specific capability tag.
+
+        Args:
+            required_tag: If provided, only consider workers that have
+                this tag. If no such worker is available, returns None
+                (a task requiring a tag should never be routed to a
+                worker that doesn't have it).
 
         Returns:
-            dict: Least loaded worker or None if none available
+            dict: Least loaded (matching) worker or None if none available.
         """
-        available = self.get_available_workers()
+        available = self.get_available_workers(required_tag=required_tag)
         if not available:
             return None
 
@@ -484,6 +526,7 @@ class WorkerRegistry:
                     "capacity": w["capacity"],
                     "active_tasks": w["active_tasks"],
                     "status": w["status"],
+                    "tags": w.get("tags", []),
                     "last_heartbeat": w.get("last_heartbeat"),
                     "total_tasks_processed": w.get("total_tasks_processed", 0),
                     "failed_tasks": w.get("failed_tasks", 0),
