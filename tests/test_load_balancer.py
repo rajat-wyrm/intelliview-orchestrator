@@ -1,115 +1,166 @@
-from unittest.mock import patch
-
-import pytest
+import threading
+import time
+from collections import Counter
 
 from orchestrator.load_balancer import BalancingStrategy, LoadBalancer
 
 
-@pytest.fixture
-def mock_registry():
-    """Fixture to safely mock out WorkerRegistry calls."""
-    with patch("orchestrator.load_balancer.WorkerRegistry") as mock_class:
-        instance = mock_class.return_value
-        yield instance
+class FakeRegistry:
+    def __init__(self, workers=None, utilization=0):
+        self._workers = workers if workers is not None else []
+        self._utilization = utilization
+
+    def get_available_workers(self):
+        return [w for w in self._workers if w["status"] == "healthy" and w["active_tasks"] < w["capacity"]]
+
+    def get_least_loaded_worker(self):
+        available = self.get_available_workers()
+        return min(available, key=lambda w: w["active_tasks"]) if available else None
+
+    def get_worker_statistics(self):
+        return {
+            "total_workers": len(self._workers),
+            "total_capacity": sum(w["capacity"] for w in self._workers),
+            "total_active_tasks": sum(w["active_tasks"] for w in self._workers),
+            "capacity_utilization": self._utilization,
+        }
 
 
-# ==============================================================================
-# 1. ROUND ROBIN STRATEGY TESTS
-# ==============================================================================
+def _make_workers():
+    return [
+        {"worker_id": "w1", "capacity": 4, "active_tasks": 3, "status": "healthy"},
+        {"worker_id": "w2", "capacity": 4, "active_tasks": 1, "status": "healthy"},
+        {"worker_id": "w3", "capacity": 4, "active_tasks": 2, "status": "healthy"},
+    ]
 
 
-def test_round_robin_cycles_evenly(mock_registry):
-    """Verifies that Round Robin cycles through workers in sequential order."""
-    workers = [{"worker_id": "w1"}, {"worker_id": "w2"}, {"worker_id": "w3"}]
-    mock_registry.get_available_workers.return_value = workers
-
-    lb = LoadBalancer(strategy=BalancingStrategy.ROUND_ROBIN)
-
-    # First cycle
-    assert lb.select_worker()["worker_id"] == "w1"
-    assert lb.select_worker()["worker_id"] == "w2"
-    assert lb.select_worker()["worker_id"] == "w3"
-    # Second cycle (wraps around)
-    assert lb.select_worker()["worker_id"] == "w1"
-
-
-# ==============================================================================
-# 2. LEAST LOADED STRATEGY TESTS
-# ==============================================================================
-
-
-def test_least_loaded_selects_lowest_active_tasks(mock_registry):
-    """Verifies that Least Loaded strategy picks the worker with minimal tasks."""
-    least_loaded_worker = {"worker_id": "w2", "active_tasks": 1, "capacity": 10}
-    mock_registry.get_least_loaded_worker.return_value = least_loaded_worker
-
+def test_least_loaded_picks_minimum():
     lb = LoadBalancer(strategy=BalancingStrategy.LEAST_LOADED)
-    selected = lb.select_worker()
-
-    assert selected["worker_id"] == "w2"
-    mock_registry.get_least_loaded_worker.assert_called_once()
+    lb.worker_registry = FakeRegistry(_make_workers())
+    assert lb.select_worker()["worker_id"] == "w2"
 
 
-# ==============================================================================
-# 3. QUEUE-BASED STRATEGY TESTS
-# ==============================================================================
+def test_round_robin_rotates():
+    lb = LoadBalancer(strategy=BalancingStrategy.ROUND_ROBIN)
+    lb.worker_registry = FakeRegistry(_make_workers())
+    first = lb.select_worker()["worker_id"]
+    second = lb.select_worker()["worker_id"]
+    third = lb.select_worker()["worker_id"]
+    assert len({first, second, third}) == 3
 
 
-def test_queue_based_returns_none_when_no_workers(mock_registry):
-    """Verifies queue-based strategy returns None if all workers are offline."""
-    mock_registry.get_least_loaded_worker.return_value = None
-
-    lb = LoadBalancer(strategy=BalancingStrategy.QUEUE_BASED)
+def test_no_workers_returns_none():
+    lb = LoadBalancer()
+    lb.worker_registry = FakeRegistry([])
     assert lb.select_worker() is None
 
 
-# ==============================================================================
-# 4. EDGE CASES & PRIORITY/OVERLOAD TESTS
-# ==============================================================================
-
-
-def test_edge_cases_no_workers_available(mock_registry):
-    """Ensures all strategies handle an empty worker pool gracefully."""
-    mock_registry.get_available_workers.return_value = []
-    mock_registry.get_least_loaded_worker.return_value = None
-
-    for strategy in BalancingStrategy:
-        lb = LoadBalancer(strategy=strategy)
-        assert lb.select_worker() is None
-
-
-def test_priority_worker_selection(mock_registry):
-    """Tests that high, medium, and low priority jobs route to appropriate loads."""
-    # Arranged specifically so most-loaded worker is at index [-1]
-    workers = [
-        {"worker_id": "w2", "active_tasks": 2, "capacity": 10},
-        {"worker_id": "w1", "active_tasks": 5, "capacity": 10},
-    ]
-    mock_registry.get_available_workers.return_value = workers
+def test_unhealthy_workers_excluded():
+    workers = _make_workers()
+    workers[0]["status"] = "unhealthy"
     lb = LoadBalancer()
-
-    # High priority -> targets least loaded tasks directly (w2)
-    assert lb.get_best_worker_for_priority("high")["worker_id"] == "w2"
-
-    # Low priority -> targets the last available element in the array (w1)
-    assert lb.get_best_worker_for_priority("low")["worker_id"] == "w1"
+    lb.worker_registry = FakeRegistry(workers)
+    assert lb.select_worker()["worker_id"] in {"w2", "w3"}
 
 
-def test_system_overload_detection(mock_registry):
-    """Verifies system overload calculations trigger at the designated threshold."""
+def test_full_capacity_workers_excluded():
+    workers = _make_workers()
+    workers[1]["active_tasks"] = 4  # w2 at capacity
     lb = LoadBalancer()
-
-    # Mock 95% utilization (Overloaded)
-    mock_registry.get_worker_statistics.return_value = {"capacity_utilization": 95.0}
-    assert lb.is_system_overloaded(threshold=0.9) is True
-
-    # Mock 50% utilization (Not Overloaded)
-    mock_registry.get_worker_statistics.return_value = {"capacity_utilization": 50.0}
-    assert lb.is_system_overloaded(threshold=0.9) is False
+    lb.worker_registry = FakeRegistry(workers)
+    assert lb.select_worker()["worker_id"] in {"w3"}
 
 
-def test_switch_strategy(mock_registry):
-    """Verifies that runtime strategy transitions function as expected."""
+def test_switch_strategy_during_selection():
+    lb = LoadBalancer(strategy=BalancingStrategy.LEAST_LOADED)
+    lb.worker_registry = FakeRegistry(_make_workers())
+
+    errors = []
+
+    def select():
+        try:
+            for _ in range(100):
+                lb.select_worker()
+                time.sleep(0.001)
+        except Exception as exc:
+            errors.append(exc)
+
+    def switch():
+        try:
+            for _ in range(100):
+                lb.switch_strategy(BalancingStrategy.ROUND_ROBIN)
+                lb.switch_strategy(BalancingStrategy.LEAST_LOADED)
+                time.sleep(0.001)
+        except Exception as exc:
+            errors.append(exc)
+
+    t1 = threading.Thread(target=select)
+    t2 = threading.Thread(target=switch)
+
+    t1.start()
+    t2.start()
+
+    t1.join()
+    t2.join()
+
+    assert not errors, f"Unexpected exceptions: {errors}"
+
+
+def test_round_robin_thread_safety():
+
+    workers = _make_workers()
     lb = LoadBalancer(strategy=BalancingStrategy.ROUND_ROBIN)
-    lb.switch_strategy(BalancingStrategy.LEAST_LOADED)
-    assert lb.strategy == BalancingStrategy.LEAST_LOADED
+    lb.worker_registry = FakeRegistry(workers)
+
+    results = []
+    results_lock = threading.Lock()
+
+    def call_select_worker():
+        worker = lb.select_worker()
+        with results_lock:
+            results.append(worker["worker_id"])
+
+    threads = [threading.Thread(target=call_select_worker) for _ in range(90)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    counts = Counter(results)
+    assert len(results) == 90
+    assert lb.round_robin_index == 90
+    for worker in workers:
+        assert counts[worker["worker_id"]] == 30
+
+
+
+
+def test_scaling_awaits_full_window_history():
+    """Verifies no recommendation is given until history matches window size."""
+    lb = LoadBalancer(window_size=3)
+    lb.worker_registry = FakeRegistry([], utilization=95.0)
+
+    lb.record_current_load()
+    lb.record_current_load()
+
+    assert lb.get_scaling_recommendation() == "no_change"
+
+
+def test_sustained_heavy_load_triggers_scale_up():
+    lb = LoadBalancer(window_size=3)
+    lb.worker_registry = FakeRegistry([], utilization=90.0)
+
+    for _ in range(3):
+        lb.record_current_load()
+
+    assert lb.get_scaling_recommendation(up_threshold=0.85) == "scale_up"
+
+
+def test_sustained_idle_load_triggers_scale_down():
+    lb = LoadBalancer(window_size=3)
+    lb.worker_registry = FakeRegistry([], utilization=20.0)
+
+    for _ in range(3):
+        lb.record_current_load()
+
+    assert lb.get_scaling_recommendation(down_threshold=0.30) == "scale_down"

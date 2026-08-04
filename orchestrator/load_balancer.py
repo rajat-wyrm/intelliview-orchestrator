@@ -32,16 +32,18 @@ class LoadBalancer:
     Implements load balancing for task distribution across worker nodes
     """
 
-    def __init__(self, strategy: BalancingStrategy = BalancingStrategy.LEAST_LOADED):
+    def __init__(self, strategy: BalancingStrategy = BalancingStrategy.LEAST_LOADED, window_size: int = 5):
         """
         Initialize load balancer
-
-        Args:
-            strategy: Load balancing strategy to use
         """
         self.worker_registry = WorkerRegistry()
         self.strategy = strategy
         self.round_robin_index = 0
+        self.window_size = window_size
+        self.load_history = []
+        self._lock = threading.Lock()
+        self.round_robin_lock = threading.Lock()
+        self.last_assigned_worker_id = None
         logger.info(f"Load Balancer initialized with strategy: {strategy.value}")
 
     def select_worker(self) -> dict[str, Any] | None:
@@ -68,9 +70,6 @@ class LoadBalancer:
 
         Distributes tasks evenly across all available workers in a circular fashion.
         Good for evenly distributed workloads.
-
-        Returns:
-            dict: Next worker in rotation or None if no workers available
         """
         available = self.worker_registry.get_available_workers()
 
@@ -89,15 +88,6 @@ class LoadBalancer:
         return worker
 
     def _select_least_loaded(self) -> dict[str, Any] | None:
-        """
-        Least Loaded Strategy: Assign to worker with fewest active tasks (RECOMMENDED)
-
-        Selects the worker with the lowest number of active tasks among available workers.
-        Provides better load balancing for varying task durations.
-
-        Returns:
-            dict: Least loaded worker or None if no workers available
-        """
         worker = self.worker_registry.get_least_loaded_worker()
 
         if not worker:
@@ -140,15 +130,6 @@ class LoadBalancer:
         return worker
 
     def _select_queue_based(self) -> dict[str, Any] | None:
-        """
-        Queue-based Strategy: Fallback to queue if no workers available
-
-        First tries to select a worker. If none available, returns None to signal
-        task should be queued in Redis for later processing.
-
-        Returns:
-            dict: Selected worker or None to trigger queueing
-        """
         worker = self.worker_registry.get_least_loaded_worker()
 
         if not worker:
@@ -159,37 +140,11 @@ class LoadBalancer:
         return worker
 
     def switch_strategy(self, strategy: BalancingStrategy) -> None:
-        """
-        Switch to a different load balancing strategy
-
-        Args:
-            strategy: New strategy to use
-        """
-        self.strategy = strategy
-        logger.info(f"Switched to {strategy.value} strategy")
+        with self._lock:
+            self.strategy = strategy
+            logger.info(f"Switched to {strategy.value} strategy")
 
     def get_best_worker_for_priority(self, priority: str) -> dict[str, Any] | None:
-        """Select worker considering task priority while respecting self.strategy.
-        How priority and strategy work together:
-        - Step 1 (Priority Filter): Narrow down the candidate worker pool based
-          on task priority level:
-           * high   → all available workers are candidates (no restriction)
-           * medium → exclude workers above 70% capacity utilization
-           * low    → only workers below 50% capacity utilization
-        - Step 2 (Strategy Selection): From the filtered candidate pool, apply
-          self.strategy (round_robin / least_loaded / queue_based) via
-          select_worker() to pick the final worker — exactly the same way a
-          normal task would be routed.
-
-        This ensures priority-aware routing stays consistent with the configured
-        strategy instead of running a separate, disconnected selection logic.
-
-        Args:
-           priority: Task priority — "high", "medium", or "low" (case-insensitive)
-
-        Returns:
-           dict: Selected worker or None if no workers available
-        """
         available = self.worker_registry.get_available_workers()
 
         if not available:
@@ -251,15 +206,6 @@ class LoadBalancer:
         return available[-1]  # Select the one with most load (fill it up)
 
     def is_system_overloaded(self, threshold: float = 0.9) -> bool:
-        """
-        Check if system is overloaded
-
-        Args:
-            threshold: Utilization threshold (0-1)
-
-        Returns:
-            bool: True if system utilization exceeds threshold
-        """
         stats = self.worker_registry.get_worker_statistics()
         utilization = stats["capacity_utilization"] / 100  # Convert to 0-1 scale
 
@@ -274,7 +220,6 @@ class LoadBalancer:
         return is_overloaded
 
     def get_load_status(self) -> dict[str, Any]:
-        """Get current system load status"""
         stats = self.worker_registry.get_worker_statistics()
         SYSTEM_UTILIZATION.set(stats["capacity_utilization"] / 100)
         available_workers = len(self.worker_registry.get_available_workers())
@@ -286,3 +231,27 @@ class LoadBalancer:
             "system_overloaded": self.is_system_overloaded(),
             "timestamp": None,
         }
+
+    def record_current_load(self) -> None:
+        with self._lock:
+            stats = self.worker_registry.get_worker_statistics()
+            utilization = stats["capacity_utilization"] / 100
+            self.load_history.append(utilization)
+
+            # Keep array sizing limited to the trailing time window limit
+            if len(self.load_history) > self.window_size:
+                self.load_history = self.load_history[-self.window_size :]
+
+    def get_scaling_recommendation(self, up_threshold: float = 0.85, down_threshold: float = 0.30) -> str:
+        with self._lock:
+            if len(self.load_history) < self.window_size:
+                return "no_change"
+
+            avg_load = sum(self.load_history) / len(self.load_history)
+
+            if avg_load >= up_threshold:
+                return "scale_up"
+            if avg_load <= down_threshold:
+                return "scale_down"
+
+            return "no_change"

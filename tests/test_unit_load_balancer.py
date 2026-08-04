@@ -1,13 +1,14 @@
-"""
-Unit tests for the LoadBalancer selection strategies.
-"""
+import threading
+import time
+from collections import Counter
 
 from orchestrator.load_balancer import BalancingStrategy, LoadBalancer
 
 
 class FakeRegistry:
-    def __init__(self, workers):
+    def __init__(self, workers, utilization=0):
         self._workers = workers
+        self._utilization = utilization
 
     def get_available_workers(self):
         return [w for w in self._workers if w["status"] == "healthy" and w["active_tasks"] < w["capacity"]]
@@ -21,7 +22,7 @@ class FakeRegistry:
             "total_workers": len(self._workers),
             "total_capacity": sum(w["capacity"] for w in self._workers),
             "total_active_tasks": sum(w["active_tasks"] for w in self._workers),
-            "capacity_utilization": 0,
+            "capacity_utilization": self._utilization,
         }
 
 
@@ -123,13 +124,53 @@ def test_weighted_least_loaded_prefers_higher_weight_worker():
         },
     ]
 
-    lb = LoadBalancer(strategy=BalancingStrategy.WEIGHTED_LEAST_LOADED)
+    errors = []
+
+    def select():
+        try:
+            for _ in range(100):
+                lb.select_worker()
+                time.sleep(0.001)
+        except Exception as exc:
+            errors.append(exc)
+
+    def switch():
+        try:
+            for _ in range(100):
+                lb.switch_strategy(BalancingStrategy.ROUND_ROBIN)
+                lb.switch_strategy(BalancingStrategy.LEAST_LOADED)
+                time.sleep(0.001)
+        except Exception as exc:
+            errors.append(exc)
+
+    t1 = threading.Thread(target=select)
+    t2 = threading.Thread(target=switch)
+
+    t1.start()
+    t2.start()
+
+    t1.join()
+    t2.join()
+
+    assert not errors, f"Unexpected exceptions: {errors}"
+
+
+def test_round_robin_thread_safety():
+    """
+    Simulates many concurrent calls to select_worker() under ROUND_ROBIN
+    strategy and confirms tasks are distributed evenly with no lost or
+    duplicate increments, proving the round_robin_index update is atomic.
+    """
+    workers = _make_workers()
+    lb = LoadBalancer(strategy=BalancingStrategy.ROUND_ROBIN)
+>>>>>>> pr-538-head
     lb.worker_registry = FakeRegistry(workers)
 
     selected = lb.select_worker()
 
     assert selected["worker_id"] == "w2"
-<<<<<<< HEAD
+
+
 def test_weighted_least_loaded_prefers_higher_weight():
     workers = [
         {
@@ -148,36 +189,17 @@ def test_weighted_least_loaded_prefers_higher_weight():
         },
     ]
 
-    lb = LoadBalancer(
-        strategy=BalancingStrategy.WEIGHTED_LEAST_LOADED
-    )
+    lb = LoadBalancer(strategy=BalancingStrategy.WEIGHTED_LEAST_LOADED)
 
+    lb.worker_registry = FakeRegistry(workers)
+
+    selected = lb.select_worker()
+
+    assert selected["worker_id"] == "w2"
 =======
-
-
-def test_weighted_least_loaded_prefers_higher_weight():
-    workers = [
-        {
-            "worker_id": "w1",
-            "capacity": 4,
-            "active_tasks": 2,
-            "status": "healthy",
-            "weight": 1,
-        },
-        {
-            "worker_id": "w2",
-            "capacity": 4,
-            "active_tasks": 2,
-            "status": "healthy",
-            "weight": 2,
-        },
-    ]
-
-    lb = LoadBalancer(strategy=BalancingStrategy.WEIGHTED_LEAST_LOADED)
-
->>>>>>> issue-527-weighted-least-loaded-v3
-    lb.worker_registry = FakeRegistry(workers)
-
-    selected = lb.select_worker()
-
-    assert selected["worker_id"] == "w2"
+    counts = Counter(results)
+    assert len(results) == 90
+    assert lb.round_robin_index == 90
+    for worker in workers:
+        assert counts[worker["worker_id"]] == 30
+>>>>>>> pr-538-head
