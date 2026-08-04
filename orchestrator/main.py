@@ -23,7 +23,11 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+
+from enum import Enum
+from fastapi import FastAPI, HTTPException, Header, Depends
+from fastapi import Query
+from workers.evaluation_pipeline import _llm_generate_question
 from fastapi.middleware.cors import CORSMiddleware
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -1558,26 +1562,54 @@ async def create_template(
         logger.error(f"Error creating template: {e!s}")
         raise HTTPException(status_code=500, detail="Error creating template")
 
-
+class QuestionStrategy(str, Enum):
+    STATIC = "static"
+    GENERATIVE = "generative"
+    HYBRID = "hybrid"
+    ADAPTIVE = "adaptive"
 # ========== Interview Q&A Endpoints ==========
-
 
 @app.post("/interviews/ask-question")
 async def ask_question(
     request: AskQuestionRequest,
+    strategy: QuestionStrategy = Query(QuestionStrategy.STATIC, description="Options: static, generative, adaptive, hybrid"),
     session_db: Session = Depends(get_db),
 ):
-    """Get next question for a session"""
+    """Get next question for a session using the chosen strategy"""
     try:
         session_data = session_manager.get_session(request.session_id)
         if not session_data:
             raise HTTPException(status_code=404, detail="Session not found")
 
         asked_ids = session_data.get("questions_asked", [])
-        question = question_bank.get_next_question(
-            category=request.category,
-            exclude_ids=[q.get("question_id") for q in asked_ids] if asked_ids else [],
-        )
+        exclude_list = [q.get("question_id") for q in asked_ids] if asked_ids else []
+
+        question = None
+
+        # Process Generative/Adaptive/Hybrid strategies
+        if strategy != QuestionStrategy.STATIC:
+            try:
+                # Calls _llm_generate_question matching signature: (session_id: str, topic: str)
+                generated_text = _llm_generate_question(
+                    session_id=request.session_id,
+                    topic=request.category or "technical"
+                )
+                
+                if generated_text and len(generated_text.strip()) >= 10:
+                    question = question_bank.save_generated_question(
+                        text=generated_text,
+                        category=request.category or "technical"
+                    )
+            except Exception as ai_err:
+                logger.error(f"LLM question generation failed: {ai_err!s}. Dropping to static fallback.")
+
+        # Static path or fallback if AI generation failed or returned None
+        if not question:
+            question = question_bank.get_next_question(
+                category=request.category,
+                exclude_ids=exclude_list,
+            )
+
         if not question:
             raise HTTPException(status_code=404, detail="No more questions available")
 
@@ -1593,7 +1625,6 @@ async def ask_question(
     except Exception as e:
         logger.error(f"Error getting question: {e!s}")
         raise HTTPException(status_code=500, detail="Error getting question")
-
 
 @app.post("/interviews/submit-answer")
 async def submit_answer(

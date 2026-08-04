@@ -5,18 +5,7 @@ Defines database models using declarative base
 
 from datetime import datetime, timezone
 
-from sqlalchemy import (
-    JSON,
-    Boolean,
-    CheckConstraint,
-    Column,
-    DateTime,
-    Float,
-    ForeignKey,
-    Integer,
-    String,
-)
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, String, Integer, Float, DateTime, JSON, Boolean
 from sqlalchemy.sql import func  # noqa: F401  (re-exported for ORM consumers)
 
 from database.db import Base
@@ -142,8 +131,11 @@ class Question(Base):
     usage_count = Column(Integer, nullable=False, default=0, index=True)
     avg_score = Column(Float, nullable=True, index=True)
 
-    created_at = Column(DateTime, nullable=False, default=utcnow)
-    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # ADD THIS LINE: Tracking flag for audit trail to identify AI-generated questions
+    generated_by_llm = Column(Boolean, default=False, nullable=False)
 
     def __repr__(self):
         return (
