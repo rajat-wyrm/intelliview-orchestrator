@@ -129,6 +129,7 @@ class RiskScoringEngine:
         quality_score = evaluation_result.get("answer_quality_score", {}).get("overall_quality_score", 50)
         accuracy_score = evaluation_result.get("technical_accuracy", {}).get("accuracy_score", 50)
         clarity_score = evaluation_result.get("communication_clarity", {}).get("clarity_score", 50)
+        coherence_score = (evaluation_result.get("evaluation_metrics", {}).get("coherence", 0.5)) * 100
 
         if quality_score < 40:
             risk_score += RiskScoringEngine.EVALUATION_FACTORS["low_quality_answers"]
@@ -136,7 +137,8 @@ class RiskScoringEngine:
             risk_score += RiskScoringEngine.EVALUATION_FACTORS["low_accuracy"]
         if clarity_score < 40:
             risk_score += RiskScoringEngine.EVALUATION_FACTORS["poor_communication"]
-
+        if coherence_score < 40:
+            risk_score += (RiskScoringEngine.EVALUATION_FACTORS["poor_communication"] * 0.5)
         return min(risk_score, 1.0)
 
     @staticmethod
@@ -253,12 +255,13 @@ class RiskScoringEngine:
 
         quality_score = evaluation_result.get("answer_quality_score", {}).get("overall_quality_score", 50)
         accuracy_score = evaluation_result.get("technical_accuracy", {}).get("accuracy_score", 50)
-
+        coherence_score = (evaluation_result.get("evaluation_metrics", {}).get("coherence", 0.5)) * 100
         if quality_score < 40:
             risk_factors.append("Low answer quality detected")
         if accuracy_score < 40:
             risk_factors.append("Low technical accuracy detected")
-
+        if coherence_score < 40:
+            risk_factors.append("Low response coherence detected")
         return risk_factors
 
     @staticmethod
