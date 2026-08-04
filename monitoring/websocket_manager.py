@@ -3,13 +3,15 @@
 Holds the active-connection set and offers typed broadcast helpers that
 publish lifecycle events to every connected client. The dashboard frontend
 connects via `/monitoring/ws/metrics?token=<api_token>` and listens for
-typed messages: `metrics`, `session_update`, `worker_alert`, `health_update`.
+typed messages: `metrics`, `session_update`, `worker_alert`, `health_update`,
+and `evaluation_token`.
 
 Broadcast helpers are invoked from:
   * `SessionManager.update_session_status` — when a session transitions
   * `WorkerRegistry.heartbeat` — when a worker's status flips
   * `HealthMonitor.check_system_health` — periodic health pings
   * Celery worker tasks — when a pipeline stage completes
+  * Evaluation pipeline — when incremental LLM tokens are generated
 """
 
 from __future__ import annotations
@@ -114,6 +116,17 @@ class WebSocketManager:
                 "type": "health_update",
                 "status": health_status,
                 "details": details,
+                "timestamp": _now().isoformat(),
+            }
+        )
+        
+    async def broadcast_evaluation_token(self, session_id: str, token: str) -> None:
+        """Broadcast an incremental evaluation token for real-time streaming."""
+        await self._broadcast(
+            {
+                "type": "evaluation_token",
+                "session_id": session_id,
+                "token": token,
                 "timestamp": _now().isoformat(),
             }
         )

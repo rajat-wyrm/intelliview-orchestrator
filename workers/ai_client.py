@@ -1,12 +1,13 @@
 """
 AI Client Module
-Provides pluggable clients for OpenAI, Whisper, and MediaPipe/OpenCV
+Provides pluggable clients for OpenAI, Gemini, Grok, Whisper, and MediaPipe/OpenCV
 with automatic fallback to mocks when API keys or libraries are absent.
+Supports synchronous and streaming responses across LLM models.
 """
 
 import logging
 import os
-from typing import Any
+from typing import Any, Generator, Union
 
 logger = logging.getLogger(__name__)
 
@@ -104,8 +105,9 @@ def chat_completion(
     model: str = "gpt-4o",
     temperature: float = 0.7,
     max_tokens: int = 1024,
-) -> str | None:
-    """Send a chat completion request; returns the assistant text or None."""
+    stream: bool = False,
+) -> Union[str, Generator[str, None, None], None]:
+    """Send a chat completion request; returns assistant text, token generator if stream=True, or None."""
     if not HAS_OPENAI:
         return None
     try:
@@ -114,7 +116,15 @@ def chat_completion(
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
+            stream=stream,
         )
+        if stream:
+            def _stream_generator():
+                for chunk in resp:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        yield chunk.choices[0].delta.content
+            return _stream_generator()
+        
         return resp.choices[0].message.content
     except Exception as exc:
         logger.warning("OpenAI chat completion failed: %s", exc)
@@ -131,17 +141,31 @@ def gemini_generate(
     *,
     temperature: float = 0.7,
     max_output_tokens: int = 1024,
-) -> str | None:
-    """Generate text using Gemini; returns the text or None."""
+    stream: bool = False,
+) -> Union[str, Generator[str, None, None], None]:
+    """Generate text using Gemini; returns text, token generator if stream=True, or None."""
     if not HAS_GEMINI:
         return None
     try:
+        config = genai.types.GenerationConfig(
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+        )
+        if stream:
+            response = gemini_model.generate_content(
+                prompt,
+                generation_config=config,
+                stream=True,
+            )
+            def _stream_generator():
+                for chunk in response:
+                    if chunk.text:
+                        yield chunk.text
+            return _stream_generator()
+
         response = gemini_model.generate_content(
             prompt,
-            generation_config=genai.types.GenerationConfig(
-                temperature=temperature,
-                max_output_tokens=max_output_tokens,
-            ),
+            generation_config=config,
         )
         return response.text
     except Exception as exc:
@@ -154,18 +178,29 @@ def gemini_chat(
     *,
     temperature: float = 0.7,
     max_output_tokens: int = 1024,
-) -> str | None:
-    """Multi-turn chat with Gemini; returns the response text or None."""
+    stream: bool = False,
+) -> Union[str, Generator[str, None, None], None]:
+    """Multi-turn chat with Gemini; returns response text, token generator if stream=True, or None."""
     if not HAS_GEMINI:
         return None
     try:
         chat = gemini_model.start_chat(history=[])
-        for msg in messages:
+        for msg in messages[:-1]:
             if msg["role"] == "user":
                 chat.send_message(msg["content"])
-            elif msg["role"] == "assistant":
-                pass
-        return chat.last.text if chat.last else None
+
+        last_message = messages[-1]["content"] if messages else ""
+        
+        if stream:
+            response = chat.send_message(last_message, stream=True)
+            def _stream_generator():
+                for chunk in response:
+                    if chunk.text:
+                        yield chunk.text
+            return _stream_generator()
+
+        response = chat.send_message(last_message)
+        return response.text
     except Exception as exc:
         logger.warning("Gemini chat failed: %s", exc)
         return None
@@ -182,8 +217,9 @@ def grok_completion(
     model: str = "grok-2-1212",
     temperature: float = 0.7,
     max_tokens: int = 1024,
-) -> str | None:
-    """Send a chat completion request to Grok; returns the assistant text or None."""
+    stream: bool = False,
+) -> Union[str, Generator[str, None, None], None]:
+    """Send a chat completion request to Grok; returns assistant text, token generator if stream=True, or None."""
     if not HAS_GROK:
         return None
     try:
@@ -192,7 +228,15 @@ def grok_completion(
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
+            stream=stream,
         )
+        if stream:
+            def _stream_generator():
+                for chunk in resp:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        yield chunk.choices[0].delta.content
+            return _stream_generator()
+
         return resp.choices[0].message.content
     except Exception as exc:
         logger.warning("Grok completion failed: %s", exc)
