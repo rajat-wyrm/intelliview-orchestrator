@@ -1,7 +1,6 @@
 """
 FastAPI Orchestration Server
 Main entry point for the AI Interview Orchestrator API
-
 Integrates:
 - Session Manager for lifecycle management
 - Session Tracker for monitoring
@@ -11,9 +10,6 @@ Integrates:
 - Worker Registry for node tracking
 - Task Queue integration with Celery
 """
-
-import io
-import json
 import logging
 import os
 import re
@@ -92,9 +88,6 @@ from workers.bias_auditor import BiasAuditor
 # Configure logging after imports so startup messages are structured.
 configure_logging()
 logger = logging.getLogger(__name__)
-
-APP_START_TIME = datetime.now(timezone.utc)
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Execute on application startup/shutdown.
@@ -164,8 +157,6 @@ async def lifespan(app: FastAPI):
                 rc.raw.close()
             except Exception:
                 pass
-
-
 # Initialize FastAPI application
 app = FastAPI(
     title="AI Interview Orchestrator",
@@ -173,44 +164,6 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
-
-if os.getenv("ENABLE_TRACING", "").lower() in ("1", "true", "yes"):
-    try:
-        logging.getLogger("opentelemetry.exporter.otlp.proto.grpc.exporter").setLevel(logging.DEBUG)
-
-        trace.set_tracer_provider(TracerProvider())
-        tracer_provider = trace.get_tracer_provider()
-        otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://jaeger:4317")
-        otlp_exporter = OTLPSpanExporter(endpoint=otlp_endpoint, insecure=True)
-        tracer_provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
-
-        FastAPIInstrumentor.instrument_app(app)
-    except Exception as exc:
-        logger.debug("Tracing initialization skipped or unavailable: %s", exc)
-
-
-@app.middleware("http")
-async def prometheus_middleware(request, call_next):
-    start = time.perf_counter()
-
-    response = await call_next(request)
-
-    duration = time.perf_counter() - start
-
-    REQUEST_COUNT.labels(
-        method=request.method,
-        path=request.url.path,
-        status=response.status_code,
-    ).inc()
-
-    REQUEST_DURATION.labels(
-        method=request.method,
-        path=request.url.path,
-    ).observe(duration)
-
-    return response
-
-
 # ========== Request ID + duration middleware ==========
 
 _VALID_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
@@ -586,8 +539,10 @@ class HealthResponse(BaseModel):
     timestamp: str
 
 
-
-@app.get("/health", response_model=HealthResponse)
+@app.get(
+    "/health",
+    tags=["Health"],
+)
 async def health_check():
     return HealthResponse(
         status="system running",
@@ -608,13 +563,19 @@ async def health():
 # ========== Deep Health & Probe Endpoints ==========
 
 
-@app.get("/livez")
+@app.get(
+    "/livez",
+    tags=["Health"],
+)
 async def liveness_probe():
     """Kubernetes-style liveness probe. Returns 200 if the process is alive."""
     return health_monitor.liveness_check()
 
 
-@app.get("/readyz")
+@app.get(
+    "/readyz",
+    tags=["Health"],
+)
 async def readiness_probe():
     """Kubernetes-style readiness probe. Returns 200 only when all dependencies are up."""
     result = await health_monitor.readiness_check()
@@ -625,7 +586,10 @@ async def readiness_probe():
     return result
 
 
-@app.get("/dependencies")
+@app.get(
+    "/dependencies",
+    tags=["Health"],
+)
 async def get_dependency_statuses():
     """Deep health check of all dependencies (Redis, Postgres, Celery broker)."""
     return await health_monitor._check_all_dependencies()
@@ -1451,11 +1415,11 @@ async def add_question(
 # ========== Candidate Endpoints ==========
 
 
-@app.get("/candidates")
-async def list_candidates(
-    limit: int = 100,
-    session_db: Session = Depends(get_db),
-):
+@app.get(
+    "/candidates",
+    tags=["Candidates"],
+)
+async def list_candidates(limit: int = 100):
     """List all candidates"""
     try:
         candidates = candidate_manager.list_candidates(limit=limit)
@@ -1465,11 +1429,11 @@ async def list_candidates(
         raise HTTPException(status_code=500, detail="Error listing candidates")
 
 
-@app.post("/candidates")
-async def create_candidate(
-    request: CreateCandidateRequest,
-    session_db: Session = Depends(get_db),
-):
+@app.post(
+    "/candidates",
+    tags=["Candidates"],
+)
+async def create_candidate(request: CreateCandidateRequest):
     """Create a new candidate profile"""
     try:
         candidate = candidate_manager.create_candidate(
@@ -1484,11 +1448,11 @@ async def create_candidate(
         raise HTTPException(status_code=500, detail="Error creating candidate")
 
 
-@app.get("/candidates/{candidate_id}")
-async def get_candidate(
-    candidate_id: str,
-    session_db: Session = Depends(get_db),
-):
+@app.get(
+    "/candidates/{candidate_id}",
+    tags=["Candidates"],
+)
+async def get_candidate(candidate_id: str):
     """Get candidate details by ID"""
     try:
         candidate = candidate_manager.get_candidate(candidate_id)
@@ -1502,11 +1466,11 @@ async def get_candidate(
         raise HTTPException(status_code=500, detail="Error fetching candidate")
 
 
-@app.get("/candidates/{candidate_id}/history")
-async def get_candidate_history(
-    candidate_id: str,
-    session_db: Session = Depends(get_db),
-):
+@app.get(
+    "/candidates/{candidate_id}/history",
+    tags=["Candidates"],
+)
+async def get_candidate_history(candidate_id: str):
     """Get candidate interview history"""
     try:
         candidate = candidate_manager.get_candidate(candidate_id)
@@ -1524,7 +1488,10 @@ async def get_candidate_history(
 # ========== Template Endpoints ==========
 
 
-@app.get("/templates")
+@app.get(
+    "/templates",
+    tags=["Templates"],
+)
 async def list_templates(interview_type: str | None = None, limit: int = 100):
     """List interview templates with optional type filter"""
     try:
@@ -1535,11 +1502,11 @@ async def list_templates(interview_type: str | None = None, limit: int = 100):
         raise HTTPException(status_code=500, detail="Error listing templates")
 
 
-@app.post("/templates")
-async def create_template(
-    request: CreateTemplateRequest,
-    session_db: Session = Depends(get_db),
-):
+@app.post(
+    "/templates",
+    tags=["Templates"],
+)
+async def create_template(request: CreateTemplateRequest):
     """Create a new interview template"""
     try:
         template = interview_template_manager.create_template(
@@ -1562,11 +1529,11 @@ async def create_template(
 # ========== Interview Q&A Endpoints ==========
 
 
-@app.post("/interviews/ask-question")
-async def ask_question(
-    request: AskQuestionRequest,
-    session_db: Session = Depends(get_db),
-):
+@app.post(
+    "/interviews/ask-question",
+    tags=["Interviews"],
+)
+async def ask_question(request: AskQuestionRequest):
     """Get next question for a session"""
     try:
         session_data = session_manager.get_session(request.session_id)
@@ -1595,11 +1562,11 @@ async def ask_question(
         raise HTTPException(status_code=500, detail="Error getting question")
 
 
-@app.post("/interviews/submit-answer")
-async def submit_answer(
-    request: SubmitAnswerRequest,
-    session_db: Session = Depends(get_db),
-):
+@app.post(
+    "/interviews/submit-answer",
+    tags=["Interviews"],
+)
+async def submit_answer(request: SubmitAnswerRequest):
     """Submit an answer and get feedback"""
     try:
         session_data = session_manager.get_session(request.session_id)
