@@ -1,10 +1,8 @@
 from fastapi import APIRouter, HTTPException
 
 # Create a router for your new API
-router = APIRouter(
-    prefix="/new-api",
-    tags=["new-api"]
-)
+router = APIRouter(prefix="/new-api", tags=["new-api"])
+
 
 @router.get("/status")
 async def get_status():
@@ -12,6 +10,7 @@ async def get_status():
     Simple health check endpoint.
     """
     return {"status": "ok", "message": "New API is working!"}
+
 
 @router.post("/process")
 async def process_data(payload: dict):
