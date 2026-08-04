@@ -133,58 +133,53 @@ export default function CandidatesPage() {
           </div>
         </div>
 
-        <StatsCards
-          data={{
-            totalCandidates: candidates.length,
-            pendingReview: candidates.reduce((a, c) => a + c.active_sessions, 0),
-            completed: candidates.reduce((a, c) => a + c.completed_sessions, 0),
-            activeNow: candidates.filter((c) => c.active_sessions > 0).length,
-          }}
-        />
-
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-1">
-            <Card
-              title="Candidate List"
-              description={`${filtered.length} candidates`}
-              action={
-                <SearchInput
-                  value={search}
-                  onChange={setSearch}
-                  placeholder="Search candidates..."
-                  className="w-48"
-                />
-              }
-            >
-              {error ? (
-                <ErrorState error={error} onRetry={mutate} />
-              ) : isLoading ? (
-                <Skeleton className="h-48 w-full" />
-              ) : filtered.length === 0 ? (
-                <EmptyState
-                  title="No candidates"
-                  description="Candidate data will appear after sessions are completed."
-                />
-              ) : (
-                <div className="max-h-[500px] space-y-1 overflow-y-auto">
-                  {filtered.map((c) => (
-                    <button
-                      key={c.candidate_id}
-                      onClick={() => setSelectedId(c.candidate_id)}
-                      className={cn(
-                        "flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left text-sm transition-colors",
-                        selectedId === c.candidate_id
-                          ? "bg-accent/15 text-accent-light"
-                          : "text-zinc-300 hover:bg-bg-card"
-                      )}
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate font-mono text-xs text-zinc-200">
-                          {c.candidate_id}
-                        </div>
-                        <div className="text-[10px] text-muted">
-                          {c.total_sessions} session{c.total_sessions !== 1 ? "s" : ""}
-                        </div>
+ <StatsCards
+  data={{
+    totalCandidates: candidates.length,
+    pendingReview: candidates.reduce((a, c) => a + c.active_sessions, 0),
+    completed: candidates.reduce((a, c) => a + c.completed_sessions, 0),
+    activeNow: candidates.filter((c) => c.active_sessions > 0).length,
+  }}
+/>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-1">
+          <Card
+            title="Candidate List"
+            description={`${filtered.length} candidates`}
+            action={
+              <SearchInput
+                value={search}
+                onChange={setSearch}
+                placeholder="Search candidates..."
+                className="w-48"
+              />
+            }
+          >
+            {error ? (
+              <ErrorState error={error} onRetry={mutate} />
+            ) : isLoading ? (
+              <Skeleton className="h-48 w-full" />
+            ) : filtered.length === 0 ? (
+              <EmptyState
+                title="No candidates"
+                description="Candidate data will appear after sessions are completed."
+              />
+            ) : (
+              <div className="max-h-[500px] space-y-1 overflow-y-auto">
+                {filtered.map((c) => (
+                  <button
+                    key={c.candidate_id}
+                    onClick={() => setSelectedId(c.candidate_id)}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left text-sm transition-colors",
+                      selectedId === c.candidate_id
+                        ? "bg-accent/15 text-accent-light"
+                        : "text-zinc-300 hover:bg-bg-card"
+                    )}
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-mono text-xs text-zinc-200">
+                        {c.candidate_id}
                       </div>
                       {c.avg_risk_score != null && (
                         <Badge variant={riskColor(c.avg_risk_score)}>

@@ -39,23 +39,10 @@ class FailureType(Enum):
 class FaultManager:
     """
     Manages fault detection and recovery operations for the distributed system.
-
-    Handles:
-    - Worker failure detection and removal
-    - Task reassignment to healthy workers
-    - Session recovery coordination
-    - Failure logging and analysis
     """
 
     def __init__(self, debounce_time: int = 60):
-        """
-        Initialize FaultManager
-
-        Args:
-            debounce_time: Seconds to wait before treating alert as new (prevent spam)
-        """
         self.debounce_time = debounce_time
-        self.redis_client = redis.from_url()
         self.redis_client = self._create_redis_client()
         self.failure_log_prefix = "failure_log:"
         self.recovery_queue_prefix = "retry_scheduled:"

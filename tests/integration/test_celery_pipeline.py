@@ -30,6 +30,15 @@ def test_process_interview_session_pipeline(
 
     mock_db.execute.return_value.scalar_one_or_none.return_value = interview
 
+    group_result = MagicMock()
+
+    group_result.get.return_value = (
+        {"risk_score": 0.2},
+        {"risk_score": 0.1},
+    )
+
+    mock_group.return_value.apply_async.return_value = group_result
+
     result = process_interview_session.run("test-session-001")
 
     assert result["session_id"] == "test-session-001"

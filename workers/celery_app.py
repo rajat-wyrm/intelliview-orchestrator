@@ -4,6 +4,14 @@ and a `session_failed` signal that lets us mark the DB session as
 FAILED only after Celery has exhausted its retries.
 """
 
+# TODO:
+# Separate worker deployment is pending.
+# These queues prepare task routing for future deployment where:
+# - interview queue will be processed by workers with
+#   worker_prefetch_multiplier=1 for long-running tasks.
+# - maintenance queue will be processed by dedicated workers with a
+#   higher worker_prefetch_multiplier for short-running tasks.
+
 from celery import Celery, signals
 from opentelemetry.instrumentation.celery import CeleryInstrumentor
 

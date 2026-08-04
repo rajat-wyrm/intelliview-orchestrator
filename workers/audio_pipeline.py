@@ -59,7 +59,6 @@ def split_audio_into_chunks(
 
     return chunk_paths, chunk_temp_dir
 
-
 # ---------------------------------------------------------------------------
 # Real detection helpers (Whisper / pyannote / OpenAI) with fallback to stubs
 # ---------------------------------------------------------------------------
@@ -121,41 +120,53 @@ def _real_transcribe(
     try:
         from workers.ai_client import transcribe_audio_file
 
-        url = audio_url or os.environ.get("AUDIO_STREAM_URL", "").strip()
-        if not url and not vad_ran:
-            logger.debug("Transcription skipped: no audio URL configured.")
+        audio_path = f"{AUDIO_TEMP_DIR}/interview_{session_id}.wav"
+
+        # Check if the audio file exists
+        if not os.path.exists(audio_path):
+            logger.warning(
+                "Audio file not found for session %s: %s",
+                session_id,
+                audio_path,
+            )
             return None
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav", dir=AUDIO_TEMP_DIR) as temp_file:
-            audio_path = temp_file.name
+        # Check if the audio file is empty
+        if os.path.getsize(audio_path) == 0:
+            logger.warning(
+                "Audio file is empty (0 bytes) for session %s: %s",
+                session_id,
+                audio_path,
+            )
+            return None
+
+        result = transcribe_audio_file(audio_path)
+        segments = result.get("segments", [])
+
+        if segments:
+            avg_logprob = np.mean([s.get("avg_logprob", -1.0) for s in segments])
+
+            confidence = round(
+                max(0.0, min(1.0, 1.0 + avg_logprob)),
+                3,
+            )
+        else:
+            confidence = 0.0
+            avg_logprob = 0.0
 
         try:
             if url:
                 urllib.request.urlretrieve(url, audio_path)
 
-            if os.path.exists(audio_path) and os.path.getsize(audio_path) == 0:
-                logger.warning("Audio file is empty (0 bytes) for session %s: %s", session_id, audio_path)
-                return None
-
-            result = transcribe_audio_file(audio_path) if url else {"text": "test", "confidence": 0.9, "language": "en", "duration_seconds": 1.0}
-            if not result:
-                return None
-
-            res_dict = {
-                "text": result.get("text", ""),
-                "confidence": result.get("confidence", 0.0),
-                "language": result.get("language", "en"),
-                "duration_seconds": result.get("duration_seconds", 0.0),
-                "timestamp": time.time(),
-            }
-            if vad_ran or vad_config is not None:
-                res_dict["vad_executed"] = True
-                res_dict["speech_detected"] = bool(result.get("text"))
-                res_dict["vad_segments"] = vad_segments
-            return res_dict
-        finally:
-            if os.path.exists(audio_path):
-                os.remove(audio_path)
+        return {
+            "text": result.get("text", ""),
+            "confidence": confidence,
+            "language": result.get("language", "en"),
+            "duration_seconds": (
+                sum(s.get("end", 0) - s.get("start", 0) for s in segments) or 120.0
+            ),
+            "timestamp": time.time(),
+        }
 
     except ImportError:
         logger.info("Whisper not installed, using stub fallback")
@@ -167,6 +178,14 @@ def _real_transcribe(
         logger.warning("Real transcription failed for session %s: %s", session_id, exc, exc_info=True)
         return None
 
+    except Exception as exc:
+        logger.warning(
+            "Real transcription failed for session %s: %s",
+            session_id,
+            exc,
+            exc_info=True,
+        )
+        return None
 
 def _real_detect_background_voices(session_id: str, audio_url: str | None = None) -> BackgroundVoiceResult | None:
     """Detect background voices using pyannote speaker diarisation."""

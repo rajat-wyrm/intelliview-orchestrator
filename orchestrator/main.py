@@ -64,7 +64,6 @@ from monitoring.dashboard_api import create_dashboard_routes
 from monitoring.metrics_collector import MetricsCollector
 from monitoring.websocket_manager import ws_manager
 from orchestrator import http_cache
-from orchestrator.audit_logger import audit_logger
 from orchestrator.auth import create_access_token
 from orchestrator.candidate_manager import CandidateManager
 from orchestrator.fault_manager import FaultManager
@@ -97,17 +96,7 @@ APP_START_TIME = datetime.now(timezone.utc)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Execute on application startup/shutdown.
-
-    Startup: ensure schema exists, run an initial health probe, and warn
-    loudly if the default API token is still in use.
-
-    Shutdown: best-effort graceful drain — flush the request-id log line,
-    close the shared Redis client, and notify clients.
-    """
-
-    settings = get_settings()
-    settings.validate_configuration()
+    """Execute on application startup/shutdown."""
 
     Base.metadata.create_all(bind=engine)
 
@@ -174,20 +163,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-if os.getenv("ENABLE_TRACING", "").lower() in ("1", "true", "yes"):
-    try:
-        logging.getLogger("opentelemetry.exporter.otlp.proto.grpc.exporter").setLevel(logging.DEBUG)
+logging.getLogger("opentelemetry.exporter.otlp.proto.grpc.exporter").setLevel(logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
 
-        trace.set_tracer_provider(TracerProvider())
-        tracer_provider = trace.get_tracer_provider()
-        otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://jaeger:4317")
-        otlp_exporter = OTLPSpanExporter(endpoint=otlp_endpoint, insecure=True)
-        tracer_provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
+trace.set_tracer_provider(TracerProvider())
+tracer_provider = trace.get_tracer_provider()
+otlp_exporter = OTLPSpanExporter(endpoint="http://jaeger:4317", insecure=True)
+tracer_provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
 
-        FastAPIInstrumentor.instrument_app(app)
-    except Exception as exc:
-        logger.debug("Tracing initialization skipped or unavailable: %s", exc)
-
+FastAPIInstrumentor.instrument_app(app)
 
 @app.middleware("http")
 async def prometheus_middleware(request, call_next):
@@ -1905,8 +1889,8 @@ async def get_scheduling_status():
         raise HTTPException(status_code=500, detail=f"Error fetching scheduling status: {e!s}")
 
 
-@app.post("/switch-strategy", dependencies=[Depends(require_token)])
-async def switch_load_balancing_strategy(strategy: str, request: Request):
+@app.post("/switch-strategy", dependencies=[Depends(require_role("admin"))])
+async def switch_load_balancing_strategy(strategy: str):
     """
     Change the active load balancing strategy
 

@@ -17,10 +17,7 @@ from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Any
 
-# Import Prometheus worker monitoring metrics
-from metrics.prometheus_metrics import (
-    CURRENT_WORKERS,
-    SYSTEM_UTILIZATION,
+from monitoring.prometheus_metrics import (
     WORKER_ACTIVE_TASKS,
     WORKER_CAPACITY,
     WORKERS_HEALTHY,
@@ -268,7 +265,6 @@ class WorkerRegistry:
 
             # Update total registered workers metric
             WORKERS_REGISTERED.set(len(self.local_workers))
-            CURRENT_WORKERS.set(len(self.local_workers))
             # Update healthy worker count
             WORKERS_HEALTHY.set(sum(1 for w in self.local_workers.values() if w["status"] == "healthy"))
             # Update unhealthy worker count
@@ -564,7 +560,6 @@ class WorkerRegistry:
 
             # Update Prometheus metrics
             WORKERS_REGISTERED.set(len(self.local_workers))
-            CURRENT_WORKERS.set(len(self.local_workers))
 
             WORKERS_HEALTHY.set(sum(1 for w in self.local_workers.values() if w["status"] == "healthy"))
 

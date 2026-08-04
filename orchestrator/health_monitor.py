@@ -19,8 +19,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-# Import Prometheus system health monitoring metrics
-from metrics.prometheus_metrics import (
+from monitoring.prometheus_metrics import (
     POSTGRES_HEALTH,
     QUEUE_DEPTH,
     REDIS_HEALTH,
@@ -100,16 +99,19 @@ class HealthMonitor:
         self.heartbeat_timeout = heartbeat_timeout
         self.session_timeout = session_timeout
         self.queue_threshold = queue_threshold
+
         self.redis_fragmentation_warn_threshold = (
             redis_fragmentation_warn_threshold
             if redis_fragmentation_warn_threshold is not None
             else self.REDIS_FRAGMENTATION_WARN_THRESHOLD
         )
+
         self.redis_fragmentation_critical_threshold = (
             redis_fragmentation_critical_threshold
             if redis_fragmentation_critical_threshold is not None
             else self.REDIS_FRAGMENTATION_CRITICAL_THRESHOLD
         )
+
         self.redis_client = get_redis_client()
         self.health_status_key = "system:health_status"
         self.last_check_key = "system:last_health_check"
@@ -129,7 +131,7 @@ class HealthMonitor:
     # Readiness probe (Kubernetes-style)
     # ------------------------------------------------------------------
 
-    async def readiness_check(self) -> dict[str, Any]:
+    def readiness_check(self) -> dict[str, Any]:
         """Return true readiness — all critical dependencies must be up.
 
         Use this for k8s readinessProbe: the service only receives

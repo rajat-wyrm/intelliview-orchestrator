@@ -150,7 +150,7 @@ pre-commit install
 | Monitoring | Prometheus, Grafana |
 | Deploy | Docker Compose |
 
-
+<!-- <<<<<<< HEAD -->
 
 ## Authentication
 
