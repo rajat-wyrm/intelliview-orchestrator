@@ -141,6 +141,10 @@ WORKER_HEARTBEAT_AGE_SECONDS = Gauge(
     ["worker_id"],
     registry=registry,
 )
+def update_worker_metrics(total, healthy, unhealthy):
+    WORKERS_REGISTERED.set(total)
+    WORKERS_HEALTHY.set(healthy)
+    WORKERS_UNHEALTHY.set(unhealthy)
 
 # ---------------------------------------------------------------------------
 # AI pipeline latency metrics

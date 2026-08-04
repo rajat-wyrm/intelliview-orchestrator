@@ -79,7 +79,7 @@ class InterviewSession(Base):
     )
 
     assigned_node = Column(String(255), nullable=True)
-    start_time = Column(DateTime, nullable=True, default=utcnow)
+    start_time = Column(DateTime, nullable=True, default=lambda: datetime.now(timezone.utc))
     end_time = Column(DateTime, nullable=True)
 
     risk_score = Column(Float, nullable=True)
@@ -94,31 +94,8 @@ class InterviewSession(Base):
     answers_provided = Column(JSON, nullable=True, default=list)
     feedback_generated = Column(JSON, nullable=True, default=list)
 
-    overall_score = Column(Float, nullable=True, index=True)
-
-    template_id = Column(
-        String(255),
-        ForeignKey("interview_templates.template_id"),
-        nullable=True,
-        index=True,
-    )
-
-    created_at = Column(DateTime, nullable=False, default=utcnow)
-    updated_at = Column(
-        DateTime,
-        nullable=False,
-        default=utcnow,
-        onupdate=utcnow,
-    )
-    candidate = relationship(
-        "Candidate",
-        back_populates="interview_sessions",
-    )
-
-    template = relationship(
-        "InterviewTemplate",
-        back_populates="interview_sessions",
-    )
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     def __repr__(self):
         return (
@@ -142,8 +119,8 @@ class Question(Base):
     usage_count = Column(Integer, nullable=False, default=0, index=True)
     avg_score = Column(Float, nullable=True, index=True)
 
-    created_at = Column(DateTime, nullable=False, default=utcnow)
-    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     def __repr__(self):
         return (
@@ -170,18 +147,8 @@ class Candidate(Base):
     avg_score = Column(Float, nullable=True, index=True)
     total_interviews = Column(Integer, nullable=False, default=0, index=True)
 
-    created_at = Column(DateTime, nullable=False, default=utcnow)
-    updated_at = Column(
-        DateTime,
-        nullable=False,
-        default=utcnow,
-        onupdate=utcnow,
-    )
-
-    interview_sessions = relationship(
-        "InterviewSession",
-        back_populates="candidate",
-    )
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     def __repr__(self):
         return f"<Candidate(candidate_id='{self.candidate_id}', name='{self.name}')>"
@@ -203,18 +170,8 @@ class InterviewTemplate(Base):
     usage_count = Column(Integer, nullable=False, default=0, index=True)
     success_rate = Column(Float, nullable=True, index=True)
 
-    created_at = Column(DateTime, nullable=False, default=utcnow)
-    updated_at = Column(
-        DateTime,
-        nullable=False,
-        default=utcnow,
-        onupdate=utcnow,
-    )
-
-    interview_sessions = relationship(
-        "InterviewSession",
-        back_populates="template",
-    )
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     def __repr__(self):
         return (

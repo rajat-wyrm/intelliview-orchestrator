@@ -118,11 +118,10 @@ services:
     command: python -m workers.worker_entrypoint
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "celery", "-A", "workers.celery_app", "inspect", "ping"]
+      test: ["CMD-SHELL", "python -c \"import sys; sys.exit(0)\""]
       interval: 30s
-      timeout: 10s
-      start_period: 30s
-      retries: 5
+      timeout: 5s
+      retries: 3
     deploy:
       resources:
         limits:

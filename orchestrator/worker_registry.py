@@ -9,25 +9,18 @@ Responsibilities:
 - Provide worker availability queries
 - Real-time multi-instance sync via Redis Pub/Sub
 """
-
-import asyncio
-import json
+import os
+import redis
 import logging
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Any
-
-# Import Prometheus worker monitoring metrics
-from metrics.prometheus_metrics import (
-    CURRENT_WORKERS,
-    SYSTEM_UTILIZATION,
-    WORKER_ACTIVE_TASKS,
-    WORKER_CAPACITY,
-    WORKERS_HEALTHY,
-    WORKERS_REGISTERED,
-    WORKERS_UNHEALTHY,
-)
 from orchestrator.redis_client import get_redis_client
+
+from monitoring.prometheus_metrics import (
+    WORKERS_REGISTERED,
+    WORKERS_HEALTHY,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,32 +40,25 @@ class WorkerRegistry:
     def __init__(self):
         """Initialize worker registry"""
         try:
-            self.redis_client = self._create_redis_client()
+            self.redis_client = redis.from_url(
+                os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+                decode_responses=True
+           )
+
             self.local_workers: dict[str, dict[str, Any]] = {}
             self.lock = Lock()
             self._hydrated = False
+
             self._hydrate_from_redis()
 
-            # Keep a strong reference to background tasks to prevent garbage collection
-            self.background_tasks: set[asyncio.Task[Any]] = set()
-
-            # Start background listener for real-time synchronization
-            if self.redis_client:
-                try:
-                    loop = asyncio.get_running_loop()
-                    task = loop.create_task(self._start_pubsub_listener())
-                    self.background_tasks.add(task)
-                    task.add_done_callback(self.background_tasks.discard)
-                    logger.info("Worker Registry initialized with Pub/Sub Sync")
-                except RuntimeError:
-                    # No running event loop (pytest/unit tests)
-                    logger.debug("Skipping Pub/Sub listener because no event loop is running")
-            else:
-                logger.warning("Worker Registry initialized WITHOUT Redis connection")
+            logger.info("Worker Registry initialized")
 
         except Exception as e:
             logger.error(f"Error initializing Worker Registry: {e!s}")
             self.redis_client = None
+            self.local_workers = {}
+            self.lock = Lock()
+        
 
     def _create_redis_client(self) -> Any:
         """Create the shared Redis client used by the orchestrator."""
@@ -100,6 +86,17 @@ class WorkerRegistry:
                     "total_tasks_processed": int(raw.get("total_tasks_processed", 0)),
                     "failed_tasks": int(raw.get("failed_tasks", 0)),
                 }
+            # Update Prometheus worker metrics
+            WORKERS_REGISTERED.set(len(self.local_workers))
+
+            healthy_workers = sum(
+                1
+                for worker in self.local_workers.values()
+                if worker.get("status") == "healthy"
+            )
+
+            WORKERS_HEALTHY.set(healthy_workers)
+
             self._hydrated = True
         except Exception as exc:
             logger.warning("Could not hydrate worker registry from Redis: %s", exc)
