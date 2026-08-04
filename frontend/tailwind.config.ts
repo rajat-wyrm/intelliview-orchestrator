@@ -6,13 +6,26 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        bg: { DEFAULT: "#0a0a0f", panel: "#12121a", card: "#1a1a24" },
+        bg: { DEFAULT: "var(--bg)", panel: "var(--bg-panel)", card: "var(--bg-card)" },
         accent: { DEFAULT: "#6366f1", light: "#818cf8", dark: "#4f46e5" },
         success: "#10b981",
         warn: "#f59e0b",
         danger: "#ef4444",
-        muted: "#71717a",
-        border: "#27272a",
+        muted: "var(--muted)",
+        border: "var(--border)",
+        zinc: {
+          50: "var(--zinc-50)",
+          100: "var(--zinc-100)",
+          200: "var(--zinc-200)",
+          300: "var(--zinc-300)",
+          400: "var(--zinc-400)",
+          500: "var(--zinc-500)",
+          600: "var(--zinc-600)",
+          700: "var(--zinc-700)",
+          800: "var(--zinc-800)",
+          900: "var(--zinc-900)",
+          950: "var(--zinc-950)",
+        },
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],

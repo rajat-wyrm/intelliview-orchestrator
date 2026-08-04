@@ -31,12 +31,12 @@ sys.path.insert(0, str(ROOT))
 
 from config import get_settings  # noqa: E402
 from database.db import Base, SessionLocal, engine  # noqa: E402
-from database.models import (
+from database.models import (  # noqa: E402
     Candidate,
     InterviewSession,
     InterviewTemplate,
     Question,
-)  # noqa: E402
+)
 from orchestrator.worker_registry import WorkerRegistry  # noqa: E402
 
 WORKER_FIXTURES = [
@@ -126,6 +126,7 @@ TEMPLATE_FIXTURES = [
     }
 ]
 
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -140,6 +141,7 @@ def seed_workers() -> None:
             print(f"  + worker {spec['worker_id']} (capacity={spec['capacity']})")
         registry.heartbeat(spec["worker_id"], active_tasks=spec["active_tasks"])
 
+
 def seed_candidates() -> None:
     """Insert sample candidates. Safe to run multiple times."""
 
@@ -147,13 +149,8 @@ def seed_candidates() -> None:
 
     try:
         for candidate in CANDIDATE_FIXTURES:
-
             # Check if candidate already exists
-            existing = (
-                db.query(Candidate)
-                .filter(Candidate.candidate_id == candidate["candidate_id"])
-                .first()
-            )
+            existing = db.query(Candidate).filter(Candidate.candidate_id == candidate["candidate_id"]).first()
 
             if existing:
                 print(f"  = candidate {candidate['candidate_id']} already exists")
@@ -179,6 +176,7 @@ def seed_candidates() -> None:
     finally:
         db.close()
 
+
 def seed_questions() -> None:
     """Insert sample interview questions. Safe to run multiple times."""
 
@@ -186,13 +184,8 @@ def seed_questions() -> None:
 
     try:
         for question in QUESTION_FIXTURES:
-
             # Check if question already exists
-            existing = (
-                db.query(Question)
-                .filter(Question.question_id == question["question_id"])
-                .first()
-            )
+            existing = db.query(Question).filter(Question.question_id == question["question_id"]).first()
 
             if existing:
                 print(f"  = question {question['question_id']} already exists")
@@ -217,6 +210,7 @@ def seed_questions() -> None:
     finally:
         db.close()
 
+
 def seed_templates() -> None:
     """Insert sample interview templates. Safe to run multiple times."""
 
@@ -224,13 +218,10 @@ def seed_templates() -> None:
 
     try:
         for template in TEMPLATE_FIXTURES:
-
             # Check if template already exists
             existing = (
                 db.query(InterviewTemplate)
-                .filter(
-                    InterviewTemplate.template_id == template["template_id"]
-                )
+                .filter(InterviewTemplate.template_id == template["template_id"])
                 .first()
             )
 
@@ -259,6 +250,7 @@ def seed_templates() -> None:
 
     finally:
         db.close()
+
 
 def seed_sessions(reset: bool = False) -> None:
     """Insert a realistic mix of completed, active, and failed sessions."""

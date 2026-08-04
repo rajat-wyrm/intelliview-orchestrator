@@ -18,6 +18,8 @@ import pytest
 
 API_HEADERS = {"X-API-Token": os.getenv("API_TOKEN", "dev-token-change-me")}
 
+pytestmark = pytest.mark.e2e
+
 
 def _wait_for_api(base_url: str, timeout: float = 30.0) -> None:
     deadline = time.time() + timeout

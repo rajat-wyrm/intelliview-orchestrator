@@ -196,6 +196,18 @@ class LoadBalancer:
             f"→ selected worker: {selected['worker_id'] if selected else None}"
         )
         return selected
+            return min(available, key=lambda w: w["active_tasks"])
+
+        # For medium priority, select from least loaded
+        if priority == "medium":
+            # Select a worker that's not overloaded
+            underutilized = [w for w in available if w["active_tasks"] < w["capacity"] * 0.7]
+            if underutilized:
+                return min(underutilized, key=lambda w: w["active_tasks"])
+            return min(available, key=lambda w: w["active_tasks"])
+
+        # For low priority, select any available
+        return max(available, key=lambda w: w["active_tasks"])  # Select the one with most load (fill it up)
 
     def is_system_overloaded(self, threshold: float = 0.9) -> bool:
         """

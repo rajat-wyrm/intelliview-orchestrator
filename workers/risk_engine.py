@@ -20,9 +20,9 @@ logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Single-source risk configuration — all weights & thresholds here.
-# Override via environment variables (prefix RISK_), e.g.
 #   RISK_VIDEO_WEIGHT=0.5 RISK_LOW_RISK_THRESHOLD=0.25
-# ---------------------------------------------------------------------------
+# -----------------------------------------# Override via environment variables (prefix RISK_), e.g.
+# ----------------------------------
 
 RISK_CONFIG: dict[str, float] = {
     # Pipeline weights (must sum to 1.0)
@@ -149,6 +149,17 @@ class RiskScoringEngine:
         return round(min(max(final_risk, 0.0), 1.0), 3)
 
     @staticmethod
+    def _apply_critical_rule_overrides(final_risk: float, risk_classification: str) -> float:
+        """Apply rule-based overrides to the linear combined risk score."""
+        if risk_classification == "CRITICAL":
+            return max(final_risk, 0.95)
+        if risk_classification == "HIGH":
+            return max(final_risk, 0.8)
+        if risk_classification == "MEDIUM":
+            return max(final_risk, 0.6)
+        return final_risk
+
+    @staticmethod
     def classify_risk(risk_score: float) -> str:
         """Classify risk level based on score."""
         if risk_score < RiskScoringEngine.LOW_RISK_THRESHOLD:
@@ -182,6 +193,7 @@ class RiskScoringEngine:
             audio_result,
             evaluation_result,
         )
+        final_risk = RiskScoringEngine._apply_critical_rule_overrides(final_risk, risk_classification)
         weighted_classification = RiskScoringEngine.classify_risk(final_risk)
         logger.info(
             "Weighted=%s (%.2f), DecisionTree=%s",
@@ -201,7 +213,13 @@ class RiskScoringEngine:
                 "evaluation_risk": evaluation_risk,
             },
             "risk_factors": risk_factors,
-            "recommendation": RiskScoringEngine._generate_recommendation(risk_classification),
+            "explanation": RiskScoringEngine._generate_explanation(
+                risk_classification,
+                risk_factors,
+            ),
+            "recommendation": RiskScoringEngine._generate_recommendation(
+                risk_classification,
+            ),
         }
 
         logger.info(f"Risk report generated: {risk_classification} (score: {final_risk})")
@@ -252,6 +270,30 @@ class RiskScoringEngine:
             "CRITICAL": "Significant fraud indicators detected. Recommend rejection or investigation.",
         }
         return recommendations.get(risk_classification, "Review interview manually.")
+
+    @staticmethod
+    def _generate_explanation(
+        risk_classification: str,
+        risk_factors: list[str],
+    ) -> str:
+        """Generate a human-readable explanation for the final risk score."""
+
+        if not risk_factors:
+            return "Low risk with no significant suspicious activity detected."
+
+        factors = ", ".join(risk_factors[:2])
+
+        explanations = {
+            "LOW": f"Low risk with minor indicators: {factors}.",
+            "MEDIUM": f"Medium risk because of {factors}.",
+            "HIGH": f"High risk due to {factors}.",
+            "CRITICAL": f"Critical risk due to {factors}. Immediate review recommended.",
+        }
+
+        return explanations.get(
+            risk_classification,
+            f"Risk detected because of {factors}.",
+        )
 
 
 class RiskDecisionTree:
