@@ -18,7 +18,6 @@ from types import SimpleNamespace
 from typing import Any
 
 from orchestrator.redis_client import get_redis_client
-from orchestrator.session_payload import deserialize_session_payload
 
 logger = logging.getLogger(__name__)
 # Backward-compatible patch target for tests/consumers mocking module.redis.from_url.
@@ -94,7 +93,7 @@ class FaultManager:
                         if not session_data:
                             continue
 
-                        session = deserialize_session_payload(session_data)
+                        session = json.loads(session_data)
 
                         # Check if session is stuck in PROCESSING
                         if session.get("status") == "PROCESSING":
@@ -224,8 +223,8 @@ class FaultManager:
                     try:
                         session_data = self.redis_client.get(key)
                         if session_data:
-                            session = deserialize_session_payload(session_data)
-                            if session.get("assigned_node") == worker_id:
+                            session = json.loads(session_data)
+                            if session.get("assigned_worker") == worker_id:
                                 tasks.append(session.get("session_id"))
                     except Exception:
                         continue

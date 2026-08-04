@@ -16,17 +16,6 @@ import logging
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Any
-
-# Import Prometheus worker monitoring metrics
-from metrics.prometheus_metrics import (
-    CURRENT_WORKERS,
-    SYSTEM_UTILIZATION,
-    WORKER_ACTIVE_TASKS,
-    WORKER_CAPACITY,
-    WORKERS_HEALTHY,
-    WORKERS_REGISTERED,
-    WORKERS_UNHEALTHY,
-)
 from orchestrator.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -126,20 +115,21 @@ class WorkerRegistry:
         return client if hasattr(client, "pubsub") else None
 
     async def _start_pubsub_listener(self) -> None:
-        """Background asynchronous loop listening for cache updates from other instances"""
+        """Background task that listens on the Redis Pub/Sub sync channel
+        and applies incoming messages to the local worker cache."""
         native = self._get_native_redis_client()
         if not native:
+            logger.warning("Cannot start Pub/Sub listener: no native Redis client available")
             return
 
-        pubsub = None
+        pubsub = native.pubsub()
         try:
-            pubsub = native.pubsub()
             pubsub.subscribe(self.SYNC_CHANNEL)
-            logger.info(f"Subscribed to Redis channel: {self.SYNC_CHANNEL}")
-
             while True:
                 try:
-                    message = pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                    message = await asyncio.to_thread(
+                        pubsub.get_message, ignore_subscribe_messages=True, timeout=1.0
+                    )
                     if message:
                         self._handle_pubsub_message(message)
                 except Exception as e:

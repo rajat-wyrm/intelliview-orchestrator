@@ -94,6 +94,40 @@ class AudioAnalysisResult(TypedDict):
     background_voices: BackgroundVoiceResult
     suspicious_conversation: SuspiciousPatternResult
     risk_score: float
+ fix/43-duration-seconds-v2
+
+
+def _get_audio_duration(audio_path: str, segments: list[dict[str, Any]]) -> float:
+    """Return the true duration of the audio file, in seconds.
+
+    Fix for #43: the old implementation summed each transcript segment's
+    (end - start), which is total *spoken* time, not the audio file's
+    actual duration. That silently drops any silence/pauses between
+    segments and falls back to a hardcoded 120.0 when there are no
+    segments at all (e.g. a silent recording).
+
+    This reads the real duration from the .wav file header instead, which
+    is accurate regardless of speech/silence patterns. If the file can't
+    be read for some reason, it falls back to the last segment's end
+    timestamp (max, not sum) as a best-effort estimate, and only returns
+    0.0 if there's truly nothing to go on.
+    """
+    try:
+        import wave
+
+        with wave.open(audio_path, "rb") as wav_file:
+            frames = wav_file.getnframes()
+            rate = wav_file.getframerate()
+            if rate:
+                return round(frames / float(rate), 2)
+    except Exception as exc:
+        logger.debug("Could not read audio duration for %s: %s", audio_path, exc)
+
+    if segments:
+        return round(max(s.get("end", 0) for s in segments), 2)
+
+    return 0.
+ main
 
 
 def _real_transcribe(
@@ -133,29 +167,16 @@ def _real_transcribe(
             if url:
                 urllib.request.urlretrieve(url, audio_path)
 
-            if os.path.exists(audio_path) and os.path.getsize(audio_path) == 0:
-                logger.warning("Audio file is empty (0 bytes) for session %s: %s", session_id, audio_path)
-                return None
-
-            result = transcribe_audio_file(audio_path) if url else {"text": "test", "confidence": 0.9, "language": "en", "duration_seconds": 1.0}
-            if not result:
-                return None
-
-            res_dict = {
-                "text": result.get("text", ""),
-                "confidence": result.get("confidence", 0.0),
-                "language": result.get("language", "en"),
-                "duration_seconds": result.get("duration_seconds", 0.0),
-                "timestamp": time.time(),
-            }
-            if vad_ran or vad_config is not None:
-                res_dict["vad_executed"] = True
-                res_dict["speech_detected"] = bool(result.get("text"))
-                res_dict["vad_segments"] = vad_segments
-            return res_dict
-        finally:
-            if os.path.exists(audio_path):
-                os.remove(audio_path)
+        return {
+            "text": result.get("text", ""),
+            "confidence": confidence,
+            "language": result.get("language", "en"),
+          fix/43-duration-seconds-v2
+            "duration_seconds": _get_audio_duration(audio_path, result.get("segments", []))
+            "duration_seconds": (sum(s.get("end", 0) - s.get("start", 0) for s in segments) or 120.0)
+          main
+            "timestamp": time.time(),
+        }
 
     except ImportError:
         logger.info("Whisper not installed, using stub fallback")

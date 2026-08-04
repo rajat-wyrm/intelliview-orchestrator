@@ -45,7 +45,7 @@ function HRDashboard() {
 
   useEffect(() => {
     document.title = "HR Dashboard";
-  }, []);
+     }, []);
 
   useEffect(() => {
     reportWebVitals();
