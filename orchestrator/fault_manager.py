@@ -17,7 +17,7 @@ from enum import Enum
 from types import SimpleNamespace
 from typing import Any
 
-from orchestrator.redis_client import get_redis_client
+ from orchestrator.redis_client import get_redis_client
 from orchestrator.session_payload import deserialize_session_payload
 
 logger = logging.getLogger(__name__)
@@ -39,23 +39,10 @@ class FailureType(Enum):
 class FaultManager:
     """
     Manages fault detection and recovery operations for the distributed system.
-
-    Handles:
-    - Worker failure detection and removal
-    - Task reassignment to healthy workers
-    - Session recovery coordination
-    - Failure logging and analysis
     """
 
     def __init__(self, debounce_time: int = 60):
-        """
-        Initialize FaultManager
-
-        Args:
-            debounce_time: Seconds to wait before treating alert as new (prevent spam)
-        """
         self.debounce_time = debounce_time
-        self.redis_client = redis.from_url()
         self.redis_client = self._create_redis_client()
         self.failure_log_prefix = "failure_log:"
         self.recovery_queue_prefix = "retry_scheduled:"

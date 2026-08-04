@@ -17,17 +17,7 @@ from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Any
 
-# Import Prometheus worker monitoring metrics
-from metrics.prometheus_metrics import (
-    CURRENT_WORKERS,
-    SYSTEM_UTILIZATION,
-    WORKER_ACTIVE_TASKS,
-    WORKER_CAPACITY,
-    WORKERS_HEALTHY,
-    WORKERS_REGISTERED,
-    WORKERS_UNHEALTHY,
-)
-from orchestrator.redis_client import get_redis_client
+from orchestrator.cache_manager import CacheManager
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +36,9 @@ class WorkerRegistry:
 
     def __init__(self):
         """Initialize worker registry"""
-        try:
-            self.redis_client = self._create_redis_client()
-            self.local_workers: dict[str, dict[str, Any]] = {}
+ try:
+    self.redis_client = self._create_redis_client()
+    self.local_workers: dict[str, dict[str, Any]] = {}
             self.lock = Lock()
             self._hydrated = False
             self._hydrate_from_redis()

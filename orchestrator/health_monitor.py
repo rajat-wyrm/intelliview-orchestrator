@@ -19,19 +19,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-# Import Prometheus system health monitoring metrics
-from metrics.prometheus_metrics import (
-    POSTGRES_HEALTH,
-    QUEUE_DEPTH,
-    REDIS_HEALTH,
-    REDIS_MEMORY_FRAGMENTATION,
-    REDIS_MEMORY_MAX,
-    REDIS_MEMORY_PEAK,
-    REDIS_MEMORY_USAGE_PERCENT,
-    REDIS_MEMORY_USED,
-    REDIS_SPACE_USED,
-)
-from orchestrator.redis_client import get_redis_client
+from orchestrator.cache_manager import CacheManager
 
 logger = logging.getLogger(__name__)
 
@@ -98,19 +86,22 @@ class HealthMonitor:
         redis_fragmentation_critical_threshold: float | None = None,
     ):
         self.heartbeat_timeout = heartbeat_timeout
-        self.session_timeout = session_timeout
-        self.queue_threshold = queue_threshold
-        self.redis_fragmentation_warn_threshold = (
-            redis_fragmentation_warn_threshold
-            if redis_fragmentation_warn_threshold is not None
-            else self.REDIS_FRAGMENTATION_WARN_THRESHOLD
-        )
-        self.redis_fragmentation_critical_threshold = (
-            redis_fragmentation_critical_threshold
-            if redis_fragmentation_critical_threshold is not None
-            else self.REDIS_FRAGMENTATION_CRITICAL_THRESHOLD
-        )
-        self.redis_client = get_redis_client()
+    self.session_timeout = session_timeout
+self.queue_threshold = queue_threshold
+
+self.redis_fragmentation_warn_threshold = (
+    redis_fragmentation_warn_threshold
+    if redis_fragmentation_warn_threshold is not None
+    else self.REDIS_FRAGMENTATION_WARN_THRESHOLD
+)
+
+self.redis_fragmentation_critical_threshold = (
+    redis_fragmentation_critical_threshold
+    if redis_fragmentation_critical_threshold is not None
+    else self.REDIS_FRAGMENTATION_CRITICAL_THRESHOLD
+)
+
+self.redis_client = get_redis_client()
         self.health_status_key = "system:health_status"
         self.last_check_key = "system:last_health_check"
         self._dep_status: dict[str, DependencyStatus] = {}

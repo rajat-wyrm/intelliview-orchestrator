@@ -59,7 +59,6 @@ def split_audio_into_chunks(
 
     return chunk_paths, chunk_temp_dir
 
-
 # ---------------------------------------------------------------------------
 # Real detection helpers (Whisper / pyannote / OpenAI) with fallback to stubs
 # ---------------------------------------------------------------------------
@@ -133,29 +132,14 @@ def _real_transcribe(
             if url:
                 urllib.request.urlretrieve(url, audio_path)
 
-            if os.path.exists(audio_path) and os.path.getsize(audio_path) == 0:
-                logger.warning("Audio file is empty (0 bytes) for session %s: %s", session_id, audio_path)
-                return None
-
-            result = transcribe_audio_file(audio_path) if url else {"text": "test", "confidence": 0.9, "language": "en", "duration_seconds": 1.0}
-            if not result:
-                return None
-
-            res_dict = {
-                "text": result.get("text", ""),
-                "confidence": result.get("confidence", 0.0),
-                "language": result.get("language", "en"),
-                "duration_seconds": result.get("duration_seconds", 0.0),
-                "timestamp": time.time(),
-            }
-            if vad_ran or vad_config is not None:
-                res_dict["vad_executed"] = True
-                res_dict["speech_detected"] = bool(result.get("text"))
-                res_dict["vad_segments"] = vad_segments
-            return res_dict
-        finally:
-            if os.path.exists(audio_path):
-                os.remove(audio_path)
+        return {
+            "text": result.get("text", ""),
+            "confidence": confidence,
+            "language": result.get("language", "en"),
+ "duration_seconds": (
+    sum(s.get("end", 0) - s.get("start", 0) for s in segments) or 120.0
+),
+"timestamp": time.time(),
 
     except ImportError:
         logger.info("Whisper not installed, using stub fallback")

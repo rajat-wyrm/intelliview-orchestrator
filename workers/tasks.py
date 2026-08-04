@@ -23,10 +23,10 @@ from sqlalchemy import select
 
 from database.db import SessionLocal
 from database.models import InterviewSession
-from metrics.prometheus_metrics import (
+ from monitoring.prometheus_metrics import (
     CELERY_ACTIVE_TASKS,
     CELERY_TASK_RUNTIME,
-    CELERY_TASKS_PROCESSED_TOTAL,  # Updated custom counter
+    CELERY_TASKS_PROCESSED_TOTAL,
     FAILURE_COUNT,
     PIPELINE_LATENCY,
     POSTGRES_HEALTH,
@@ -146,7 +146,7 @@ def _after_parallel(self, results: list, session_id: str):
         logger.info("Parallel video+audio done for %s - running evaluation", session_id)
         session_manager.update_session_status(session_id, session_manager.EVALUATING, {"stage": "evaluation"})
 
-        start = time.perf_counter()
+ start = time.perf_counter()
         evaluation_result = evaluate_answers(session_id)
 
         latency = time.perf_counter() - start
@@ -350,7 +350,7 @@ def scan_and_dispatch_retries():
     passed and re-dispatch the corresponding session through the normal
     scheduling path. Runs every 60 s via Celery Beat.
     """
-    redis_client = get_redis_client()
+ redis_client = get_redis_client()
     retry_scheduled_prefix = "retry_scheduled:"
 
     try:

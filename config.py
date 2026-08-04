@@ -208,7 +208,7 @@ JWT_ACCESS_TOKEN_EXPIRE_MINUTES = settings.jwt_access_token_expire_minutes
 JWT_REFRESH_TOKEN_EXPIRE_DAYS = settings.jwt_refresh_token_expire_days
 
 CORS_ALLOW_ORIGINS = ",".join(settings.cors_allow_origins)
-MAX_REQUEST_BODY_BYTES = settings.max_request_body_bytes
+ MAX_REQUEST_BODY_BYTES = settings.max_request_body_bytes
 ENABLE_PROMETHEUS = settings.enable_prometheus
 DATABASE_SSLMODE = settings.database_sslmode
 
