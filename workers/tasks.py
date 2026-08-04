@@ -14,12 +14,10 @@ from __future__ import annotations
 import json
 import logging
 import socket
-import time
-from datetime import datetime, timezone
-import redis
+from datetime import datetime, timedelta, timezone
 
-from celery import chord, group
-from sqlalchemy import select
+from celery import group
+from sqlalchemy import delete, select
 
 from database.db import SessionLocal
 from database.models import InterviewSession
@@ -42,6 +40,7 @@ from metrics.prometheus_metrics import (
 from orchestrator.redis_client import get_redis_client
 from orchestrator.session_manager import SessionManager
 from orchestrator.state_sync import StateSynchronizer
+from orchestrator.time_utils import utcnow
 from workers.celery_app import celery_app
 from workers.evaluation_pipeline import evaluate_answers
 from workers.risk_engine import RiskScoringEngine
@@ -450,3 +449,73 @@ def scan_and_dispatch_retries():
 
     except Exception as exc:
         logger.error("scan_and_dispatch_retries failed: %s", exc)
+
+
+QUEUED_ORPHAN_THRESHOLD_SECONDS = 24 * 60 * 60  # 24h
+
+
+@celery_app.task(name="workers.tasks.prune_orphaned_queued_sessions")
+def prune_orphaned_queued_sessions():
+    """Hard-delete sessions stuck in QUEUED for >24h.
+
+    A QUEUED session that's never been picked up carries no video/audio/
+    evaluation data worth preserving. Per team decision this is a hard
+    delete (not a status change to CANCELLED) to actually shrink the
+    table; traceability comes from the log line below, not the row.
+
+    Runs hourly via Celery Beat.
+    """
+    # .replace(tzinfo=None): updated_at is stored as naive UTC (see
+    # database/models.py), so the cutoff must match for a clean comparison.
+    cutoff = utcnow().replace(tzinfo=None) - timedelta(seconds=QUEUED_ORPHAN_THRESHOLD_SECONDS)
+
+    db_session = SessionLocal()
+    try:
+        orphaned = db_session.execute(
+            select(InterviewSession).where(
+                InterviewSession.status == session_manager.QUEUED,
+                InterviewSession.updated_at < cutoff,
+            )
+        ).scalars().all()
+
+        if not orphaned:
+            logger.info("prune_orphaned_queued_sessions: no orphaned QUEUED sessions found")
+            return {"pruned": 0}
+
+        ids = [interview.session_id for interview in orphaned]
+
+        result = db_session.execute(
+            delete(InterviewSession)
+            .where(
+                InterviewSession.session_id.in_(ids),
+                InterviewSession.status == session_manager.QUEUED,  # re-check: guards against a
+                                                                      # worker picking the session up
+                                                                      # between the SELECT and here
+            )
+            .returning(
+                InterviewSession.session_id,
+                InterviewSession.candidate_id,
+                InterviewSession.updated_at,
+            )
+        )
+        deleted_rows = result.all()
+        db_session.commit()
+
+        for session_id, candidate_id, queued_since in deleted_rows:
+            logger.warning(
+                "Pruned orphaned QUEUED session %s (candidate=%s, queued since %s)",
+                session_id,
+                candidate_id,
+                queued_since,
+            )
+            state_sync.delete_session_state(session_id)
+
+        logger.info("prune_orphaned_queued_sessions complete: pruned %d session(s)", len(deleted_rows))
+        return {"pruned": len(deleted_rows)}
+
+    except Exception as exc:
+        db_session.rollback()
+        logger.error("prune_orphaned_queued_sessions failed: %s", exc, exc_info=True)
+        return {"pruned": 0, "error": str(exc)}
+    finally:
+        db_session.close()

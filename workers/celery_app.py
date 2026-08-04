@@ -36,6 +36,10 @@ celery_app.conf.update(
             "task": "workers.tasks.scan_and_dispatch_retries",
             "schedule": 60.0,
         },
+        "prune-orphaned-queued-sessions": {
+            "task": "workers.tasks.prune_orphaned_queued_sessions",
+            "schedule": 3600.0,  # hourly, plenty for a 24h threshold
+        },
     },
 )
 
