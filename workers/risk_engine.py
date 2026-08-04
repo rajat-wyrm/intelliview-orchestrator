@@ -16,6 +16,8 @@ source of truth for every numeric constant in the scoring pipeline.
 import logging
 import os
 from typing import Any
+from workers.threshold_calculator import AdaptiveThresholdCalculator
+from workers.risk_history import RiskHistoryManager
 
 logger = logging.getLogger(__name__)
 
@@ -162,13 +164,45 @@ class RiskScoringEngine:
 
     @staticmethod
     def classify_risk(risk_score: float) -> str:
-        """Classify risk level based on score."""
-        if risk_score < RiskScoringEngine.LOW_RISK_THRESHOLD:
+        """
+        Classify risk using adaptive thresholds.
+        """
+
+        thresholds = AdaptiveThresholdCalculator.get_thresholds()
+
+        low_threshold = thresholds["low"]
+        medium_threshold = thresholds["medium"]
+        high_threshold = thresholds["high"]
+
+        if risk_score < low_threshold:
             return "LOW"
-        if risk_score < RiskScoringEngine.MEDIUM_RISK_THRESHOLD:
+
+        if risk_score < medium_threshold:
             return "MEDIUM"
-        if risk_score < RiskScoringEngine.HIGH_RISK_THRESHOLD:
+
+        if risk_score < high_threshold:
             return "HIGH"
+
+        return "CRITICAL"
+
+    @staticmethod
+    def classify_risk_dynamic(
+        risk_score: float,
+        thresholds: dict[str, float],
+    ) -> str:
+        """
+        Classify risk using adaptive thresholds.
+        """
+
+        if risk_score < thresholds["low"]:
+            return "LOW"
+
+        if risk_score < thresholds["medium"]:
+            return "MEDIUM"
+
+        if risk_score < thresholds["high"]:
+            return "HIGH"
+
         return "CRITICAL"
 
     @staticmethod
@@ -184,24 +218,10 @@ class RiskScoringEngine:
         video_risk = RiskScoringEngine.calculate_video_risk(video_result)
         audio_risk = RiskScoringEngine.calculate_audio_risk(audio_result)
         evaluation_risk = RiskScoringEngine.calculate_evaluation_risk(evaluation_result)
-        final_risk = RiskScoringEngine.calculate_final_risk(
-            video_risk,
-            audio_risk,
-            evaluation_risk,
-        )
-        risk_classification = RiskDecisionTree.classify(
-            video_result,
-            audio_result,
-            evaluation_result,
-        )
-        final_risk = RiskScoringEngine._apply_critical_rule_overrides(final_risk, risk_classification)
-        weighted_classification = RiskScoringEngine.classify_risk(final_risk)
-        logger.info(
-            "Weighted=%s (%.2f), DecisionTree=%s",
-            weighted_classification,
-            final_risk,
-            risk_classification,
-        )
+        final_risk = RiskScoringEngine.calculate_final_risk(video_risk, audio_risk, evaluation_risk)
+        RiskHistoryManager.save_score(session_id=session_id,risk_score=final_risk,)
+        thresholds = AdaptiveThresholdCalculator.get_thresholds()
+        risk_classification = RiskScoringEngine.classify_risk_dynamic(final_risk,thresholds,)
         risk_factors = RiskScoringEngine._identify_risk_factors(video_result, audio_result, evaluation_result)
 
         report = {

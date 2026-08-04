@@ -24,7 +24,7 @@ services:
     image: postgres:15
     container_name: ai-interview-postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       POSTGRES_DB: ai_interview_db
       POSTGRES_USER: postgres
