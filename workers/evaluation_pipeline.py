@@ -17,13 +17,9 @@ import json
 import logging
 import re
 from typing import Any
-from workers.prompts import (
-    QUALITY_EVALUATION_PROMPT,
-    TECHNICAL_ACCURACY_PROMPT,
-    COMMUNICATION_EVALUATION_PROMPT,
-)
-
-
+from difflib import SequenceMatcher
+from statistics import mean
+import random
 logger = logging.getLogger(__name__)
 
 
@@ -36,9 +32,11 @@ from workers._stubs import _seeded_unit  # noqa: E402
 
 def _llm_evaluate_answer_quality(session_id: str, question: str, answer: str) -> dict[str, Any] | None:
     """Use GPT-4o/Gemini/Grok to evaluate answer quality and relevance."""
-
-    prompt = QUALITY_EVALUATION_PROMPT
-
+    prompt = (
+        "You are an expert technical interviewer. Evaluate this candidate answer. "
+        "Return a JSON object with keys: overall_quality_score (0-100), "
+        "relevance (0-1),accuracy (0-1),coherence (0-1), completeness (0-1), clarity (0-1), feedback (string)."
+    )
     user_msg = f"Question: {question}\n\nAnswer: {answer}"
 
     try: 
@@ -61,6 +59,8 @@ def _llm_evaluate_answer_quality(session_id: str, question: str, answer: str) ->
                 return {
                     "overall_quality_score": round(parsed.get("overall_quality_score", 50), 2),
                     "relevance": round(parsed.get("relevance", 0.5), 2),
+                    "accuracy": round(parsed.get("accuracy", 0.5), 2),
+                    "coherence": round(parsed.get("coherence", 0.5), 2),
                     "completeness": round(parsed.get("completeness", 0.5), 2),
                     "clarity": round(parsed.get("clarity", 0.5), 2),
                     "feedback": parsed.get("feedback", ""),
@@ -83,6 +83,8 @@ def _llm_evaluate_answer_quality(session_id: str, question: str, answer: str) ->
             return {
                     "overall_quality_score": round(parsed.get("overall_quality_score", 50), 2),
                     "relevance": round(parsed.get("relevance", 0.5), 2),
+                    "accuracy": round(parsed.get("accuracy", 0.5), 2),
+                    "coherence": round(parsed.get("coherence", 0.5), 2),
                     "completeness": round(parsed.get("completeness", 0.5), 2),
                     "clarity": round(parsed.get("clarity", 0.5), 2),
                     "feedback": parsed.get("feedback", ""),
@@ -109,6 +111,8 @@ def _llm_evaluate_answer_quality(session_id: str, question: str, answer: str) ->
                 return {
                     "overall_quality_score": round(parsed.get("overall_quality_score", 50), 2),
                     "relevance": round(parsed.get("relevance", 0.5), 2),
+                    "accuracy": round(parsed.get("accuracy", 0.5), 2),
+                    "coherence": round(parsed.get("coherence", 0.5), 2),
                     "completeness": round(parsed.get("completeness", 0.5), 2),
                     "clarity": round(parsed.get("clarity", 0.5), 2),
                     "feedback": parsed.get("feedback", ""),
@@ -403,14 +407,67 @@ def _llm_generate_question(session_id: str, topic: str = "systems_design") -> st
     except Exception:
         return None
 
+def generate_multiple_feedbacks(session_id: str, runs: int = 3) -> list[str]:
+    """
+    Generate multiple local feedback responses without using any API.
+    """
 
+    templates = [
+        "The candidate demonstrated a good understanding of distributed systems and explained the concepts clearly.",
+        "The candidate showed solid knowledge of distributed systems with relevant examples.",
+        "The answer covered the main concepts of distributed systems but could include more implementation details.",
+        "The explanation was technically sound and communicated effectively.",
+        "The response demonstrated strong problem-solving skills and good technical understanding."
+    ]
+
+    random.seed(session_id)
+
+    responses = []
+
+    for _ in range(runs):
+        responses.append(random.choice(templates))
+
+    return responses
+
+def calculate_response_consistency(responses: list[str]) -> dict:
+    """
+    Calculate confidence score based on similarity of responses.
+    """
+
+    if len(responses) < 2:
+        return {
+            "confidence_score": 100.0,
+            "average_similarity": 1.0,
+            "pairwise_scores": [],
+        }
+
+    scores = []
+
+    for i in range(len(responses)):
+        for j in range(i + 1, len(responses)):
+            similarity = SequenceMatcher(
+                None,
+                responses[i].lower(),
+                responses[j].lower(),
+            ).ratio()
+
+            scores.append(similarity)
+
+    avg = mean(scores)
+
+    return {
+        "confidence_score": round(avg * 100, 2),
+        "average_similarity": round(avg, 3),
+        "pairwise_scores": [round(x, 3) for x in scores],
+    }
 # ---------------------------------------------------------------------------
 # Public pipeline API — real LLM evaluation with seeded stub fallback
 # ---------------------------------------------------------------------------
 
 
 def evaluate_answers(session_id: str) -> dict[str, Any]:
-    """Execute answer evaluation pipeline for an interview session."""
+    """Execute answer evaluation pipeline."""
+
     logger.info(f"Starting answer evaluation for session {session_id}")
 
     quality = evaluate_answer_quality(session_id)
@@ -418,17 +475,41 @@ def evaluate_answers(session_id: str) -> dict[str, Any]:
     clarity = evaluate_communication(session_id)
     feedback = generate_feedback(session_id)
 
+    # Generate multiple local responses
+    responses = generate_multiple_feedbacks(session_id, runs=3)
+
+    # Calculate confidence
+    consistency = calculate_response_consistency(responses)
+
     results = {
         "session_id": session_id,
+
         "answer_quality_score": quality,
+
         "technical_accuracy": accuracy,
+
         "communication_clarity": clarity,
+
+        "evaluation_metrics": {
+            "relevance": quality.get("relevance", 0.0),
+            "accuracy": quality.get("accuracy", 0.0),
+            "coherence": quality.get("coherence", 0.0),
+            "completeness": quality.get("completeness", 0.0),
+        },
+
         "feedback": feedback,
+
+        "response_consistency": consistency,
+
+        "confidence_score": consistency["confidence_score"],
+
         "risk_score": 0.0,
     }
 
     results["risk_score"] = calculate_evaluation_risk_score(results)
-    logger.info(f"Answer evaluation completed for session {session_id}: {results}")
+
+    logger.info(results)
+
     return results
 
 
@@ -448,6 +529,8 @@ def evaluate_answer_quality(session_id: str) -> dict[str, Any]:
     return {
         "overall_quality_score": round(base * 100, 2),
         "relevance": round(base * 0.95, 2),
+        "accuracy": round(base * 0.94, 2),
+        "coherence": round(base * 0.93, 2),
         "completeness": round(base * 0.9, 2),
         "clarity": round(base * 0.92, 2),
         "feedback": "Response is on-topic and reasonably complete.",
@@ -517,16 +600,48 @@ def generate_feedback(session_id: str) -> dict[str, Any]:
 
 
 def calculate_evaluation_risk_score(results: dict[str, Any]) -> float:
-    """Calculate a 0–1 risk score (inverse of performance)."""
+
     from workers.risk_engine import RiskScoringEngine
 
-    quality = results.get("answer_quality_score", {}).get("overall_quality_score", 50) / 100.0
-    accuracy = results.get("technical_accuracy", {}).get("accuracy_score", 50) / 100.0
-    clarity = results.get("communication_clarity", {}).get("clarity_score", 50) / 100.0
+    quality = results.get(
+        "answer_quality_score", {}
+    ).get("overall_quality_score", 50) / 100
 
-    quality_risk = (1 - quality) * RiskScoringEngine.EVALUATION_FACTORS["low_quality_answers"]
-    accuracy_risk = (1 - accuracy) * RiskScoringEngine.EVALUATION_FACTORS["low_accuracy"]
-    clarity_risk = (1 - clarity) * RiskScoringEngine.EVALUATION_FACTORS["poor_communication"]
+    accuracy = results.get(
+        "technical_accuracy", {}
+    ).get("accuracy_score", 50) / 100
 
-    score = quality_risk + accuracy_risk + clarity_risk
+    clarity = results.get(
+        "communication_clarity", {}
+    ).get("clarity_score", 50) / 100
+
+    confidence = results.get(
+        "confidence_score",
+        100,
+    ) / 100
+
+    quality_risk = (
+        (1 - quality)
+        * RiskScoringEngine.EVALUATION_FACTORS["low_quality_answers"]
+    )
+
+    accuracy_risk = (
+        (1 - accuracy)
+        * RiskScoringEngine.EVALUATION_FACTORS["low_accuracy"]
+    )
+
+    clarity_risk = (
+        (1 - clarity)
+        * RiskScoringEngine.EVALUATION_FACTORS["poor_communication"]
+    )
+
+    confidence_risk = (1 - confidence) * 0.20
+
+    score = (
+        quality_risk
+        + accuracy_risk
+        + clarity_risk
+        + confidence_risk
+    )
+
     return round(min(score, 1.0), 3)
