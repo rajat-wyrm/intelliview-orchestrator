@@ -173,6 +173,7 @@ def _after_parallel(self, results: list, session_id: str):
                 interview.video_analysis = video_result
                 interview.audio_analysis = audio_result
                 interview.evaluation_analysis = evaluation_result
+                interview.llm_usage = evaluation_result.get("llm_usage")
                 interview.end_time = now
                 interview.updated_at = now
                 db_session.commit()
@@ -450,3 +451,4 @@ def scan_and_dispatch_retries():
 
     except Exception as exc:
         logger.error("scan_and_dispatch_retries failed: %s", exc)
+ 

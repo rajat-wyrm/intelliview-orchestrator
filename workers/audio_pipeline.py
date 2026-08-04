@@ -234,7 +234,7 @@ def _real_detect_suspicious(session_id: str) -> SuspiciousPatternResult | None:
         if not text:
             return None
 
-        response = chat_completion(
+        response, usage = chat_completion(
             [
                 {
                     "role": "system",

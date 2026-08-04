@@ -4,7 +4,7 @@ These verify the pluggable contracts still hold: each pipeline returns the
 shape the RiskScoringEngine consumes, and the seeded deterministic outputs
 let end-to-end risk classification thresholds fire.
 """
-
+from unittest.mock import patch
 from workers.audio_pipeline import (
     calculate_audio_risk_score,
     detect_background_voices,
@@ -109,3 +109,63 @@ def test_helper_functions_return_dicts():
         (generate_feedback, "x"),
     ]:
         assert isinstance(fn(sid), dict)
+
+@patch("workers.evaluation_pipeline._llm_evaluate_answer_quality")
+def test_answer_quality_contains_llm_usage(mock_quality):
+    mock_quality.return_value = {
+        "overall_quality_score": 95,
+        "relevance": 1.0,
+        "completeness": 1.0,
+        "clarity": 1.0,
+        "feedback": "Excellent",
+        "provider": "openai",
+        "llm_usage": {
+            "prompt_tokens": 10,
+            "completion_tokens": 20,
+            "total_tokens": 30,
+        },
+    }
+
+    result = evaluate_answer_quality("session-1")
+
+    assert "llm_usage" in result
+    assert result["llm_usage"]["total_tokens"] == 30
+
+    
+@patch("workers.evaluation_pipeline.evaluate_answer_quality")
+@patch("workers.evaluation_pipeline.evaluate_communication")
+@patch("workers.evaluation_pipeline.generate_feedback")
+def test_evaluate_answers_collects_llm_usage(
+    mock_feedback,
+    mock_communication,
+    mock_quality,
+):
+    mock_quality.return_value = {
+        "overall_quality_score": 90,
+        "llm_usage": {
+            "total_tokens": 20,
+        },
+    }
+
+    mock_communication.return_value = {
+        "clarity_score": 80,
+        "llm_usage": {
+            "total_tokens": 15,
+        },
+    }
+
+    mock_feedback.return_value = {
+        "recommendation": "progress",
+        "llm_usage": {
+            "total_tokens": 25,
+        },
+    }
+
+    result = evaluate_answers("session-1")
+
+    assert "llm_usage" in result
+    assert result["llm_usage"]["quality"]["total_tokens"] == 20
+    assert result["llm_usage"]["communication"]["total_tokens"] == 15
+    assert result["llm_usage"]["feedback"]["total_tokens"] == 25
+
+        

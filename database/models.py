@@ -88,6 +88,7 @@ class InterviewSession(Base):
     video_analysis = Column(JSON, nullable=True)
     audio_analysis = Column(JSON, nullable=True)
     evaluation_analysis = Column(JSON, nullable=True)
+    llm_usage = Column(JSON,nullable=True,default=dict)
 
     # Interview Q&A tracking
     questions_asked = Column(JSON, nullable=True, default=list)
