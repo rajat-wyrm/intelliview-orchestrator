@@ -1,239 +1,74 @@
-"""
-Configuration for the AI Interview Orchestrator.
-
-Settings are loaded from environment variables (or a `.env` file in dev)
-via `pydantic-settings`. All values have sensible local defaults but
-should be overridden in production.
-"""
-import json
 import os
-from functools import lru_cache
-from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
-@lru_cache(maxsize=1)
-def get_aws_secrets(secret_name: str, region_name: str = "us-east-1") -> dict:
-    """Fetches and caches JSON secrets from AWS Secrets Manager."""
-    import boto3
-    from botocore.exceptions import ClientError
+from pathlib import Path
+from dotenv import load_dotenv
 
-    session = boto3.session.Session()
-    client = session.client(service_name="secretsmanager", region_name=region_name)
-    try:
-        response = client.get_secret_value(SecretId=secret_name)
-        if "SecretString" in response:
-            return json.loads(response["SecretString"])
-    except ClientError as e:
-        print(f"Error fetching secrets: {e}")
-    return {}
+# Load environment variables from .env file
+env_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
+class Settings:
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "gemini").lower()
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    MIN_RELEVANCE_THRESHOLD: float = float(os.getenv("MIN_RELEVANCE_THRESHOLD", "0.1"))
 
-class _CsvList(list):
-    """Marker type that prevents pydantic-settings from JSON-parsing."""
+    # Database path
+    DB_PATH: str = os.getenv("DB_PATH", str(Path(__file__).resolve().parent.parent / "evaluation_logs.db"))
 
-
-class Settings(BaseSettings):
-    """Application configuration loaded from the environment."""
-
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-        case_sensitive=False,
-    )
-
-    environment: str = "development"
-    aws_secret_name: str = "intelliview-secrets"
-    aws_region: str = "us-east-1"
-
-    # --- Service discovery ---
-    redis_url: str = "redis://localhost:6379/0"
-    database_url: str = ""
-
-    postgres_host: str = "localhost"
-    postgres_port: int = 5432
-    postgres_db: str = "ai_interview_db"
-    postgres_user: str = "postgres"
-    postgres_password: str = "postgres"
-
-    # --- Worker / Celery ---
-    worker_concurrency: int = 4
-    max_retries: int = 3
-    worker_id: str = "worker-1"
-
-    # --- API / Security ---
-    api_token: str = "dev-token-change-me"
-    jwt_secret_key: str = "change-this-to-a-long-random-secret-key"
-    jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 30
-    jwt_refresh_token_expire_days: int = 7
-    cors_allow_origins_raw: str = Field(default="*", alias="cors_allow_origins")
-
-    # --- Request validation ---
-    max_request_body_bytes: int = 1048576  # 1 MB
-
-    # --- Audit logging ---
-    audit_log_file: str = ""
-
-    # --- Prometheus ---
-    enable_prometheus: bool = True
-
-    # --- AI Provider Keys ---
-    gemini_api_key: str = ""
-    grok_api_key: str = ""
-
-    # --- Screen Lock ---
-    screen_lock_timeout: int = 300
-    screen_lock_pin: str = "1234"
-
-    # --- Real-time Tracking ---
-    realtime_enabled: bool = True
-    realtime_tick_interval: int = 1
-    moment_tracking_enabled: bool = True
-
-    # --- Celery ---
-    celery_broker_url: str = ""
-    celery_result_backend: str = ""
-
-    # --- Database SSL ---
-    database_sslmode: str = "disable"
-
-    @field_validator("postgres_host", "postgres_db", "postgres_user")
-    @classmethod
-    def validate_required_database_fields(cls, value: str) -> str:
-        if not value or not value.strip():
-            raise ValueError("Database configuration values cannot be empty")
-        return value
-
-    @field_validator("postgres_port")
-    @classmethod
-    def validate_database_port(cls, value: int) -> int:
-        if value <= 0 or value > 65535:
-            raise ValueError("PostgreSQL port must be between 1 and 65535")
-        return value
-
-    @field_validator("database_sslmode")
-    @classmethod
-    def validate_database_sslmode(cls, value: str) -> str:
-        allowed_modes = {
-            "disable",
-            "allow",
-            "prefer",
-            "require",
-            "verify-ca",
-            "verify-full",
+    # Comprehensive dictionaries of domain-specific terms (stored as lowercase sets for fast matching)
+    DOMAIN_KEYWORDS: dict[str, set[str]] = {
+        "dsa": {
+            "array", "vector", "list", "linked list", "singly", "doubly", "stack", "queue", "deque", 
+            "priority queue", "heap", "min-heap", "max-heap", "tree", "binary tree", "binary search tree", 
+            "bst", "avl", "red-black", "b-tree", "trie", "graph", "hash", "hash table", "hash map", 
+            "collision", "chaining", "open addressing", "segment tree", "fenwick", "disjoint set", "union find",
+            "sorting", "quicksort", "mergesort", "heapsort", "bubble sort", "insertion sort", "selection sort", 
+            "radix sort", "counting sort", "binary search", "linear search", "bfs", "breadth-first search", 
+            "dfs", "depth-first search", "dijkstra", "bellman-ford", "floyd-warshall", "kruskal", "prim", 
+            "topological sort", "dynamic programming", "dp", "backtracking", "recursion", "recursive", 
+            "greedy", "divide and conquer", "sliding window", "two pointers", "big o", "time complexity", 
+            "space complexity", "asymptotic", "linear", "quadratic", "logarithmic", "exponential", "memoization"
+        },
+        "dbms": {
+            "database", "dbms", "rdbms", "nosql", "schema", "table", "relation", "tuple", "row", "record", 
+            "column", "attribute", "field", "primary key", "foreign key", "candidate key", "super key", 
+            "composite key", "unique constraint", "index", "indexing", "b-tree", "hash index", "clustered index", 
+            "non-clustered index", "sql", "query", "select", "insert", "update", "delete", "join", "inner join", 
+            "left join", "right join", "outer join", "cross join", "self join", "group by", "order by", 
+            "having", "aggregate", "sum", "count", "avg", "min", "max", "view", "stored procedure", "trigger", 
+            "transaction", "acid", "atomicity", "consistency", "isolation", "durability", "concurrency", 
+            "concurrency control", "locking", "shared lock", "exclusive lock", "two-phase locking", "2pl", 
+            "deadlock", "write-ahead logging", "wal", "recovery", "normalization", "1nf", "2nf", "3nf", "bcnf", 
+            "4nf", "5nf", "denormalization", "sharding", "replication", "cap theorem", "mongodb", "redis", "cassandra"
+        },
+        "os": {
+            "process", "thread", "multithreading", "multiprocessing", "pcb", "process control block", 
+            "context switch", "scheduling", "scheduler", "fcfs", "sjf", "round robin", "priority scheduling", 
+            "multi-level queue", "srtf", "thread pool", "concurrency", "synchronization", "race condition", 
+            "critical section", "mutual exclusion", "mutex", "semaphore", "counting semaphore", 
+            "binary semaphore", "deadlock", "starvation", "livelock", "bankers algorithm", "dining philosophers", 
+            "producer consumer", "reader writer", "memory", "physical memory", "virtual memory", "paging", 
+            "page table", "tlb", "translation lookaside buffer", "page fault", "demand paging", "page replacement", 
+            "fifo", "lru", "optimal", "mru", "clock replacement", "segmentation", "fragmentation", 
+            "internal fragmentation", "external fragmentation", "compaction", "kernel", "microkernel", 
+            "monolithic", "system call", "user mode", "kernel mode", "privileged", "file system", "inode", 
+            "metadata", "directory", "disk scheduling", "sstf", "scan", "c-scan", "look", "c-look", 
+            "bootloader", "interrupt", "isr", "interrupt service routine", "cache", "spooling", "buffering"
         }
+    }
 
-        if value not in allowed_modes:
-            raise ValueError(f"Invalid database SSL mode: {value}")
+    def __init__(self):
+        # Expand multi-word keywords to also match individual words (e.g. "primary key" -> "primary", "key")
+        expanded = {}
+        for domain, keywords in self.DOMAIN_KEYWORDS.items():
+            words = set()
+            for kw in keywords:
+                words.add(kw)
+                if " " in kw:
+                    words.update(kw.split())
+            expanded[domain] = words
+        self.DOMAIN_KEYWORDS = expanded
 
-        return value
-
-
-        
-    def __init__(self, **values):
-        super().__init__(**values)
-        if self.environment.lower() == "production":
-            secrets = get_aws_secrets(self.aws_secret_name, self.aws_region)
-            for key, val in secrets.items():
-                if hasattr(self, key.lower()):
-                    setattr(self, key.lower(), val)
-
-    # --- Feature flags ---
-    enable_celery_broker: bool = True
-    json_logging: bool = True
-    auto_seed_demo_data: bool = False
-
-    def validate_configuration(self) -> None:
-        errors = []
-
-        if not self.api_token.strip():
-            errors.append("API_TOKEN is required.")
-
-        if self.worker_concurrency <= 0:
-            errors.append("WORKER_CONCURRENCY must be greater than 0.")
-
-        if self.max_retries < 0:
-            errors.append("MAX_RETRIES cannot be negative.")
-
-        if self.max_request_body_bytes <= 0:
-            errors.append("MAX_REQUEST_BODY_BYTES must be greater than 0.")
-
-        if errors:
-            raise ValueError(
-                "Configuration validation failed:\n- " + "\n- ".join(errors)
-            )
-
-    # --- Derived ---
-    @property
-    def resolved_database_url(self) -> str:
-        if self.database_url:
-            return self.database_url
-
-        base = (
-            f"postgresql://{self.postgres_user}:{self.postgres_password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
-        )
-        if self.database_sslmode and self.database_sslmode != "disable":
-            return f"{base}?sslmode={self.database_sslmode}"
-        return base
-
-    @property
-    def is_default_token(self) -> bool:
-        return self.api_token == "dev-token-change-me"
-
-    @property
-    def cors_allow_origins(self) -> list[str]:
-        raw = (self.cors_allow_origins_raw or "").strip()
-        if not raw or raw == "*":
-            return ["*"]
-        return [v.strip() for v in raw.split(",") if v.strip()]
-
-
-@lru_cache(maxsize=1)
-def get_settings() -> Settings:
-    """Cached settings accessor (per-process)."""
-    return Settings()
-
-
-# Module-level aliases for backwards compatibility with imports like
-# `from config import REDIS_URL`. New code should use `get_settings()`.
-settings = get_settings()
-REDIS_URL = settings.redis_url
-DATABASE_URL = settings.resolved_database_url
-WORKER_CONCURRENCY = settings.worker_concurrency
-API_TOKEN = settings.api_token
-JWT_SECRET_KEY = settings.jwt_secret_key
-JWT_ALGORITHM = settings.jwt_algorithm
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES = settings.jwt_access_token_expire_minutes
-JWT_REFRESH_TOKEN_EXPIRE_DAYS = settings.jwt_refresh_token_expire_days
-
-CORS_ALLOW_ORIGINS = ",".join(settings.cors_allow_origins)
-MAX_REQUEST_BODY_BYTES = settings.max_request_body_bytes
-ENABLE_PROMETHEUS = settings.enable_prometheus
-DATABASE_SSLMODE = settings.database_sslmode
-
-# ---------------------------------------------------------------------------
-# EEOC / legal compliance — banned interview topics (Issue #121)
-# ---------------------------------------------------------------------------
-# Keywords whose presence in a generated question signals a legally or
-# ethically prohibited interview topic under EEOC and similar regulations.
-# The list is intentionally kept here so it can be extended in one place
-# without touching the validation logic in workers/evaluation_pipeline.py.
-BANNED_TOPICS: list[str] = [
-    "age",
-    "how old",
-    "old are you",
-    "pregnant",
-    "children",
-    "family planning",
-    "religion",
-    "religious",
-    "citizenship",
-    "nationality",
-    "marital status",
-    "married",
-    "disability",
-    "disabled",
-    "medical condition",
-    "health condition",
-]
+settings = Settings()

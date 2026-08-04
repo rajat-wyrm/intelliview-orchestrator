@@ -1,474 +1,99 @@
-# IntelliView Orchestrator
+# AI Response Quality Dashboard
 
-> **AI-powered interview orchestration platform with real-time monitoring, multi-provider AI evaluation, and fault-tolerant distributed processing.**
+An interactive, premium dashboard to monitor, search, and analyze automated candidate technical answer evaluations.
 
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB.svg)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/API-FastAPI-009688.svg)](https://fastapi.tiangolo.com)
-[![Next.js](https://img.shields.io/badge/UI-Next.js_14-000.svg)](https://nextjs.org)
-[![CI](https://img.shields.io/badge/CI-passing-brightgreen.svg)](./.github/workflows/ci.yml)
+Serves as an analytics interface for the automated answer evaluation engine, highlighting scoring patterns, confidence distributions, and database queries.
+
+## Key Features
+
+1. **KPI Statistics Cards**: Monitor total evaluations, average scores, mean evaluation confidence, and LLM vs Rule-Based breakdown ratio.
+2. **Dynamic Charting**:
+   - **Score Distribution**: Histogram grouping scores from 0 to 10.
+   - **Domain Breakdown**: Donut chart detailing proportions of DSA, DBMS, and OS questions.
+   - **Score & Volume Trend**: 30-day timeline showing average evaluation score and request counts per day.
+   - **Method Proportions**: Visualizing LLM API usage vs fallback rule-based matching.
+3. **Advanced Log Explorer**:
+   - Live text search across all questions, answers, and feedback text.
+   - Filtering by domain (DSA, DBMS, OS), evaluation method, and score ranges.
+   - Full sorting support on ID, Timestamp, Domain, Score, Confidence, and Method.
+   - Detail inspect modal with full text viewing.
+4. **Live Interactive Sandbox**: Submit new answers for automated evaluation directly from the UI and see results reflected instantly.
+5. **No Heavy Database Setup**: Uses a local SQLite database (`evaluation_logs.db`) with automatic table creation and schema init on startup.
 
 ---
-
-## Quick Start
-
-Running `docker compose up -d --build` automatically builds and starts the entire stack, including both the FastAPI backend and the Next.js frontend.
-
-```bash
-git clone https://github.com/rajat-wyrm/intelliview-orchestrator
-cd intelliview-orchestrator
-cp .env.example .env          # edit API_TOKEN, database credentials
-docker compose up -d --build
-```
-
-| Service | URL | Description |
-|---------|-----|-------------|
-| **Frontend** | http://localhost:3000 | Dashboard UI |
-| **API** | http://localhost:8000 | REST API (docs at `/docs`) |
-| **Prometheus** | http://localhost:9090 | Metrics |
-| **Grafana** | http://localhost:3001 | Dashboards (admin/admin) |
 
 ## Architecture
 
-```
-┌───────────────────┐     ┌──────────────────┐
-│  Next.js Dashboard│────▶│  FastAPI Backend  │
-│  (Port 3000)      │     │  (Port 8000)      │
-└───────────────────┘     └────┬───────┬──────┘
-                               │       │
-                    ┌──────────▼─┐  ┌──▼──────────┐
-                    │   Redis    │  │  PostgreSQL  │
-                    │  (Cache)   │  │  (Truth)     │
-                    └──────┬─────┘  └─────────────┘
-                           │
-              ┌────────────▼────────────┐
-              │   Celery Worker Nodes   │
-              │  video │ audio │ eval   │
-              └─────────────────────────┘
+```mermaid
+graph TD
+    UI[Frontend Dashboard<br>HTML / CSS / JS] -->|HTTP Request| API[FastAPI Server]
+    API -->|Read/Write Logs| DB[(SQLite Database<br>evaluation_logs.db)]
+    API -->|Evaluate Answers| Evaluator[Automated Evaluator Engine]
+    Evaluator -->|Primary/Fallback API| LLM[Gemini / OpenAI APIs]
+    Evaluator -->|No API Key Fallback| RuleEngine[Rule-Based Keyword Filter]
 ```
 
-## Features
+---
 
-### Real-time Interview Monitoring
-- **Live video/audio feed** with browser-based camera access
-- **Screen lock** with auto-lock after inactivity and PIN unlock
-- **Moment tracking** — logs every key event during interviews
-- **WebSocket push** for instant dashboard updates
+## Setup & Running Guide
 
-### Multi-Provider AI Evaluation
-- **Gemini** (Google) — primary evaluation and question generation
-- **Grok** (xAI) — fallback for answer scoring
-- **OpenAI** (GPT-4o) — additional fallback
-- Automatic provider fallback with zero downtime
+### 1. Requirements
 
-### Production Infrastructure
-- **Prometheus + Grafana** dashboards out of the box
-- **Circuit breaker** for Redis fault tolerance
-- **Rate limiting** and request validation middleware
-- **Structured audit logging** for compliance
-- **Neon DB / cloud PostgreSQL** SSL support
+- Python 3.10 or higher
+- API keys (at least one of OpenAI or Gemini) to run LLM evaluations. (The system degrades gracefully to the rule-based keyword filter if keys are absent.)
 
-### Dashboard Pages
-- **Overview** — system health, worker status, live sparklines
-- **Sessions** — active/completed/failed with pipeline visualization
-- **Interview** — real-time video, audio viz, AI feedback, risk score
-- **Candidates** — profiles, history, performance analytics
-- **Workers** — load balancing, capacity, heartbeat monitoring
-- **Analytics** — risk distribution, failure breakdown, trend charts
-- **Settings** — token management, theme, strategy switching
+### 2. Install Dependencies
 
-## Configuration
-
-All settings via environment variables (or `.env`):
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `REDIS_URL` | `redis://localhost:6379/0` | Cache + Celery broker |
-| `POSTGRES_HOST` | `localhost` | Database host |
-| `DATABASE_SSLMODE` | `disable` | Set `require` for Neon DB |
-| `GEMINI_API_KEY` | — | Google Gemini API key |
-| `GROK_API_KEY` | — | xAI Grok API key |
-| `API_TOKEN` | `dev-token-change-me` | Auth token for mutations |
-| `SCREEN_LOCK_PIN` | `1234` | Dashboard screen lock PIN |
-
-### Configuration Validation
-
-The application validates configuration during startup before serving requests.
-
-The following configuration rules are enforced:
-
-- `API_TOKEN` must not be empty.
-- `WORKER_CONCURRENCY` must be greater than `0`.
-- `MAX_RETRIES` must be greater than or equal to `0`.
-- `MAX_REQUEST_BODY_BYTES` must be greater than `0`.
-
-If any of these checks fail, the application stops during startup and displays a clear validation error message.
-
-## API Reference
-
-Full OpenAPI docs at `/docs` when running. Key endpoints:
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `POST` | `/start-interview` | Yes | Start a new interview session |
-| `GET` | `/active-sessions` | No | List active sessions |
-| `GET` | `/session-status/{id}` | No | Session details + risk score |
-| `POST` | `/interviews/ask-question` | Yes | Get next interview question |
-| `POST` | `/interviews/submit-answer` | Yes | Submit answer for evaluation |
-| `GET` | `/candidates` | No | List candidate profiles |
-| `GET` | `/system-health` | No | Full system health check |
-| `GET` | `/metrics` | No | Prometheus metrics |
-
-## Development
+Install the requirements from the root of the project directory:
 
 ```bash
-# Backend
-python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn orchestrator.main:app --reload
-
-# Tests
-pytest tests/ --ignore=tests/test_e2e_smoke.py -v
-
-# Lint
-ruff check . && ruff format --check .
 ```
 
-# Code Formatting & Pre-commit Hooks We use **Black** for code formatting and **isort** for import sorting
+### 3. Configuration
 
-pip install pre-commit
-pre-commit install
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Backend | Python 3.11+, FastAPI, Celery, SQLAlchemy 2.0 |
-| Frontend | Next.js 14, React 18, Tailwind CSS, Recharts |
-| Database | PostgreSQL (Neon DB compatible) |
-| Cache | Redis 7 |
-| AI | Gemini, Grok, OpenAI (pluggable) |
-| Monitoring | Prometheus, Grafana |
-| Deploy | Docker Compose |
-
-
-
-## Authentication
-
-The application uses API Token authentication to protect privileged API endpoints.
-
-### API Token
-
-Configure the API token in the `.env` file:
+Configure your environment keys inside the `.env` file in the root directory:
 
 ```env
-API_TOKEN=your-api-token
+# API Keys
+GEMINI_API_KEY=your-gemini-key
+OPENAI_API_KEY=your-openai-key
+
+# Configuration Options
+LLM_PROVIDER=gemini       # preferred model provider: gemini or openai
+GEMINI_MODEL=gemini-2.5-flash
+OPENAI_MODEL=gpt-4o-mini
+MIN_RELEVANCE_THRESHOLD=0.1
+DB_PATH=evaluation_logs.db
 ```
 
-### Protected Endpoints
+### 4. Running the Dashboard
 
-Protected endpoints require the `X-API-Token` request header.
-
-Example:
-
-```http
-X-API-Token: api123
-```
-
-### Authentication Responses
-
-- **200 OK** – Valid API token.
-- **401 Unauthorized** – Missing or invalid API token.
-
-Authentication is enforced through the `require_token` dependency for protected API endpoints.
-
-
-## License
-
-MIT — [Rajat Kumar](https://github.com/rajat-wyrm)
-<!-- =======
-# Delivery Analytics API
-
-A FastAPI-based webhook analytics service that receives email delivery events, stores them in SQLite using SQLAlchemy, and exposes analytics through a REST API.
-
----
-
-## Features
-
-- Receive email webhook events
-- Store events in SQLite database
-- Delivery analytics endpoint
-- Duplicate event detection
-- Event normalization (case-insensitive)
-- Automated regression tests using Pytest
-- FastAPI interactive Swagger documentation
-
----
-
-## Tech Stack
-
-- FastAPI
-- SQLAlchemy
-- SQLite
-- Pydantic
-- Pytest
-- Uvicorn
-
----
-
-## Project Structure
-
-```
-Delivery_Analytics/
-│
-├── app.py
-├── crud.py
-├── database.py
-├── models.py
-├── schemas.py
-├── generate_data.py
-├── requirements.txt
-├── README.md
-├── delivery.db
-└── tests/
-    └── test_app.py
-```
-
----
-
-## Installation
-
-Clone the repository
+Start the application with the startup script:
 
 ```bash
-git clone https://github.com/nandithasri2006/Delivery_Analytics.git
+./run.sh
 ```
 
-Go into the project
+Or run manually:
 
 ```bash
-cd Delivery_Analytics
+PYTHONPATH=. uvicorn app.main:app --reload --port 8000
 ```
 
-Create virtual environment
+> **Note**: On the very first run, `run.sh` will automatically run `app/seed.py` to seed the database with **50 mock evaluation logs** spanning the last 30 days. This populates your charts and logs instantly!
+
+- **Dashboard UI**: [http://127.0.0.1:8000/dashboard](http://127.0.0.1:8000/dashboard)
+- **API Documentation**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+
+---
+
+## Running Unit Tests
+
+Run the test suite to verify correctness:
 
 ```bash
-python -m venv venv
+python3 -m pytest tests/ -v
 ```
 
-Activate
-
-Windows
-
-```bash
-venv\Scripts\activate
-```
-
-Linux / macOS
-
-```bash
-source venv/bin/activate
-```
-
-Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-## Run the Application
-
-```bash
-uvicorn app:app --reload
-```
-
-Open Swagger UI
-
-```
-http://127.0.0.1:8000/docs
-```
-
----
-
-## API Endpoints
-
-### GET /
-
-Returns welcome message.
-
----
-
-### POST /webhook
-
-Stores an email webhook event.
-
-Example
-
-```json
-{
-  "event_id": "evt101",
-  "email": "user@example.com",
-  "event": "Delivered",
-  "timestamp": "2026-07-10T10:00:00"
-}
-```
-
-Response
-
-```json
-{
-  "message": "Webhook stored successfully"
-}
-```
-
----
-
-### GET /analytics
-
-Returns analytics including
-
-- Sent
-- Delivered
-- Opened
-- Clicked
-- Bounced
-- Delivery Rate
-- Open Rate
-- Click Rate
-- Bounce Rate
-
-Example
-
-```json
-{
-  "email_sent": 200,
-  "delivered": 196,
-  "delivery_rate": "98.0%",
-  "opened": 150,
-  "open_rate": "76.53%",
-  "clicked": 90,
-  "click_rate": "60.0%",
-  "bounced": 4,
-  "bounce_rate": "2.0%"
-}
-```
-
----
-
-# Reliability Improvements
-
-## Event Normalization
-
-Webhook events are normalized to lowercase before storage.
-
-Example
-
-Incoming
-
-```json
-{
-    "event":"Delivered"
-}
-```
-
-Stored
-
-```
-delivered
-```
-
-This ensures analytics remain accurate regardless of input casing.
-
----
-
-## Case-insensitive Analytics
-
-Analytics queries perform case-insensitive comparisons to avoid silent undercounting caused by inconsistent event casing.
-
----
-
-## Duplicate Event Protection
-
-Duplicate webhook deliveries are detected using the unique `event_id`.
-
-Duplicate requests return
-
-```
-400 Bad Request
-```
-
-with
-
-```json
-{
-    "detail":"Duplicate Event"
-}
-```
-
----
-
-## Database Session Management
-
-Database sessions are managed using FastAPI dependency injection (`Depends(get_db)`), ensuring sessions are always closed even if an exception occurs during request handling.
-
----
-
-## Testing
-
-Run tests
-
-```bash
-python -m pytest
-```
-
-Regression test included
-
-- Mixed-case event ("Delivered") is counted correctly.
-- Duplicate event detection.
-- Invalid event rejection.
-
----
-
-## Current Database
-
-SQLite
-
-```
-delivery.db
-```
-
----
-
-## Future Improvements
-
-The following enhancements are planned:
-
-- Email validation using `EmailStr`
-- Timestamp validation using `datetime`
-- Webhook authentication (shared secret / HMAC)
-- Date range filtering for `/analytics`
-- GET `/events` endpoint with pagination
-- PostgreSQL support through `DATABASE_URL`
-- Concurrency tests for duplicate webhook handling
-- Alembic database migrations
-
----
-
-## Author
-
-**Nandhitha Sri Maraka**
-
-GitHub
-
-https://github.com/nandithasri2006
-
-LinkedIn
-
-https://www.linkedin.com/in/nandhitha-maraka-905678293/
->>>>>>> upstream/main -->
-<!-- =======
-## License
-
-MIT — [Rajat Kumar](https://github.com/rajat-wyrm)
->>>>>>> upstream/main -->
+All unit tests run inside an in-memory SQLite configuration (`:memory:`) to ensure no side effects or dev data pollution.

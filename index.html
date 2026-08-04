@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AI Response Quality Dashboard — Monitor and analyze evaluation metrics, scores, and logs for AI-powered answer assessment.">
+    <title>AI Response Quality Dashboard</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+
+        <!-- ===== HEADER ===== -->
+        <header class="dashboard-header">
+            <div class="header-left">
+                <div class="header-logo">🧠</div>
+                <div class="header-title">
+                    <h1>AI Response Quality Dashboard</h1>
+                    <p>Evaluation metrics &amp; analytics</p>
+                </div>
+            </div>
+            <div class="header-right">
+                <span class="refresh-info" id="lastRefresh">Last updated: —</span>
+                <button class="btn" id="btnRefresh" onclick="refreshAll()">
+                    <span>↻</span> Refresh
+                </button>
+                <button class="btn btn-primary" id="btnNewEval" onclick="openEvalForm()">
+                    <span>+</span> New Evaluation
+                </button>
+            </div>
+        </header>
+
+        <!-- ===== KPI CARDS ===== -->
+        <div class="kpi-grid">
+            <div class="kpi-card animate-in">
+                <div class="kpi-icon">📊</div>
+                <div class="kpi-label">Total Evaluations</div>
+                <div class="kpi-value" id="kpiTotal">—</div>
+                <div class="kpi-subtitle">All-time evaluations recorded</div>
+            </div>
+            <div class="kpi-card animate-in">
+                <div class="kpi-icon">⭐</div>
+                <div class="kpi-label">Average Score</div>
+                <div class="kpi-value" id="kpiAvgScore">—</div>
+                <div class="kpi-subtitle">Out of 10.0 maximum</div>
+            </div>
+            <div class="kpi-card animate-in">
+                <div class="kpi-icon">🎯</div>
+                <div class="kpi-label">Avg Confidence</div>
+                <div class="kpi-value" id="kpiAvgConf">—</div>
+                <div class="kpi-subtitle">Evaluation certainty level</div>
+            </div>
+            <div class="kpi-card animate-in">
+                <div class="kpi-icon">🤖</div>
+                <div class="kpi-label">LLM vs Rule-Based</div>
+                <div class="kpi-value" id="kpiMethodRatio">—</div>
+                <div class="kpi-subtitle" id="kpiMethodDetail">Method distribution</div>
+            </div>
+        </div>
+
+        <!-- ===== CHARTS ===== -->
+        <h2 class="section-title">Analytics Overview</h2>
+        <div class="charts-grid">
+            <div class="chart-card animate-in">
+                <h3>Score Distribution</h3>
+                <div class="chart-wrapper">
+                    <canvas id="chartScoreDist"></canvas>
+                </div>
+            </div>
+            <div class="chart-card animate-in">
+                <h3>Domain Breakdown</h3>
+                <div class="chart-wrapper">
+                    <canvas id="chartDomain"></canvas>
+                </div>
+            </div>
+            <div class="chart-card animate-in">
+                <h3>Score Trend (Last 30 Days)</h3>
+                <div class="chart-wrapper">
+                    <canvas id="chartTrend"></canvas>
+                </div>
+            </div>
+            <div class="chart-card animate-in">
+                <h3>Evaluation Method</h3>
+                <div class="chart-wrapper">
+                    <canvas id="chartMethod"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== EVALUATE FORM (collapsible) ===== -->
+        <div class="evaluate-form" id="evalFormSection" style="display:none;">
+            <h2 class="section-title">Submit New Evaluation</h2>
+            <form id="evalForm" onsubmit="submitEvaluation(event)">
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label for="evalQuestion">Question</label>
+                        <textarea id="evalQuestion" placeholder="Enter the technical question..." required></textarea>
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="evalAnswer">Candidate's Answer</label>
+                        <textarea id="evalAnswer" placeholder="Enter the candidate's answer..." required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="evalDomain">Domain (optional)</label>
+                        <select id="evalDomain">
+                            <option value="">Auto-detect</option>
+                            <option value="dsa">DSA</option>
+                            <option value="dbms">DBMS</option>
+                            <option value="os">OS</option>
+                        </select>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary" id="btnSubmitEval">
+                            <span>⚡</span> Evaluate
+                        </button>
+                        <button type="button" class="btn" onclick="closeEvalForm()">Cancel</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- ===== FILTERS ===== -->
+        <h2 class="section-title">Evaluation Logs</h2>
+        <div class="filters-bar">
+            <div class="filter-group">
+                <label for="filterSearch">Search</label>
+                <input type="text" id="filterSearch" placeholder="Search questions, answers, feedback..." oninput="debouncedFilter()">
+            </div>
+            <div class="filter-group">
+                <label for="filterDomain">Domain</label>
+                <select id="filterDomain" onchange="applyFilters()">
+                    <option value="">All Domains</option>
+                    <option value="dsa">DSA</option>
+                    <option value="dbms">DBMS</option>
+                    <option value="os">OS</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filterMethod">Method</label>
+                <select id="filterMethod" onchange="applyFilters()">
+                    <option value="">All Methods</option>
+                    <option value="llm">LLM</option>
+                    <option value="rule_based">Rule-Based</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filterMinScore">Min Score</label>
+                <input type="number" id="filterMinScore" placeholder="0" min="0" max="10" step="0.5" onchange="applyFilters()">
+            </div>
+            <div class="filter-group">
+                <label for="filterMaxScore">Max Score</label>
+                <input type="number" id="filterMaxScore" placeholder="10" min="0" max="10" step="0.5" onchange="applyFilters()">
+            </div>
+            <div class="filter-actions">
+                <button class="btn" onclick="clearFilters()">✕ Clear</button>
+            </div>
+        </div>
+
+        <!-- ===== LOGS TABLE ===== -->
+        <div class="table-container" id="tableContainer">
+            <table class="data-table" id="logsTable">
+                <thead>
+                    <tr>
+                        <th data-sort="id" onclick="sortTable('id')">ID <span class="sort-icon">↕</span></th>
+                        <th data-sort="timestamp" class="sorted" onclick="sortTable('timestamp')">Timestamp <span class="sort-icon">↓</span></th>
+                        <th data-sort="domain" onclick="sortTable('domain')">Domain <span class="sort-icon">↕</span></th>
+                        <th>Question</th>
+                        <th data-sort="score" onclick="sortTable('score')">Score <span class="sort-icon">↕</span></th>
+                        <th data-sort="confidence" onclick="sortTable('confidence')">Confidence <span class="sort-icon">↕</span></th>
+                        <th data-sort="evaluation_method" onclick="sortTable('evaluation_method')">Method <span class="sort-icon">↕</span></th>
+                    </tr>
+                </thead>
+                <tbody id="logsBody">
+                    <tr>
+                        <td colspan="7">
+                            <div class="loading-overlay">
+                                <div class="spinner"></div>
+                                Loading evaluation logs...
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="pagination" id="pagination"></div>
+        </div>
+    </div>
+
+    <!-- ===== DETAIL MODAL ===== -->
+    <div class="modal-overlay" id="detailModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Evaluation Detail</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-meta" id="modalMeta"></div>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <!-- ===== TOAST ===== -->
+    <div class="toast" id="toast"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
