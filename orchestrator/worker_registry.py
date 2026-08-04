@@ -92,12 +92,13 @@ class WorkerRegistry:
                 raw = self.redis_client.hgetall(f"{self.WORKER_KEY_PREFIX}{wid}")
                 if not raw:
                     continue
+                capacity = int(raw.get("capacity", 4))
                 self.local_workers[wid] = {
                     "worker_id": wid,
                     "status": raw.get("status", "healthy"),
                     "active_tasks": int(raw.get("active_tasks", 0)),
-                    "capacity": int(raw.get("capacity", 4)),
-                    "tags": json.loads(raw.get("tags", "[]")),
+                    "capacity": capacity,
+                    "weight": int(raw.get("weight", capacity)),
                     "registered_at": raw.get("registered_at", ""),
                     "last_heartbeat": raw.get("last_heartbeat", ""),
                     "total_tasks_processed": int(raw.get("total_tasks_processed", 0)),
@@ -107,149 +108,26 @@ class WorkerRegistry:
         except Exception as exc:
             logger.warning("Could not hydrate worker registry from Redis: %s", exc)
 
-    def _get_native_redis_client(self) -> Any:
-        """Helper to safely extract the raw, native Redis client from CacheManager / wrappers"""
-        if not self.redis_client:
-            return None
-
-        client = self.redis_client
-        for _ in range(3):
-            if hasattr(client, "pubsub"):
-                return client
-            if hasattr(client, "_client"):
-                client = client._client
-            elif hasattr(client, "_redis"):
-                client = client._redis
-            elif hasattr(client, "redis"):
-                client = client.redis
-            elif hasattr(client, "client"):
-                client = client.client
-            else:
-                break
-        return client if hasattr(client, "pubsub") else None
-
-    async def _start_pubsub_listener(self) -> None:
-        """Background asynchronous loop listening for cache updates from other instances"""
-        native = self._get_native_redis_client()
-        if not native:
-            return
-
-        pubsub = None
-        try:
-            pubsub = native.pubsub()
-            pubsub.subscribe(self.SYNC_CHANNEL)
-            logger.info(f"Subscribed to Redis channel: {self.SYNC_CHANNEL}")
-
-            while True:
-                try:
-                    message = pubsub.get_message(
-                        ignore_subscribe_messages=True, timeout=1.0
-                    )
-                    if message:
-                        self._handle_pubsub_message(message)
-                except Exception as e:
-                    logger.error(f"Error processing message in Pub/Sub loop: {e!s}")
-
-                await asyncio.sleep(0.1)
-
-        except asyncio.CancelledError:
-            logger.info(
-                "Pub/Sub sync listener task cancellation triggered. Shutting down gracefully..."
-            )
-            raise
-        finally:
-            if pubsub:
-                try:
-                    pubsub.unsubscribe(self.SYNC_CHANNEL)
-                    pubsub.close()
-                    logger.info(
-                        "Successfully unsubscribed and closed Redis Pub/Sub connections."
-                    )
-                except Exception as close_err:
-                    logger.error(
-                        f"Error closing pubsub connection during shutdown: {close_err!s}"
-                    )
-
-    def _handle_pubsub_message(self, message: dict) -> None:
-        """Isolated handler to parse and process a single incoming Redis Pub/Sub message string"""
-        if not message or message.get("type") != "message":
-            return
-
-        try:
-            data = json.loads(message["data"])
-        except (json.JSONDecodeError, TypeError) as je:
-            logger.error(f"Malformed JSON payload received on sync channel: {je!s}")
-            return
-
-        worker_id = data.get("worker_id")
-        action = data.get("action")
-
-        if worker_id and action == "sync":
-            raw = self.redis_client.hgetall(f"{self.WORKER_KEY_PREFIX}{worker_id}")
-            if raw:
-                with self.lock:
-                    self.local_workers[worker_id] = {
-                        "worker_id": worker_id,
-                        "status": raw.get("status", "healthy"),
-                        "active_tasks": int(raw.get("active_tasks", 0)),
-                        "capacity": int(raw.get("capacity", 4)),
-                        "tags": json.loads(raw.get("tags", "[]")),
-                        "registered_at": raw.get("registered_at", ""),
-                        "last_heartbeat": raw.get("last_heartbeat", ""),
-                        "total_tasks_processed": int(
-                            raw.get("total_tasks_processed", 0)
-                        ),
-                        "failed_tasks": int(raw.get("failed_tasks", 0)),
-                    }
-                logger.debug(f"Synchronized worker {worker_id} map state locally.")
-        elif worker_id and action == "deregister":
-            with self.lock:
-                if worker_id in self.local_workers:
-                    del self.local_workers[worker_id]
-            logger.debug(f"Removed worker {worker_id} from local cache via sync alert.")
-
-    def _trigger_sync_broadcast(self, worker_id: str, action: str = "sync") -> None:
+    def register_worker(self, worker_id: str, capacity: int = 4, weight: int | None = None) -> bool:
         """
         Private helper to alert other cluster nodes to sync memory updates
 
         Args:
-            worker_id: Unique worker identifier to update
-            action: Sync event behavior type ("sync" or "deregister")
-        """
-        native = self._get_native_redis_client()
-        if native:
-            try:
-                native.publish(
-                    self.SYNC_CHANNEL,
-                    json.dumps({"worker_id": worker_id, "action": action}),
-                )
-            except Exception as e:
-                logger.error(f"Failed to publish sync broadcast: {e!s}")
-
-    def register_worker(
-        self,
-        worker_id: str,
-        capacity: int = 4,
-        tags: list[str] | None = None,
-    ) -> bool:
-        """
-        Register a new worker node.
-
-        Args:
-            worker_id: Unique worker identifier.
-            capacity: Maximum concurrent tasks this worker can handle.
-            tags: Optional worker capability tags.
+            worker_id: Unique worker identifier
+            capacity: Maximum concurrent tasks this worker can handle
+            weight: Scheduling weight for weighted round robin (defaults to capacity)
 
         Returns:
             bool: True if successful.
         """
         try:
+            effective_weight = weight if weight is not None else capacity
             worker_data = {
                 "worker_id": worker_id,
                 "status": "healthy",
                 "active_tasks": 0,
                 "capacity": capacity,
-                "tags": tags or [],
+                "weight": effective_weight,
                 "registered_at": datetime.now(timezone.utc).isoformat(),
                 "last_heartbeat": datetime.now(timezone.utc).isoformat(),
                 "total_tasks_processed": 0,
@@ -322,6 +200,7 @@ class WorkerRegistry:
             # Initialize active task metric for the new worker
             WORKER_ACTIVE_TASKS.labels(worker_id=worker_id).set(0)
 
+            logger.info(f"Registered worker: {worker_id} with capacity {capacity}, weight {effective_weight}")
             return True
 
         except Exception as e:

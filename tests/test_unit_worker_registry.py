@@ -156,30 +156,27 @@ def test_deregister_worker_removes_entry():
     assert reg.get_worker("w4") is None
 
 
-def test_pubsub_sync_message_updates_local_workers():
+# ===========================================================================
+# NEW: Weight field tests
+# ===========================================================================
+
+
+def test_register_worker_with_weight():
+    """Explicit weight should be stored correctly, separate from capacity."""
     reg = _new_registry()
-    fake_message = {"type": "message", "data": '{"worker_id": "test_sync_worker", "action": "sync"}'}
-    with patch.object(
-        reg.redis_client, "hgetall", return_value={"status": "healthy", "active_tasks": "2", "capacity": "4"}
-    ):
-        reg._handle_pubsub_message(fake_message)
-    assert "test_sync_worker" in reg.local_workers
-    assert reg.local_workers["test_sync_worker"]["active_tasks"] == 2
+    assert reg.register_worker("heavy", capacity=4, weight=10) is True
+    w = reg.get_worker("heavy")
+    assert w is not None
+    assert w["capacity"] == 4
+    assert w["weight"] == 10
 
 
-def test_pubsub_deregister_message_removes_worker():
+def test_register_worker_default_weight_equals_capacity():
+    """When no weight is specified, it should default to the capacity value."""
     reg = _new_registry()
-    reg.local_workers["dead_worker"] = {"worker_id": "dead_worker", "status": "healthy"}
-    fake_message = {"type": "message", "data": '{"worker_id": "dead_worker", "action": "deregister"}'}
-    reg._handle_pubsub_message(fake_message)
-    assert "dead_worker" not in reg.local_workers
+    assert reg.register_worker("default", capacity=8) is True
+    w = reg.get_worker("default")
+    assert w is not None
+    assert w["weight"] == 8  # defaults to capacity
+    assert w["capacity"] == 8
 
-
-def test_pubsub_malformed_message_handled_safely():
-    reg = _new_registry()
-    fake_message = {
-        "type": "message",
-        "data": "invalid-json-payload-string",
-    }
-    reg._handle_pubsub_message(fake_message)
-    assert reg.local_workers == {}

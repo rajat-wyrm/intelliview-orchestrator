@@ -6,11 +6,13 @@ Strategies:
 1. Round Robin - Distribute tasks evenly in sequence
 2. Least Loaded - Assign to worker with fewest active tasks (recommended)
 3. Queue-based - Fallback to Redis queue if no workers available
+4. Weighted Round Robin - Smooth weighted distribution proportional to worker weights
 """
 
 import logging
 import time
 from enum import Enum
+from threading import Lock
 from typing import Any
 
 from metrics.prometheus_metrics import SYSTEM_UTILIZATION
@@ -26,6 +28,7 @@ class BalancingStrategy(Enum):
     LEAST_LOADED = "least_loaded"
     WEIGHTED_LEAST_LOADED = "weighted_least_loaded"
     QUEUE_BASED = "queue_based"
+    WEIGHTED_ROUND_ROBIN = "weighted_round_robin"
 
 
 class LoadBalancer:
@@ -43,10 +46,14 @@ class LoadBalancer:
         self.worker_registry = WorkerRegistry()
         self.strategy = strategy
         self.round_robin_index = 0
-        self._worker_cache = None
-        self._cache_timestamp = 0
-        self._cache_ttl = 5  # Cache valid for 5 seconds
-        self._registry_lookup_count = 0
+
+        # Smooth Weighted Round Robin state — tracks the running
+        # ``current_weight`` for each worker across scheduling calls.
+        # Protected by its own lock so the registry lock is not held
+        # during weight arithmetic.
+        self._wrr_current_weights: dict[str, int] = {}
+        self._wrr_lock = Lock()
+
         logger.info(f"Load Balancer initialized with strategy: {strategy.value}")
 
     def select_worker(self) -> dict[str, Any] | None:
@@ -64,6 +71,8 @@ class LoadBalancer:
             return self._select_weighted_least_loaded()
         if self.strategy == BalancingStrategy.QUEUE_BASED:
             return self._select_queue_based()
+        if self.strategy == BalancingStrategy.WEIGHTED_ROUND_ROBIN:
+            return self._select_weighted_round_robin()
         # Default to least loaded
         return self._select_least_loaded()
 
@@ -170,10 +179,71 @@ class LoadBalancer:
         Args:
             strategy: New strategy to use
         """
+        old_strategy = self.strategy
         self.strategy = strategy
+
+        # Reset SWRR state when switching away so a later switch back
+        # starts from a clean slate.
+        if old_strategy == BalancingStrategy.WEIGHTED_ROUND_ROBIN:
+            with self._wrr_lock:
+                self._wrr_current_weights.clear()
+
         logger.info(f"Switched to {strategy.value} strategy")
 
-    def _get_cached_workers(self) -> list[dict[str, Any]]:
+    def _select_weighted_round_robin(self) -> dict[str, Any] | None:
+        """
+        Smooth Weighted Round Robin Strategy (Nginx algorithm)
+
+        For every scheduling request:
+        1. Increase current_weight of every available worker by its configured weight.
+        2. Select the worker with the highest current_weight.
+        3. Reduce the selected worker's current_weight by the total weight.
+        4. Return the selected worker.
+
+        Produces a smooth, interleaved distribution proportional to worker weights.
+        For weights {A:5, B:1, C:1}, the 7-call sequence is: A A B A C A A
+        (not A A A A A B C).
+
+        Thread-safe: uses ``_wrr_lock`` to protect ``_wrr_current_weights``.
+
+        Returns:
+            dict: Selected worker or None if no workers available
+        """
+        available = self.worker_registry.get_available_workers()
+
+        if not available:
+            logger.warning("No workers available for Weighted Round Robin selection")
+            return None
+
+        with self._wrr_lock:
+            # Prune stale entries for workers that are no longer available
+            available_ids = {w["worker_id"] for w in available}
+            stale_ids = set(self._wrr_current_weights.keys()) - available_ids
+            for sid in stale_ids:
+                del self._wrr_current_weights[sid]
+
+            # Step 1: increase current_weight by configured weight
+            for w in available:
+                wid = w["worker_id"]
+                configured_weight = w.get("weight", w["capacity"])
+                self._wrr_current_weights[wid] = (
+                    self._wrr_current_weights.get(wid, 0) + configured_weight
+                )
+
+            # Step 2: select worker with the highest current_weight
+            best = max(available, key=lambda w: self._wrr_current_weights[w["worker_id"]])
+
+            # Step 3: reduce selected worker's current_weight by total weight
+            total_weight = sum(w.get("weight", w["capacity"]) for w in available)
+            self._wrr_current_weights[best["worker_id"]] -= total_weight
+
+        logger.debug(
+            f"Weighted Round Robin selected worker: {best['worker_id']} "
+            f"(weight: {best.get('weight', best['capacity'])})"
+        )
+        return best
+
+    def get_best_worker_for_priority(self, priority: str) -> dict[str, Any] | None:
         """
         Return cached workers if cache is still valid.
         """
