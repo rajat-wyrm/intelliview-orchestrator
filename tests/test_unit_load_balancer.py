@@ -86,50 +86,16 @@ def test_full_capacity_workers_excluded():
     lb = LoadBalancer()
     lb.worker_registry = FakeRegistry(workers)
     assert lb.select_worker()["worker_id"] in {"w3"}
-def test_weighted_least_loaded_prefers_higher_weight_worker():
+
+def test_medium_priority_selects_least_loaded_underutilized():
+    """Medium priority should select the least-loaded worker below 70% utilization."""
+
     workers = [
         {
             "worker_id": "w1",
             "capacity": 10,
-            "active_tasks": 4,
-            "status": "healthy",
-            "weight": 1,
-        },
-        {
-            "worker_id": "w2",
-            "capacity": 10,
-            "active_tasks": 6,
-            "status": "healthy",
-            "weight": 3,
-        },
-    ]
 
 
-def test_weighted_least_loaded_prefers_higher_weight_worker():
-    workers = [
-        {
-            "worker_id": "w1",
-            "capacity": 10,
-            "active_tasks": 4,
-            "status": "healthy",
-            "weight": 1,
-        },
-        {
-            "worker_id": "w2",
-            "capacity": 10,
-            "active_tasks": 6,
-            "status": "healthy",
-            "weight": 3,
-        },
-    ]
-
-    lb = LoadBalancer(strategy=BalancingStrategy.WEIGHTED_LEAST_LOADED)
-    lb.worker_registry = FakeRegistry(workers)
-
-    selected = lb.select_worker()
-
-    assert selected["worker_id"] == "w2"
-<<<<<<< HEAD
 def test_weighted_least_loaded_prefers_higher_weight():
     workers = [
         {
@@ -148,36 +114,70 @@ def test_weighted_least_loaded_prefers_higher_weight():
         },
     ]
 
-    lb = LoadBalancer(
-        strategy=BalancingStrategy.WEIGHTED_LEAST_LOADED
-    )
+    lb = LoadBalancer(strategy=BalancingStrategy.WEIGHTED_LEAST_LOADED)
 
+    lb.worker_registry = FakeRegistry(workers)
+
+    selected = lb.select_worker()
+
+    assert selected["worker_id"] == "w2"
 =======
-
-
-def test_weighted_least_loaded_prefers_higher_weight():
-    workers = [
-        {
-            "worker_id": "w1",
-            "capacity": 4,
-            "active_tasks": 2,
+            "active_tasks": 5,
             "status": "healthy",
-            "weight": 1,
         },
         {
             "worker_id": "w2",
-            "capacity": 4,
+            "capacity": 10,
             "active_tasks": 2,
             "status": "healthy",
-            "weight": 2,
+        },
+        {
+            "worker_id": "w3",
+            "capacity": 10,
+            "active_tasks": 4,
+            "status": "healthy",
         },
     ]
 
-    lb = LoadBalancer(strategy=BalancingStrategy.WEIGHTED_LEAST_LOADED)
+    lb = LoadBalancer()
 
->>>>>>> issue-527-weighted-least-loaded-v3
     lb.worker_registry = FakeRegistry(workers)
 
-    selected = lb.select_worker()
+    worker = lb.get_best_worker_for_priority("medium")
 
-    assert selected["worker_id"] == "w2"
+    assert worker["worker_id"] == "w2"
+
+
+def test_medium_priority_fallback_to_least_loaded():
+    """If every worker is above 70% utilization,
+    choose the least-loaded worker."""
+
+    workers = [
+        {
+            "worker_id": "w1",
+            "capacity": 10,
+            "active_tasks": 8,
+            "status": "healthy",
+        },
+        {
+            "worker_id": "w2",
+            "capacity": 10,
+            "active_tasks": 7,
+            "status": "healthy",
+        },
+        {
+            "worker_id": "w3",
+            "capacity": 10,
+            "active_tasks": 9,
+            "status": "healthy",
+        },
+    ]
+
+    lb = LoadBalancer()
+
+    lb.worker_registry = FakeRegistry(workers)
+
+    worker = lb.get_best_worker_for_priority("medium")
+
+    assert worker["worker_id"] == "w2"
+>>>>>>> pr-414-head
