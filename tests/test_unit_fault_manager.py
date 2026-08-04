@@ -1,28 +1,18 @@
 """Unit tests for FaultManager — failure logging, DLQ, recovery queue."""
 
 from datetime import datetime, timezone
-from unittest.mock import patch
+
 
 from orchestrator.fault_manager import FailureType, FaultManager
 
 
-# def _manager():
-#     with patch("orchestrator.fault_manager.redis.from_url") as mock_redis:
-#         client = mock_redis.return_value
-#         client.ping.return_value = True
-#         client.lpush.return_value = 1
-#         client.ltrim.return_value = True
-#         client.expire.return_value = True
-#         client.scan.return_value = (0, [])
-#         client.lrange.return_value = []
-#         client.get.return_value = None
-#         client.setex.return_value = True
-#         client.incr.return_value = 1
-#         return FaultManager()
+from unittest.mock import MagicMock, patch
+
+
 def _manager():
-    with patch("orchestrator.fault_manager.get_redis_client") as mock_get_redis_client:
-        client = mock_get_redis_client.return_value
-        client.ping.return_value = True
+    with patch("orchestrator.fault_manager.get_redis_client") as mock_get_redis:
+        client = MagicMock()
+
         client.lpush.return_value = 1
         client.ltrim.return_value = True
         client.expire.return_value = True
@@ -32,8 +22,9 @@ def _manager():
         client.set.return_value = True
         client.incr.return_value = 1
 
-        return FaultManager()
+        mock_get_redis.return_value = client
 
+        return FaultManager()
 
 def test_log_failure_appends_to_log_key():
     fm = _manager()
@@ -82,4 +73,42 @@ def test_reassign_increments_counter_and_persists():
     fm = _manager()
     fm.redis_client.incr.return_value = 2
     assert fm.reassign_task("s3", original_worker="w_dead") is True
+    # The modern redis-py uses `set(key, value, ex=ttl)` instead of the
+    # deprecated `setex(key, ttl, value)`.
     fm.redis_client.set.assert_called()
+    
+import json
+
+
+def test_get_worker_tasks_uses_assigned_node():
+    fm = _manager()
+
+    session = {
+        "session_id": "session-123",
+        "assigned_node": "worker-1",
+    }
+
+    fm.redis_client.scan.return_value = (0, ["session:123"])
+    fm.redis_client.get.return_value = json.dumps(session)
+
+    tasks = fm._get_worker_tasks("worker-1")
+
+    assert tasks == ["session-123"]   
+    
+import json
+
+
+def test_get_worker_tasks_uses_assigned_node():
+    fm = _manager()
+
+    session = {
+        "session_id": "session-123",
+        "assigned_node": "worker-1",
+    }
+
+    fm.redis_client.scan.return_value = (0, ["session:123"])
+    fm.redis_client.get.return_value = json.dumps(session)
+
+    tasks = fm._get_worker_tasks("worker-1")
+
+    assert tasks == ["session-123"]     
