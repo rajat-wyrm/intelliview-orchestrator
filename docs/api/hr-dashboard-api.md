@@ -1,5 +1,24 @@
 # HR Dashboard API Contracts
 
+## Response Schema Validation
+
+This API contract now uses response models and schema validation for the main endpoints.
+
+### Validation rules
+- All response fields must match the defined schema types.
+- String fields should be strings.
+- Numeric fields such as score and risk values should be numeric and within allowed ranges.
+- Optional fields may be null.
+- Lists should contain the correct item type.
+
+### Example validation response
+```json
+{
+  "status": "system running",
+  "timestamp": "2026-08-04T12:00:00Z"
+}
+```
+
 ## 1. Get Candidates
 **Method and URL:** `GET /api/candidates`
 **Auth requirements:** Required (Bearer Token)
@@ -8,12 +27,23 @@
 ```http
 GET /api/candidates?domain=Python&status=completed&page=1&limit=10
 ```
+
+**Success response:**
 ```json
 {
-  "name": "HR Name",
-  "department": "Engineering"
+  "count": 1,
+  "candidates": [
+    {
+      "candidate_id": "cand-001",
+      "name": "HR Name",
+      "email": "hr@company.com",
+      "resume_text": "Experienced Python engineer",
+      "skills": ["Python", "FastAPI"]
+    }
+  ]
 }
 ```
+
 ## 2. Get HR Profile
 **Method and URL:** `GET /api/hr/profile`
 **Auth requirements:** Required (Bearer Token)
@@ -22,6 +52,8 @@ GET /api/candidates?domain=Python&status=completed&page=1&limit=10
 ```http
 GET /api/hr/profile
 ```
+
+**Success response:**
 ```json
 {
   "id": "hr-123",
@@ -30,6 +62,7 @@ GET /api/hr/profile
   "department": "Engineering"
 }
 ```
+
 ## 3. Update HR Profile
 **Method and URL:** `PUT /api/hr/profile`
 **Auth requirements:** Required (Bearer Token)
@@ -41,6 +74,8 @@ GET /api/hr/profile
   "department": "Human Resources"
 }
 ```
+
+**Success response:**
 ```json
 {
   "message": "Profile updated successfully",
@@ -51,6 +86,7 @@ GET /api/hr/profile
   }
 }
 ```
+
 ## 4. Cancel Schedule
 **Method and URL:** `POST /api/schedules/:id/cancel`
 **Auth requirements:** Required (Bearer Token)
@@ -59,11 +95,8 @@ GET /api/hr/profile
 ```http
 POST /api/schedules/98765/cancel
 ```
-```json
-{
-  "reason": "Candidate requested reschedule"
-}
-```
+
+**Success response:**
 ```json
 {
   "message": "Schedule cancelled successfully",
@@ -71,9 +104,7 @@ POST /api/schedules/98765/cancel
   "status": "CANCELLED"
 }
 ```
-```http
-GET /api/notifications/unread-count
-```
+
 ## 5. Get Unread Notifications Count
 **Method and URL:** `GET /api/notifications/unread-count`
 **Auth requirements:** Required (Bearer Token)
@@ -82,6 +113,8 @@ GET /api/notifications/unread-count
 ```http
 GET /api/notifications/unread-count
 ```
+
+**Success response:**
 ```json
 {
   "unreadCount": 12

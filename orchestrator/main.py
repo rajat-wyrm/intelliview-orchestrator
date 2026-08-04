@@ -288,8 +288,6 @@ def require_token(x_api_token: str | None = Header(default=None)) -> None:
         raise HTTPException(status_code=401, detail="invalid or missing API token")
 
 
-class LoginRequest(BaseModel):
-    api_token: str
 
 
 @app.post("/login")
@@ -393,7 +391,7 @@ class InterviewSessionResponse(BaseModel):
     status: str
     created_at: str | None = None
     candidate_id: str
-    risk_score: float | None = None
+    risk_score: float | None = Field(default=None, ge=0, le=10)
     estimated_wait_time: int | None = None
 
 
@@ -403,7 +401,7 @@ class SessionStatusResponse(BaseModel):
     session_id: str
     status: str
     candidate_id: str
-    risk_score: float | None = None
+    risk_score: float | None = Field(default=None, ge=0, le=10)
     assigned_node: str | None = None
     start_time: str | None = None
     end_time: str | None = None
@@ -419,7 +417,7 @@ class ReportCandidate(BaseModel):
 class ReportInterviewSummary(BaseModel):
     start_time: str | None = None
     end_time: str | None = None
-    duration_minutes: float | None = None
+    duration_minutes: float | None =  Field(default=None, ge=0, le=10)
 
 
 class ReportQuestion(BaseModel):
@@ -431,9 +429,9 @@ class ReportQuestion(BaseModel):
 
 
 class ReportEvaluation(BaseModel):
-    quality: float | None = None
-    accuracy: float | None = None
-    clarity: float | None = None
+    quality: float | None = Field(default=None, ge=0, le=10)
+    accuracy: float | None = Field(default=None, ge=0, le=10)
+    clarity: float | None = Field(default=None, ge=0, le=10)
 
 
 class ReportLLMFeedback(BaseModel):
@@ -444,7 +442,7 @@ class ReportLLMFeedback(BaseModel):
 
 
 class ReportRiskAssessment(BaseModel):
-    score: float | None = None
+    score: float | None = Field(default=None, ge=0, le=10)
     classification: str | None = None
     factors: list[str] = Field(default_factory=list)
 
@@ -492,8 +490,8 @@ class AskQuestionResponse(BaseModel):
     session_id: str
     question_id: str
     text: str
-    category: str
-    difficulty: str
+    category: str | None = None
+    difficulty: str | None = None
 
 
 class SubmitAnswerRequest(BaseModel):
@@ -511,9 +509,9 @@ class SubmitAnswerResponse(BaseModel):
     session_id: str
     question_id: str
     feedback: str
-    score: float | None = None
+    score: float | None = Field(default=None, ge=0, le=10)
     questions_asked: int
-    overall_score: float | None = None
+    overall_score: float | None = Field(default=None, ge=0, le=10)
 
 
 class AddQuestionRequest(BaseModel):
@@ -545,6 +543,98 @@ class CreateTemplateRequest(BaseModel):
     category_distribution: dict[str, float] | None = None
     difficulty_distribution: dict[str, float] | None = None
 
+
+class QuestionResponse(BaseModel):
+    """Response model for a question entry."""
+
+    question_id: str
+    text: str
+    category: str
+    difficulty: str
+    tags: list[str] = Field(default_factory=list)
+
+
+class QuestionListResponse(BaseModel):
+    """Response model for a paged question list."""
+
+    count: int
+    questions: list[QuestionResponse] = Field(default_factory=list)
+
+
+class CandidateProfileResponse(BaseModel):
+    """Response model for a candidate profile."""
+
+    candidate_id: str | None = None
+    name: str | None = None
+    email: str | None = None
+    resume_text: str | None = None
+    skills: list[str] = Field(default_factory=list)
+
+
+class CandidateListResponse(BaseModel):
+    """Response model for a candidate list."""
+
+    count: int
+    candidates: list[CandidateProfileResponse] = Field(default_factory=list)
+
+
+class CandidateHistoryResponse(BaseModel):
+    """Response model for candidate interview history."""
+
+    candidate_id: str
+    history: list[dict[str, object]] = Field(default_factory=list)
+
+
+class TemplateResponse(BaseModel):
+    """Response model for an interview template."""
+
+    name: str
+    interview_type: str
+    description: str | None = None
+    duration_minutes: int = 60
+    question_count: int = 10
+    category_distribution: dict[str, float] | None = None
+    difficulty_distribution: dict[str, float] | None = None
+
+
+class TemplateListResponse(BaseModel):
+    """Response model for a template list."""
+
+    count: int
+    templates: list[TemplateResponse] = Field(default_factory=list)
+
+
+class WorkerRegistrationResponse(BaseModel):
+    """Response model for worker registration."""
+
+    status: str
+    message: str
+    worker_id: str
+    capacity: int
+    timestamp: str
+
+
+class WorkerHeartbeatResponse(BaseModel):
+    """Response model for worker heartbeat."""
+
+    status: str
+    message: str
+    worker_id: str
+    health: str
+    active_tasks: int
+    timestamp: str
+
+
+class WorkerListResponse(BaseModel):
+    """Response model for the worker list endpoint."""
+
+    total_workers: int
+    healthy_workers: int
+    unhealthy_workers: int
+    workers: list[dict[str, object]] = Field(default_factory=list)
+    timestamp: str
+
+
 class HealthResponse(BaseModel):
     """Response model for GET /health"""
     status: str
@@ -558,17 +648,6 @@ async def health_check():
         status="system running",
         timestamp=datetime.now(timezone.utc).isoformat()
     )
-@app.get("/health")
-async def health():
-    uptime = int((datetime.now(timezone.utc) - APP_START_TIME).total_seconds())
-
-    return {
-        "alive": True,
-        "status": "system running",
-        "uptime_seconds": uptime,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
-
 
 # ========== Deep Health & Probe Endpoints ==========
 
@@ -1269,7 +1348,7 @@ async def list_interviews(
 # ========== Question Endpoints ==========
 
 
-@app.get("/questions")
+@app.get("/questions", response_model=QuestionListResponse)
 async def list_questions(
     category: str | None = None,
     difficulty: str | None = None,
@@ -1289,7 +1368,7 @@ async def list_questions(
         raise HTTPException(status_code=500, detail="Error listing questions")
 
 
-@app.post("/questions")
+@app.post("/questions", response_model=QuestionResponse)
 async def add_question(
     request: AddQuestionRequest,
     session_db: Session = Depends(get_db),
@@ -1313,7 +1392,7 @@ async def add_question(
 # ========== Candidate Endpoints ==========
 
 
-@app.get("/candidates")
+@app.get("/candidates", response_model=CandidateListResponse)
 async def list_candidates(
     limit: int = 100,
     session_db: Session = Depends(get_db),
@@ -1327,7 +1406,7 @@ async def list_candidates(
         raise HTTPException(status_code=500, detail="Error listing candidates")
 
 
-@app.post("/candidates")
+@app.post("/candidates", response_model=CandidateProfileResponse)
 async def create_candidate(
     request: CreateCandidateRequest,
     session_db: Session = Depends(get_db),
@@ -1364,7 +1443,7 @@ async def get_candidate(
         raise HTTPException(status_code=500, detail="Error fetching candidate")
 
 
-@app.get("/candidates/{candidate_id}/history")
+@app.get("/candidates/{candidate_id}/history", response_model=CandidateHistoryResponse)
 async def get_candidate_history(
     candidate_id: str,
     session_db: Session = Depends(get_db),
@@ -1386,7 +1465,7 @@ async def get_candidate_history(
 # ========== Template Endpoints ==========
 
 
-@app.get("/templates")
+@app.get("/templates", response_model=TemplateListResponse)
 async def list_templates(interview_type: str | None = None, limit: int = 100):
     """List interview templates with optional type filter"""
     try:
@@ -1397,7 +1476,7 @@ async def list_templates(interview_type: str | None = None, limit: int = 100):
         raise HTTPException(status_code=500, detail="Error listing templates")
 
 
-@app.post("/templates")
+@app.post("/templates", response_model=TemplateResponse)
 async def create_template(
     request: CreateTemplateRequest,
     session_db: Session = Depends(get_db),
@@ -1424,7 +1503,7 @@ async def create_template(
 # ========== Interview Q&A Endpoints ==========
 
 
-@app.post("/interviews/ask-question")
+@app.post("/interviews/ask-question", response_model=AskQuestionResponse)
 async def ask_question(
     request: AskQuestionRequest,
     session_db: Session = Depends(get_db),
@@ -1444,12 +1523,12 @@ async def ask_question(
             raise HTTPException(status_code=404, detail="No more questions available")
 
         return AskQuestionResponse(
-            session_id=request.session_id,
-            question_id=question["question_id"],
-            text=question["text"],
-            category=question["category"],
-            difficulty=question["difficulty"],
-        )
+             session_id=request.session_id,
+             question_id=question["question_id"],
+             text=question["text"],
+             category=question.get("category"),
+             difficulty=question.get("difficulty"),
+)
     except HTTPException:
         raise
     except Exception as e:
@@ -1457,7 +1536,7 @@ async def ask_question(
         raise HTTPException(status_code=500, detail="Error getting question")
 
 
-@app.post("/interviews/submit-answer")
+@app.post("/interviews/submit-answer", response_model=SubmitAnswerResponse)
 async def submit_answer(
     request: SubmitAnswerRequest,
     session_db: Session = Depends(get_db),
@@ -1537,7 +1616,7 @@ async def submit_answer(
 # ========== Worker Management Endpoints ==========
 
 
-@app.post("/register-worker", dependencies=[Depends(require_token)])
+@app.post("/register-worker", response_model=WorkerRegistrationResponse, dependencies=[Depends(require_token)])
 async def register_worker(request: WorkerRegistrationRequest):
     """
     Register a new worker node
@@ -1571,7 +1650,7 @@ async def register_worker(request: WorkerRegistrationRequest):
         raise HTTPException(status_code=500, detail=f"Error registering worker: {e!s}")
 
 
-@app.post("/worker/heartbeat", dependencies=[Depends(require_token)])
+@app.post("/worker/heartbeat", response_model=WorkerHeartbeatResponse, dependencies=[Depends(require_token)])
 async def worker_heartbeat(request: WorkerHeartbeatRequest):
     """
     Process heartbeat from worker node
@@ -1620,7 +1699,7 @@ async def worker_heartbeat(request: WorkerHeartbeatRequest):
         raise HTTPException(status_code=500, detail=f"Error processing heartbeat: {e!s}")
 
 
-@app.get("/workers")
+@app.get("/workers", response_model=WorkerListResponse)
 @http_cache.cached("workers", ttl=2)
 async def list_workers():
     """

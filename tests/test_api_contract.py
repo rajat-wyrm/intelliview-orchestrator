@@ -9,7 +9,13 @@ These are static checks (no live server required).
 import pytest
 from fastapi import FastAPI
 
-from orchestrator.main import app
+from orchestrator.main import (
+    app,
+    AskQuestionResponse,
+    HealthResponse,
+    InterviewSessionResponse,
+    SubmitAnswerResponse,
+)
 
 
 def _all_routes(application: FastAPI):
@@ -61,7 +67,32 @@ EXPECTED = {
 }
 
 
+def _get_response_schema(path: str, method: str):
+    schema = app.openapi()
+    operation = schema["paths"][path][method.lower()]
+    response = operation.get("responses", {}).get("200", {})
+    content = response.get("content", {}).get("application/json", {})
+    return content.get("schema", {})
+
+
 @pytest.mark.parametrize(("method", "path"), sorted(EXPECTED))
 def test_endpoint_exists(method, path):
     routes = _all_routes(app)
     assert (method, path) in routes, f"Missing endpoint {method} {path}"
+
+
+@pytest.mark.parametrize(
+    ("path", "method", "model_cls"),
+    [
+        ("/health", "get", HealthResponse),
+        ("/start-interview", "post", InterviewSessionResponse),
+        ("/interviews/ask-question", "post", AskQuestionResponse),
+        ("/interviews/submit-answer", "post", SubmitAnswerResponse),
+    ],
+)
+def test_response_schema_is_registered(path, method, model_cls):
+    response_schema = _get_response_schema(path, method)
+    expected_ref = f"#/components/schemas/{model_cls.__name__}"
+    assert response_schema.get("$ref") == expected_ref, (
+        f"Expected response schema {expected_ref} for {method.upper()} {path}"
+    )
