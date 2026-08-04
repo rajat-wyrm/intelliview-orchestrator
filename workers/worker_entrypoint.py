@@ -97,9 +97,31 @@ def main() -> int:
     )
     heartbeat_thread.start()
 
+    def _hb_loop():
+        while not stop_event.is_set():
+            try:
+                agent._post(
+                    "/worker/heartbeat",
+                    {
+                        "worker_id": agent.worker_id,
+                        "active_tasks": agent.active_tasks,
+                    },
+                )
+            except Exception as exc:
+                logger.debug("Heartbeat error: %s", exc)
+            stop_event.wait(agent.heartbeat_interval)
+
+    threading.Thread(target=_hb_loop, daemon=True).start()
+
+    def _shutdown(*_):
+        logger.info("Shutdown signal received")
+        stop_event.set()
+
     @worker_shutdown.connect
     def _on_worker_shutdown(**kwargs):
-        logger.info("Shutting down worker")
+        logger.info("Celery worker stopped")
+        agent.deregister()
+
 
         agent.deregister()
 
