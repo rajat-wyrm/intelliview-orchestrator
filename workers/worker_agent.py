@@ -47,6 +47,7 @@ class WorkerAgent:
             "X-API-Token": API_TOKEN,
             "Content-Type": "application/json",
         }
+        self.client = httpx.Client( timeout=5.0, headers=self._headers )
 
         # Read the configured Celery worker pool.
         # Default to 'solo' if not explicitly configured.
@@ -62,21 +63,37 @@ class WorkerAgent:
                 "the active_tasks counter is process-local and is not "
                 "accurate with multiple worker processes."
             )
+        
 
     def _post(self, path: str, payload: dict, retries: int = 5) -> bool:
         for attempt in range(1, retries + 1):
             try:
-                r = httpx.post(
+                r = self.client.post(
                     f"{self.api_url}{path}",
                     json=payload,
-                    headers=self._headers,
-                    timeout=5.0,
                 )
+
                 if r.status_code < 500:
                     return r.status_code < 400
-                logger.warning("API %s returned %s, retrying", path, r.status_code)
+                
+                logger.warning(
+                    "Worker %s | API %s returned %s | Attempt %d/%d",
+                    self.worker_id,
+                    path,
+                    r.status_code,
+                    attempt,
+                    retries,
+                )
+
             except Exception as exc:
-                logger.warning("API %s failed (%s), retrying", path, exc)
+                logger.warning(
+                    "Worker %s | API %s failed: %s | Attempt %d/%d",
+                    self.worker_id,
+                    path,
+                    exc,
+                    attempt,
+                    retries,
+                )
             time.sleep(min(2**attempt, 15))
         return False
 
@@ -90,21 +107,56 @@ class WorkerAgent:
 
     def deregister(self) -> None:
         try:
-            httpx.delete(
+            self.client.delete(
                 f"{self.api_url}/deregister-worker/{self.worker_id}",
-                headers=self._headers,
-                timeout=5.0,
             )
         except Exception as exc:
             logger.debug("Deregister failed: %s", exc)
 
     def heartbeat_loop(self) -> None:
         while not self._stop:
-            self._post(
+            ok = self._post(
                 "/worker/heartbeat",
-                {"worker_id": self.worker_id, "active_tasks": self.active_tasks},
+                {
+                    "worker_id": self.worker_id,
+                    "active_tasks": self.active_tasks,
+                },
             )
+
+            if not ok:
+                logger.warning(
+                    "Heartbeat failed. Trying to re-register worker..."
+                )
+
+                while not self._stop:
+                    if self.register():
+                        logger.info(
+                            "Worker %s re-registered successfully.",
+                            self.worker_id,
+                        )
+                        break
+
+                    logger.warning(
+                        "Re-registration failed. Retrying in %s seconds...",
+                        self.heartbeat_interval,
+                    )
+
+                    time.sleep(self.heartbeat_interval)
+
+
             time.sleep(self.heartbeat_interval)
+    
+
+    def shutdown(self, *_):
+        logger.info("Shutting down worker agent...")
+
+        self._stop = True
+
+        self.deregister()
+
+        self.client.close()
+
+        sys.exit(0)        
 
     def _handle_shutdown(self, signum, frame) -> None:
         logger.info("Received signal %s, shutting down worker %s", signum, self.worker_id)
@@ -114,8 +166,21 @@ class WorkerAgent:
     def start(self) -> None:
         signal.signal(signal.SIGTERM, self._handle_shutdown)
         signal.signal(signal.SIGINT, self._handle_shutdown)
-        if not self.register():
-            sys.exit(1)
+
+        while not self._stop:
+            if self.register():
+                break
+
+            logger.warning(
+                "Registration failed. Retrying in %s seconds...",
+                self.heartbeat_interval,
+            )
+
+            time.sleep(self.heartbeat_interval)
+
+        if self._stop:
+            return
+
         Thread(target=self.heartbeat_loop, daemon=True).start()
         logger.info("Worker agent started for %s", self.worker_id)
 

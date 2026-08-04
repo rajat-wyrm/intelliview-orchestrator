@@ -67,6 +67,39 @@ docker compose up -d --build
 - **Structured audit logging** for compliance
 - **Neon DB / cloud PostgreSQL** SSL support
 
+### Worker Agent
+
+The Celery Worker Agent is responsible for maintaining communication with the FastAPI orchestrator.
+
+Features:
+- Automatically registers the worker during startup.
+- Sends periodic heartbeat requests with active task count.
+- Automatically retries registration during temporary network failures.
+- Reconnects automatically after FastAPI restarts.
+- Gracefully deregisters the worker during shutdown.
+- Uses a reusable HTTP client for reliable communication.
+- Registration is retried until the FastAPI server becomes available.
+- Heartbeat failures trigger automatic re-registration attempts.
+- Registration and heartbeat failures are logged for easier debugging.
+- Supports only the `solo` Celery worker pool to ensure accurate active task tracking.
+
+### Worker Entrypoint
+
+The worker entrypoint is responsible for starting the Worker Agent alongside the Celery worker.
+
+Changes made:
+- Starts the Worker Agent before the Celery worker.
+- Tracks active task count using Celery task signals (`task_prerun` and `task_postrun`).
+- Runs a dedicated heartbeat thread to continuously send worker status.
+- Handles graceful shutdown by deregistering the worker before exit.
+
+### Testing
+
+- Verified worker registration during startup.
+- Verified periodic heartbeat requests.
+- Tested retry mechanism during FastAPI downtime.
+- Verified heartbeat resumes after FastAPI becomes available.
+
 ### Dashboard Pages
 - **Overview** — system health, worker status, live sparklines
 - **Sessions** — active/completed/failed with pipeline visualization
