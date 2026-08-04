@@ -109,3 +109,72 @@ def test_helper_functions_return_dicts():
         (generate_feedback, "x"),
     ]:
         assert isinstance(fn(sid), dict)
+
+
+def test_audio_pipeline_temp_file_cleanup():
+    import os
+    import sys
+    from unittest.mock import MagicMock, patch
+    from workers.audio_pipeline import AUDIO_TEMP_DIR, run_audio_analysis
+
+    # Setup a mock/dummy audio file at the legacy path
+    session_id = "test-session-cleanup-123"
+    legacy_file_path = os.path.join(AUDIO_TEMP_DIR, f"interview_{session_id}.wav")
+
+    # Ensure the directory exists
+    os.makedirs(AUDIO_TEMP_DIR, exist_ok=True)
+    with open(legacy_file_path, "wb") as f:
+        f.write(b"mock audio bytes")
+
+    assert os.path.exists(legacy_file_path)
+
+    # Mock dependencies to bypass real AI model invocation.
+    mock_numpy = MagicMock()
+    mock_transcribe = MagicMock(return_value={"text": "Hello world", "language": "en", "segments": []})
+    mock_diarization = MagicMock(return_value=[])
+
+    original_numpy = sys.modules.get("numpy")
+    sys.modules["numpy"] = mock_numpy
+
+    try:
+        with patch("workers.ai_client.transcribe_audio_file", mock_transcribe), \
+             patch("workers.ai_client.detect_speaker_segments", mock_diarization), \
+             patch("workers.ai_client.HAS_WHISPER", True):
+
+            result = run_audio_analysis(session_id)
+
+            # Check that transcribe_audio_file was indeed called on the temporary copy
+            assert mock_transcribe.call_count == 2
+            called_path = mock_transcribe.call_args_list[0][0][0]
+
+            # The path should NOT be the legacy path
+            assert called_path != legacy_file_path
+            assert "interview_test-session-cleanup-123_" in called_path
+            assert called_path.endswith(f"interview_{session_id}.wav")
+
+            # The temporary directory and file should no longer exist after the run
+            temp_dir = os.path.dirname(called_path)
+            assert not os.path.exists(temp_dir)
+            assert not os.path.exists(called_path)
+
+            # The legacy path should also be cleaned up automatically upon successful completion
+            assert not os.path.exists(legacy_file_path)
+
+            # The return shape and contents should still be correct
+            assert result["session_id"] == session_id
+            assert result["transcription"]["text"] == "Hello world"
+
+    finally:
+        # Restore sys.modules['numpy']
+        if original_numpy is not None:
+            sys.modules["numpy"] = original_numpy
+        else:
+            sys.modules.pop("numpy", None)
+
+        # Clean up legacy file if it still exists
+        if os.path.exists(legacy_file_path):
+            try:
+                os.remove(legacy_file_path)
+            except Exception:
+                pass
+

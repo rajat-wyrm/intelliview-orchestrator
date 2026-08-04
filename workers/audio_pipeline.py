@@ -15,10 +15,12 @@ deterministic per-session signals so end-to-end risk scoring and the
 HIGH/CRITICAL thresholds fire correctly without GPU dependencies.
 """
 
-import logging                 
+import contextlib
+import logging
 import os
 import shutil
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Any, TypedDict
@@ -58,6 +60,55 @@ def split_audio_into_chunks(
         chunk_paths.append(str(chunk_path))
 
     return chunk_paths, chunk_temp_dir
+
+# Thread-safe registry to track active temporary directory paths for each session
+_temp_dir_lock = threading.Lock()
+_session_temp_dirs: dict[str, str] = {}
+
+
+@contextlib.contextmanager
+def manage_session_audio(session_id: str):
+    """Context manager to manage the lifetime of the temporary directory for a session analysis.
+
+    Copies the legacy/input audio file into the secure temporary directory if it exists.
+    """
+    with tempfile.TemporaryDirectory(prefix=f"interview_{session_id}_") as temp_dir:
+        with _temp_dir_lock:
+            _session_temp_dirs[session_id] = temp_dir
+
+        legacy_path = os.path.join(AUDIO_TEMP_DIR, f"interview_{session_id}.wav")
+        temp_path = os.path.join(temp_dir, f"interview_{session_id}.wav")
+        if os.path.exists(legacy_path):
+            shutil.copy2(legacy_path, temp_path)
+
+        try:
+            yield temp_path
+        finally:
+            with _temp_dir_lock:
+                _session_temp_dirs.pop(session_id, None)
+
+
+@contextlib.contextmanager
+def session_audio_context(session_id: str):
+    """Context manager to access the secure temporary audio file path.
+
+    If run_audio_analysis has set up a session-level temporary directory,
+    it uses that. Otherwise (e.g. in standalone helper calls/tests),
+    it creates a one-off temporary directory, copies the source file if present,
+    and cleans it up.
+    """
+    with _temp_dir_lock:
+        temp_dir = _session_temp_dirs.get(session_id)
+
+    if temp_dir:
+        yield os.path.join(temp_dir, f"interview_{session_id}.wav")
+    else:
+        with tempfile.TemporaryDirectory(prefix=f"interview_{session_id}_") as local_dir:
+            legacy_path = os.path.join(AUDIO_TEMP_DIR, f"interview_{session_id}.wav")
+            temp_path = os.path.join(local_dir, f"interview_{session_id}.wav")
+            if os.path.exists(legacy_path):
+                shutil.copy2(legacy_path, temp_path)
+            yield temp_path
 
 
 # ---------------------------------------------------------------------------
@@ -121,41 +172,38 @@ def _real_transcribe(
     try:
         from workers.ai_client import transcribe_audio_file
 
-        url = audio_url or os.environ.get("AUDIO_STREAM_URL", "").strip()
-        if not url and not vad_ran:
-            logger.debug("Transcription skipped: no audio URL configured.")
-            return None
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav", dir=AUDIO_TEMP_DIR) as temp_file:
-            audio_path = temp_file.name
-
-        try:
-            if url:
-                urllib.request.urlretrieve(url, audio_path)
-
-            if os.path.exists(audio_path) and os.path.getsize(audio_path) == 0:
-                logger.warning("Audio file is empty (0 bytes) for session %s: %s", session_id, audio_path)
+        with session_audio_context(session_id) as audio_path:
+            if not os.path.exists(audio_path):
+                logger.warning("Audio file not found: %s", audio_path)
                 return None
-
-            result = transcribe_audio_file(audio_path) if url else {"text": "test", "confidence": 0.9, "language": "en", "duration_seconds": 1.0}
-            if not result:
+            result = transcribe_audio_file(audio_path)
+            if result is None:
                 return None
+            segments = result.get("segments", [])
+            avg_logprob = None
+            if segments:
+                avg_logprob = np.mean([s.get("avg_logprob", -1.0) for s in segments])
 
-            res_dict = {
+                confidence = round(
+                    max(0.0, min(1.0, 1.0 + avg_logprob)),
+                    3,
+                )
+            else:
+                confidence = 0.0
+
+            logger.info(
+                "avg_logprob=%s, confidence=%s",
+                avg_logprob,
+                confidence,
+            )
+
+            return {
                 "text": result.get("text", ""),
-                "confidence": result.get("confidence", 0.0),
+                "confidence": confidence,
                 "language": result.get("language", "en"),
-                "duration_seconds": result.get("duration_seconds", 0.0),
+                "duration_seconds": (sum(s.get("end", 0) - s.get("start", 0) for s in segments) or 120.0),
                 "timestamp": time.time(),
             }
-            if vad_ran or vad_config is not None:
-                res_dict["vad_executed"] = True
-                res_dict["speech_detected"] = bool(result.get("text"))
-                res_dict["vad_segments"] = vad_segments
-            return res_dict
-        finally:
-            if os.path.exists(audio_path):
-                os.remove(audio_path)
 
     except ImportError:
         logger.info("Whisper not installed, using stub fallback")
@@ -176,27 +224,21 @@ def _real_detect_background_voices(session_id: str, audio_url: str | None = None
     try:
         from workers.ai_client import detect_speaker_segments
 
-        url = audio_url or os.environ.get("AUDIO_STREAM_URL", "").strip()
-        if not url:
-            logger.debug("Background voice detection skipped: no audio URL configured.")
-            return None
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav", dir=AUDIO_TEMP_DIR) as temp_file:
-            audio_path = temp_file.name
-
-        try:
-            urllib.request.urlretrieve(url, audio_path)
+        with session_audio_context(session_id) as audio_path:
+            if not os.path.exists(audio_path):
+                logger.warning("Audio file not found: %s", audio_path)
+                return None
             segments = detect_speaker_segments(audio_path)
             if segments is None:
                 return None
             speaker_ids = {s["speaker_id"] for s in segments}
             voice_count = len(speaker_ids)
-            return BackgroundVoiceResult(
-                background_voices_detected=voice_count > 1,
-                voice_count=voice_count,
-                confidence=0.85,
-                speaker_segments=segments,
-                timestamps=[
+            return {
+                "background_voices_detected": voice_count > 1,
+                "voice_count": voice_count,
+                "confidence": 0.85,
+                "speaker_segments": segments,
+                "timestamps": [
                     {
                         "speaker": s["speaker_id"],
                         "start": s["start"],
@@ -204,11 +246,7 @@ def _real_detect_background_voices(session_id: str, audio_url: str | None = None
                     }
                     for s in segments
                 ],
-            )
-        finally:
-            if os.path.exists(audio_path):
-                os.remove(audio_path)
-
+            }
     except ImportError:
         logger.info("pyannote not installed, using stub fallback")
         return None
@@ -300,9 +338,12 @@ def run_audio_analysis(session_id: str,vad_config: Any | None = None,) -> AudioA
     """Execute audio analysis pipeline for an interview session."""
     logger.info(f"Starting audio analysis for session {session_id}")
 
-    transcription = transcribe_speech(session_id, vad_config=vad_config)
-    bg_voices = detect_background_voices(session_id)
-    suspicious = detect_suspicious_conversation(session_id)
+    success = False
+    with manage_session_audio(session_id):
+        transcription = transcribe_speech(session_id)
+        bg_voices = detect_background_voices(session_id)
+        suspicious = detect_suspicious_conversation(session_id)
+        success = True
 
     results = {
         "session_id": session_id,
@@ -314,6 +355,16 @@ def run_audio_analysis(session_id: str,vad_config: Any | None = None,) -> AudioA
 
     results["risk_score"] = calculate_audio_risk_score(results)
     logger.info(f"Audio analysis completed for session {session_id}: {results}")
+
+    if success:
+        legacy_path = os.path.join(AUDIO_TEMP_DIR, f"interview_{session_id}.wav")
+        if os.path.exists(legacy_path):
+            try:
+                os.remove(legacy_path)
+                logger.info("Cleaned up legacy audio file: %s", legacy_path)
+            except Exception as exc:
+                logger.warning("Failed to clean up legacy audio file %s: %s", legacy_path, exc)
+
     return results
 
 
