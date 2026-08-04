@@ -1,44 +1,24 @@
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
-from config import API_TOKEN
 from orchestrator.auth import verify_access_token
 
-oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="/login",
-    auto_error=False,
-)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 
-def get_current_user(
-    token: str | None = Depends(oauth2_scheme),
-    x_api_token: str | None = Header(default=None),
-):
+def get_current_user(token: str = Depends(oauth2_scheme)):
     """
-    Authenticate using either:
-    - JWT Bearer token
-    - Legacy X-API-Token
+    Validate the JWT and return the current user.
     """
+    payload = verify_access_token(token)
 
-    # JWT authentication
-    if token:
-        payload = verify_access_token(token)
-        if payload is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired token",
-            )
-        return payload
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
 
-    # Legacy API token authentication
-    if x_api_token == API_TOKEN:
-        return {"role": "admin"}
-
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid or missing authentication",
-    )
-
+    return payload
 
 def require_role(role: str):
     """

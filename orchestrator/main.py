@@ -88,6 +88,8 @@ from orchestrator.session_tracker import SessionTracker
 from orchestrator.state_sync import StateSynchronizer
 from orchestrator.worker_registry import WorkerRegistry
 from workers.bias_auditor import BiasAuditor
+from orchestrator.auth import create_access_token
+from orchestrator.security import get_current_user, require_role
 
 # Configure logging after imports so startup messages are structured.
 configure_logging()
@@ -298,7 +300,33 @@ def require_token(x_api_token: str | None = Header(default=None)) -> None:
         logger.debug("Using default API token — set API_TOKEN in production")
     if x_api_token != API_TOKEN:
         raise HTTPException(status_code=401, detail="invalid or missing API token")
+    
+class LoginRequest(BaseModel):
+    api_token: str
 
+@app.post("/login")
+async def login(request: LoginRequest):
+    """
+    Exchange a valid API token for a JWT access token.
+    """
+
+    if request.api_token != API_TOKEN:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API token"
+        )
+
+    access_token = create_access_token(
+        {
+            "sub": "system",
+            "role": "admin"
+        }
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
 
 class LoginRequest(BaseModel):
     api_token: str
@@ -415,6 +443,9 @@ class WorkerHeartbeatRequest(BaseModel):
 
     worker_id: str
     active_tasks: int
+
+class LoginRequest(BaseModel):
+    api_token: str
 
 
 class LoginRequest(BaseModel):
@@ -1905,22 +1936,8 @@ async def get_scheduling_status():
         raise HTTPException(status_code=500, detail=f"Error fetching scheduling status: {e!s}")
 
 
-@app.post("/switch-strategy", dependencies=[Depends(require_token)])
-async def switch_load_balancing_strategy(strategy: str, request: Request):
-    """
-    Change the active load balancing strategy
-
-    Supported strategies:
-    - ROUND_ROBIN: Sequential worker assignment (even task distribution)
-    - LEAST_LOADED: Assign to worker with fewest active tasks (recommended)
-    - QUEUE_BASED: Use Redis queue length as selection metric
-
-    Args:
-        strategy: Strategy name (ROUND_ROBIN, LEAST_LOADED, QUEUE_BASED)
-
-    Returns:
-        dict: Strategy change confirmation
-    """
+@app.post("/switch-strategy", dependencies=[Depends(require_role("admin"))])
+async def switch_load_balancing_strategy(strategy: str):
     try:
         logger.info(f"Switching load balancing strategy to: {strategy}")
 
