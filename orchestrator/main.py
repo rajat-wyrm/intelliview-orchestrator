@@ -695,12 +695,9 @@ async def get_circuit_breaker_status():
 @app.post(
     "/start-interview",
     response_model=InterviewSessionResponse,
-    dependencies=[Depends(get_current_user)],
 )
-async def start_interview(
-    request: StartInterviewRequest,
-    session_db: Session = Depends(get_db),
-):
+
+async def start_interview(request: StartInterviewRequest):
     """
     Start a new interview session using intelligent scheduling
 
