@@ -62,17 +62,23 @@ export default function OverviewPage() {
           <span className="text-xs text-muted">Live</span>
         </div>
       </div>
-
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="glass-card p-4 animate-slide-in-up [animation-delay:0ms]">
+        <div className="glass-card p-4 animate-slide-in-up animate-delay-0">
           <Stat
             label="System"
-            value={health.data ? <StatusBadge status={health.data.overall_status} /> : <Skeleton className="h-7 w-20" />}
+            value={
+              health.data ? (
+                <StatusBadge status={health.data.overall_status} />
+              ) : (
+                <Skeleton className="h-7 w-20" />
+              )
+            }
             hint={health.data ? `Updated ${formatRelative(health.data.timestamp)}` : ""}
             icon={<Activity size={16} />}
           />
         </div>
-        <div className="glass-card p-4 animate-slide-in-up [animation-delay:50ms]">
+
+        <div className="glass-card p-4 animate-slide-in-up animate-delay-50">
           <Stat
             label="Workers"
             value={
@@ -86,15 +92,27 @@ export default function OverviewPage() {
             icon={<Users size={16} />}
           />
         </div>
-        <div className="glass-card p-4 animate-slide-in-up [animation-delay:100ms]">
+
+        <div className="glass-card p-4 animate-slide-in-up animate-delay-100">
           <Stat
             label="Completed"
-            value={stats.data ? stats.data.completed_sessions : <Skeleton className="h-7 w-12" />}
-            hint={stats.data ? `${stats.data.active_sessions} active · ${stats.data.failed_sessions} failed` : ""}
+            value={
+              stats.data ? (
+                stats.data.completed_sessions
+              ) : (
+                <Skeleton className="h-7 w-12" />
+              )
+            }
+            hint={
+              stats.data
+                ? `${stats.data.active_sessions} active · ${stats.data.failed_sessions} failed`
+                : ""
+            }
             icon={<CheckCircle2 size={16} />}
           />
         </div>
-        <div className="glass-card p-4 animate-slide-in-up [animation-delay:150ms]">
+
+        <div className="glass-card p-4 animate-slide-in-up animate-delay-150">
           <Stat
             label="Avg risk"
             value={
@@ -104,7 +122,11 @@ export default function OverviewPage() {
                 <Skeleton className="h-7 w-16" />
               )
             }
-            hint={stats.data ? `${stats.data.risk_score_stats.high_risk_sessions} high risk` : ""}
+            hint={
+              stats.data
+                ? `${stats.data.risk_score_stats.high_risk_sessions} high risk`
+                : ""
+            }
             icon={<AlertTriangle size={16} />}
           />
         </div>

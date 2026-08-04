@@ -133,14 +133,69 @@ export default function CandidatesPage() {
           </div>
         </div>
 
-        <StatsCards
-          data={{
-            totalCandidates: candidates.length,
-            pendingReview: candidates.reduce((a, c) => a + c.active_sessions, 0),
-            completed: candidates.reduce((a, c) => a + c.completed_sessions, 0),
-            activeNow: candidates.filter((c) => c.active_sessions > 0).length,
-          }}
-        />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="glass-card p-4 animate-slide-in-up animate-delay-0">
+          <Stat
+            label="Total candidates"
+            value={isLoading ? <Skeleton className="h-7 w-12" /> : candidates.length}
+            icon={<UserCircle size={16} />}
+          />
+        </div>
+        <div className="glass-card p-4 animate-slide-in-up animate-delay-50">
+          <Stat
+            label="Avg success rate"
+            value={
+              isLoading ? (
+                <Skeleton className="h-7 w-12" />
+              ) : (
+                formatPercent(
+                  candidates.length > 0
+                    ? (candidates.reduce((a, c) => a + c.completed_sessions, 0) /
+                        Math.max(
+                          1,
+                          candidates.reduce((a, c) => a + c.total_sessions, 0)
+                        )) *
+                        100
+                    : 0
+                )
+              )
+            }
+            icon={<CheckCircle2 size={16} />}
+          />
+        </div>
+        <div className="glass-card p-4 animate-slide-in-up animate-delay-100">
+          <Stat
+            label="Avg risk score"
+            value={
+              isLoading ? (
+                <Skeleton className="h-7 w-16" />
+              ) : (
+                (() => {
+                  const withRisk = candidates.filter((c) => c.avg_risk_score != null);
+                  if (withRisk.length === 0) return "—";
+                  return (
+                    withRisk.reduce((a, c) => a + c.avg_risk_score, 0) / withRisk.length
+                  ).toFixed(3);
+                })()
+              )
+            }
+            icon={<AlertTriangle size={16} />}
+          />
+        </div>
+        <div className="glass-card p-4 animate-slide-in-up animate-delay-150">
+          <Stat
+            label="Total sessions"
+            value={
+              isLoading ? (
+                <Skeleton className="h-7 w-12" />
+              ) : (
+                candidates.reduce((a, c) => a + c.total_sessions, 0)
+              )
+            }
+            icon={<Activity size={16} />}
+          />
+        </div>
+      </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="lg:col-span-1">
@@ -313,7 +368,124 @@ export default function CandidatesPage() {
                 </Card>
               </div>
             )}
-          </div>
+          </Card>
+        </div>
+
+        <div className="lg:col-span-2">
+          {!selected ? (
+            <Card>
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <UserCircle size={48} className="mb-3 text-muted opacity-30" />
+                <p className="text-sm text-zinc-300">Select a candidate to view details</p>
+                <p className="mt-1 text-xs text-muted">
+                  Click on a candidate from the list to see their profile
+                </p>
+              </div>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              <Card title={selected.candidate_id} description="Candidate profile and performance">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="rounded-md border border-border bg-bg-card px-3 py-2.5">
+                    <div className="text-[10px] uppercase tracking-wide text-muted">Total</div>
+                    <div className="mt-1 text-lg font-semibold text-zinc-50">
+                      {selected.total_sessions}
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border bg-bg-card px-3 py-2.5">
+                    <div className="text-[10px] uppercase tracking-wide text-muted">Completed</div>
+                    <div className="mt-1 text-lg font-semibold text-emerald-400">
+                      {selected.completed_sessions}
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border bg-bg-card px-3 py-2.5">
+                    <div className="text-[10px] uppercase tracking-wide text-muted">Failed</div>
+                    <div className="mt-1 text-lg font-semibold text-rose-400">
+                      {selected.failed_sessions}
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border bg-bg-card px-3 py-2.5">
+                    <div className="text-[10px] uppercase tracking-wide text-muted">Avg Risk</div>
+                    <div className="mt-1 text-lg font-semibold text-zinc-50">
+                      {selected.avg_risk_score != null ? selected.avg_risk_score.toFixed(3) : "—"}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              {statusData.length > 0 && (
+                <Card title="Session Status Distribution">
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={statusData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                      <XAxis dataKey="status" stroke="#71717a" fontSize={11} />
+                      <YAxis stroke="#71717a" fontSize={11} />
+                      <tooltip
+                       contentStyle={{
+                        background: "var(--bg-panel)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 8,
+                        }}
+                      />
+                      <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Card>
+              )}
+
+              <Card title="Interview History" description="All sessions for this candidate">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-left text-xs uppercase tracking-wide text-muted">
+                      <tr>
+                        <th className="py-2 pr-4">Session</th>
+                        <th className="py-2 pr-4">Pipeline</th>
+                        <th className="py-2 pr-4">Status</th>
+                        <th className="py-2 pr-4">Risk</th>
+                        <th className="py-2 pr-4">Worker</th>
+                        <th className="py-2 pr-4">Updated</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selected.sessions
+                        .sort(
+                          (a, b) =>
+                            new Date(b.updated_at || 0) - new Date(a.updated_at || 0)
+                        )
+                        .map((s) => (
+                          <tr key={s.session_id} className="border-t border-border">
+                            <td className="py-2 pr-4 font-mono text-xs text-zinc-300">
+                              {s.session_id}
+                            </td>
+                            <td className="py-2 pr-4">
+                              <Pipeline current={s.status} />
+                            </td>
+                            <td className="py-2 pr-4">
+                              <StatusBadge status={s.status} />
+                            </td>
+                            <td className="py-2 pr-4">
+                              {s.risk_score != null ? (
+                                <Badge variant={riskColor(s.risk_score)}>
+                                  {s.risk_score.toFixed(2)}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted">—</span>
+                              )}
+                            </td>
+                            <td className="py-2 pr-4 font-mono text-xs text-muted">
+                              {s.assigned_node ?? "—"}
+                            </td>
+                            <td className="py-2 pr-4 text-muted">
+                              {formatDate(s.updated_at ?? s.end_time)}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
+          )}
         </div>
       </div>
     </ErrorBoundary>
