@@ -372,6 +372,7 @@ class WorkerRegistrationRequest(BaseModel):
 
     worker_id: str
     capacity: int = 4
+    tags: list[str] | None = None
 
 
 class WorkerHeartbeatRequest(BaseModel):
@@ -1530,16 +1531,23 @@ async def register_worker(request: WorkerRegistrationRequest):
     Register a new worker node
 
     Args:
-        request: Worker registration details (worker_id, capacity)
+        request: Worker registration details (worker_id, capacity, tags)
 
     Returns:
         dict: Registration confirmation
     """
     try:
-        logger.info(f"Registering worker: {request.worker_id} with capacity {request.capacity}")
+        logger.info(
+            f"Registering worker: {request.worker_id} with capacity {request.capacity} "
+            f"tags={request.tags}"
+        )
 
         # Register worker in registry
-        worker_registry.register_worker(worker_id=request.worker_id, capacity=request.capacity)
+        worker_registry.register_worker(
+            worker_id=request.worker_id,
+            capacity=request.capacity,
+            tags=request.tags,
+        )
 
         # Log successful registration
         logger.info(f"Worker registered successfully: {request.worker_id}")
@@ -1551,6 +1559,7 @@ async def register_worker(request: WorkerRegistrationRequest):
             "message": f"Worker {request.worker_id} registered",
             "worker_id": request.worker_id,
             "capacity": request.capacity,
+            "tags": request.tags or [],
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     except Exception as e:
