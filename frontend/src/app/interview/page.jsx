@@ -23,7 +23,7 @@ import { useAppStore } from "@/lib/store";
 import { toast } from "@/lib/toast";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useMomentTracking } from "@/hooks/useMomentTracking";
-import RiskTimeline from "@/components/RiskTimeline";
+import  RiskTimeline  from "@/components/RiskTimeline";
 import { cn, riskColor } from "@/lib/utils";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
@@ -54,25 +54,12 @@ export default function InterviewPage() {
     trackEvent,
   } = useMomentTracking(activeSession);
 
-  const { connected, status } = useWebSocket({
+  const { connected } = useWebSocket({
     path: "/monitoring/ws/metrics",
     enabled: !!token && isLive,
     onMessage: (data) => {
-      if (data?.risk_score != null) {
-        setRiskScore(data.risk_score);
-
-        trackEvent("risk_detected", {
-          risk_score: data.risk_score,
-        });
-      }
-
-      if (data?.feedback) {
-        setFeedback((prev) => [...prev, data.feedback].slice(-20));
-
-        trackEvent("ai_feedback", {
-          message: data.feedback,
-        });
-      }
+      if (data?.risk_score != null) setRiskScore(data.risk_score);
+      if (data?.feedback) setFeedback((prev) => [...prev, data.feedback].slice(-20));
     },
   });
 
@@ -381,8 +368,6 @@ export default function InterviewPage() {
                   <span className="text-muted">WS</span>
                   {connected ? (
                     <Badge variant="success">Connected</Badge>
-                  ) : status === "reconnecting" ? (
-                    <Badge variant="warn">Reconnecting...</Badge>
                   ) : (
                     <Badge variant="muted">Disconnected</Badge>
                   )}
@@ -399,21 +384,22 @@ export default function InterviewPage() {
             </Card>
 
             <Card
-              title="Risk Timeline"
-              description={
-                isLive
-                  ? "Real-time interview events and risk history."
-                  : "Timeline will appear after the interview starts."
-              }
-            >
-              {isLive ? (
-                <RiskTimeline moments={moments} />
-              ) : (
-                <div className="flex h-32 items-center justify-center text-center text-sm text-muted">
-                  Interview not started
-                </div>
-              )}
-            </Card>
+    title="Risk Timeline"
+    description={
+      isLive
+        ? "Real-time interview events and risk history."
+        : "Timeline will appear after the interview starts."
+    }
+  >
+    {isLive ? (
+      <RiskTimeline moments={moments} />
+    ) : (
+      <div className="flex h-32 items-center justify-center text-center text-sm text-muted">
+        Interview not started
+      </div>
+    )}
+  </Card>
+            
           </div>
         </div>
       </div>

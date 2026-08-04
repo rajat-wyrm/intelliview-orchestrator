@@ -60,15 +60,6 @@ ACTIVE_PROCESSING_STATUSES = {
 }
 
 
-def _resolve_priority_queue(priority: str | None) -> str:
-    """Map a priority string ("high"/"medium"/"low") to its queue name.
-    Anything unrecognized (typo, None) falls back to medium."""
-    priority_clean = str(priority).strip().lower() if priority else "medium"
-    if priority_clean not in ("high", "medium", "low"):
-        priority_clean = "medium"
-    return priority_clean, f"{priority_clean}_priority"
-
-
 # ---------------------------------------------------------------------------
 # Helper to set background infrastructure health states
 # ---------------------------------------------------------------------------
@@ -196,12 +187,10 @@ def _after_parallel(self, results: list, session_id: str):
 
 
 @celery_app.task(bind=True, max_retries=3, name="workers.tasks.process_interview_session")
-def process_interview_session(self, session_id, priority="medium"):
-    priority_clean, target_queue = _resolve_priority_queue(priority)
-
+def process_interview_session(self, session_id):
     logger.info("==============================")
     logger.info("PROCESS_INTERVIEW_SESSION STARTED")
-    logger.info("Session = %s | Priority = %s", session_id, priority_clean)
+    logger.info("Session = %s", session_id)
     logger.info("==============================")
 
     task_name = self.name
@@ -294,14 +283,13 @@ def process_interview_session(self, session_id, priority="medium"):
         # Use chord to dispatch video + audio in parallel and chain into
         # _after_parallel once both complete — avoids blocking the solo
         # worker pool (group + result.get() would deadlock).
-        # Target queue is passed so child tasks match the parent session priority.
         parallel_header = group(
-            _run_video.s(session_id).set(queue=target_queue),
-            _run_audio.s(session_id).set(queue=target_queue),
+            _run_video.s(session_id),
+            _run_audio.s(session_id),
         )
-        chord(parallel_header)(_after_parallel.s(session_id).set(queue=target_queue))
+        chord(parallel_header)(_after_parallel.s(session_id))
 
-        logger.info("Dispatched parallel video+audio for session %s on queue %s", session_id, target_queue)
+        logger.info("Dispatched parallel video+audio for session %s", session_id)
 
         # Record total runtime metrics
         runtime = time.perf_counter() - start_time
@@ -315,7 +303,6 @@ def process_interview_session(self, session_id, priority="medium"):
             "session_id": session_id,
             "status": "processing_parallel",
             "processed_by": worker_hostname,
-            "priority": priority_clean,
         }
 
     except Exception as exc:
@@ -333,9 +320,7 @@ def process_interview_session(self, session_id, priority="medium"):
             exc_info=True,
         )
         RETRY_COUNT.inc()
-        # Retry on the same priority queue - otherwise a retried
-        # high-priority session silently falls back to task_default_queue.
-        raise self.retry(exc=exc, countdown=retry_delay, queue=target_queue)
+        raise self.retry(exc=exc, countdown=retry_delay)
 
     finally:
         # Decouple the active gauge count
