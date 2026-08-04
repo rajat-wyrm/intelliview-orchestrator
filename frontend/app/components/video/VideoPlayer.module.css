@@ -1,0 +1,267 @@
+.container {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    justify-content: center;
+    width: 100%;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.videoSection {
+    position: relative;
+    flex: 2;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.7s ease-out;
+}
+
+.videoFrame {
+    position: relative;
+    overflow: hidden;
+    border-radius: 18px;
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.18);
+    background: linear-gradient(135deg, #0f172a, #1d4ed8);
+}
+
+.video {
+    width: 100%;
+    display: block;
+    border-radius: 18px;
+    background: #000;
+    transition: transform 0.35s ease, box-shadow 0.35s ease;
+}
+
+.video:hover {
+    transform: scale(1.01);
+}
+
+.videoOverlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    padding: 24px;
+    text-align: center;
+    color: white;
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.5), rgba(15, 23, 42, 0.8));
+    backdrop-filter: blur(4px);
+    animation: fadeIn 0.35s ease;
+}
+
+.videoBadge {
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.18);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+}
+
+.videoOverlay p {
+    margin: 0;
+    max-width: 320px;
+    line-height: 1.5;
+}
+
+.transcriptPanel {
+    flex: 1;
+    background: #ffffff;
+    border-radius: 14px;
+    box-shadow: 0 8px 20px rgba(0,0,0,.08);
+    padding: 20px;
+    max-height: 720px;
+    overflow-y: auto;
+    animation: slideUp 0.8s ease-out;
+}
+
+.transcriptTitle {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    color: #1f2937;
+    text-align: center;
+}
+
+.transcriptList {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.transcriptItem {
+    border-left: 4px solid transparent;
+    background: #f8fafc;
+    border-radius: 10px;
+    padding: 14px;
+    transition: all .3s ease;
+    animation: fadeIn 0.35s ease;
+}
+
+.transcriptItem:hover {
+    background: #eef2ff;
+}
+
+.activeTranscript {
+    background: #2563eb;
+    color: white;
+    border-left: 4px solid #1d4ed8;
+    border-radius: 10px;
+    padding: 14px;
+    transition: all .3s ease;
+}
+
+.time {
+    display: inline-block;
+    font-size: 13px;
+    font-weight: 700;
+    color: #6b7280;
+    margin-bottom: 8px;
+}
+
+.activeTranscript .time {
+    color: white;
+}
+
+.transcriptItem p,
+.activeTranscript p {
+    margin: 0;
+    line-height: 1.6;
+    font-size: 15px;
+}
+
+.videoSection video::cue {
+    background: rgba(0,0,0,.75);
+    color: white;
+    font-size: 18px;
+}
+
+.videoSection button {
+    transition: .3s;
+}
+
+.videoSection button:hover {
+    transform: scale(1.05);
+}
+
+.videoSection button:active {
+    transform: scale(.95);
+}
+
+.videoSection input[type="range"] {
+    width: 100%;
+    cursor: pointer;
+}
+
+.transcriptPanel::-webkit-scrollbar {
+    width: 8px;
+}
+
+.transcriptPanel::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 50px;
+}
+
+.transcriptPanel::-webkit-scrollbar-track {
+    background: #f8fafc;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(18px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Tablet */
+
+@media (max-width:1024px){
+
+.container{
+    flex-direction:column;
+}
+
+.transcriptPanel{
+    width:100%;
+    max-height:350px;
+}
+
+.videoSection{
+    width:100%;
+}
+
+}
+
+/* Mobile */
+
+@media (max-width:768px){
+
+.container{
+    padding:10px;
+}
+
+.video{
+    border-radius:10px;
+}
+
+.transcriptPanel{
+    padding:15px;
+}
+
+.transcriptTitle{
+    font-size:20px;
+}
+
+.transcriptItem,
+.activeTranscript{
+    padding:12px;
+}
+
+.transcriptItem p,
+.activeTranscript p{
+    font-size:14px;
+}
+
+}
+
+/* Small Mobile */
+
+@media (max-width:480px){
+
+.container{
+    gap:15px;
+}
+
+.transcriptTitle{
+    font-size:18px;
+}
+
+.time{
+    font-size:12px;
+}
+
+.transcriptItem p,
+.activeTranscript p{
+    font-size:13px;
+}
+
+}
