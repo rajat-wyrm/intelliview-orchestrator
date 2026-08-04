@@ -2,7 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 1. Default Variables (Your Dark Theme Values) */
+/* ========================================
+   DEFAULT / DARK THEME
+======================================== */
+
 :root {
   color-scheme: dark;
   --bg: #0a0a0f;
@@ -28,125 +31,340 @@
   --page-fg: #e4e4e7;
 }
 
-html, body {
-  background: var(--page-bg);
-  color: var(--page-fg);
+html,
+body {
+  background-color: #0a0a0f;
+  color: #e4e4e7;
   -webkit-font-smoothing: antialiased;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
+
+/* ========================================
+   LIGHT THEME
+======================================== */
 
 html.light {
   color-scheme: light;
-  --bg: #f8fafc;
-  --bg-panel: #ffffff;
-  --bg-card: #ffffff;
-  --muted: #64748b;
-  --border: #e2e8f0;
-
-  /* Physically Inverted Zinc palette for smart global light mode */
-  --zinc-50: #09090b;
-  --zinc-100: #18181b;
-  --zinc-200: #27272a;
-  --zinc-300: #3f3f46;
-  --zinc-400: #52525b;
-  --zinc-500: #71717a;
-  --zinc-600: #a1a1aa;
-  --zinc-700: #d4d4d8;
-  --zinc-800: #e4e4e7;
-  --zinc-900: #f1f5f9;
-  --zinc-950: #f8fafc;
-
-  --page-bg: #f1f5f9;
-  --page-fg: #0f172a;
 }
+
+html.light body {
+  background-color: #fafafa;
+  color: #18181b;
+}
+
+/*
+  Light-theme overrides for the custom theme utilities.
+  The html.light selector provides enough specificity,
+  so !important is not required here.
+*/
+
+/* Backgrounds */
+
+html.light .bg-bg {
+  background-color: #fafafa;
+}
+
+html.light .bg-bg-panel {
+  background-color: #ffffff;
+}
+
+html.light .bg-bg-card {
+  background-color: #f4f4f5;
+}
+
+/* Borders */
+
+html.light .border-border {
+  border-color: #e4e4e7;
+}
+
+/* Muted text */
+
+html.light .text-muted {
+  color: #71717a;
+}
+
+/* Zinc text overrides */
+
+html.light .text-zinc-50,
+html.light .text-zinc-100 {
+  color: #18181b;
+}
+
+html.light .text-zinc-200 {
+  color: #27272a;
+}
+
+html.light .text-zinc-300 {
+  color: #3f3f46;
+}
+
+html.light .text-zinc-400 {
+  color: #52525b;
+}
+
+/* Hover text */
+
+html.light .hover\:text-zinc-100:hover,
+html.light .hover\:text-zinc-200:hover {
+  color: #18181b;
+}
+
+/* ========================================
+   GLASS COMPONENTS - LIGHT THEME
+======================================== */
+
+html.light .glass-panel {
+  background-color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+html.light .glass-card {
+  background-color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+html.light .glass-button {
+  background-color: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+html.light .glass-button:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
+html.light .glass-input {
+  background-color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #18181b;
+}
+
+/* ========================================
+   GLOBAL
+======================================== */
 
 * {
   box-sizing: border-box;
 }
 
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #27272a; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+/* ========================================
+   SCROLLBAR
+======================================== */
 
-html.light ::-webkit-scrollbar-thumb { background: #d4d4d8; }
-html.light ::-webkit-scrollbar-thumb:hover { background: #a1a1aa; }
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+
+html.light ::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+}
+
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: #a1a1aa;
+}
+
+/* ========================================
+   ANIMATIONS
+======================================== */
 
 @keyframes shimmer {
-  100% { transform: translateX(100%); }
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes slide-in-right {
-  from { opacity: 0; transform: translateX(20px); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 @keyframes slide-in-up {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes scale-in {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
-  50% { box-shadow: 0 0 20px 4px rgba(99, 102, 241, 0.2); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 20px 4px rgba(99, 102, 241, 0.2);
+  }
 }
 
 @keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
-  20%, 40%, 60%, 80% { transform: translateX(4px); }
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  10%,
+  30%,
+  50%,
+  70%,
+  90% {
+    transform: translateX(-4px);
+  }
+
+  20%,
+  40%,
+  60%,
+  80% {
+    transform: translateX(4px);
+  }
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
 }
 
 @keyframes spin-slow {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes gradient-shift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
-.animate-fade-in { animation: fade-in 0.3s ease-out; }
-.animate-slide-in-right { animation: slide-in-right 0.3s ease-out; }
-.animate-slide-in-up { animation: slide-in-up 0.3s ease-out; }
-.animate-scale-in { animation: scale-in 0.2s ease-out; }
-.animate-pulse-glow { animation: pulse-glow 2s infinite; }
-.animate-shake { animation: shake 0.5s ease-in-out; }
-.animate-float { animation: float 3s ease-in-out infinite; }
-.animate-spin-slow { animation: spin-slow 3s linear infinite; }
-.animate-gradient { animation: gradient-shift 3s ease infinite; background-size: 200% 200%; }
+/* ========================================
+   ANIMATION CLASSES
+======================================== */
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out;
+}
+
+.animate-slide-in-up {
+  animation: slide-in-up 0.3s ease-out;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.2s ease-out;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s infinite;
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
+}
+
+.animate-gradient {
+  animation: gradient-shift 3s ease infinite;
+  background-size: 200% 200%;
+}
+
+/* ========================================
+   COMPONENTS
+======================================== */
 
 @layer components {
   .glass-panel {
-    @apply bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl;
+    @apply rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl;
   }
 
   .glass-card {
-    @apply bg-white/5 backdrop-blur-lg border border-white/10 rounded-xl;
+    @apply rounded-xl border border-white/10 bg-white/5 backdrop-blur-lg;
   }
 
   .glass-button {
-    @apply bg-white/10 backdrop-blur-md border border-white/10 rounded-lg px-4 py-2 text-sm font-medium hover:bg-white/20 active:scale-[0.98] transition-all;
+    @apply rounded-lg border border-white/10 bg-white/10 px-4 py-2 text-sm font-medium backdrop-blur-md transition-all hover:bg-white/20 active:scale-[0.98];
   }
 
   .glass-input {
-    @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all;
+    @apply rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm backdrop-blur-md transition-all focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/50;
   }
 
   .glow-accent {
@@ -171,25 +389,47 @@ html.light ::-webkit-scrollbar-thumb:hover { background: #a1a1aa; }
 
   .gradient-border {
     position: relative;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1));
+    background: linear-gradient(
+      135deg,
+      rgba(99, 102, 241, 0.1),
+      rgba(168, 85, 247, 0.1)
+    );
   }
 
   .gradient-border::before {
-    content: '';
+    content: "";
     position: absolute;
     inset: 0;
     border-radius: inherit;
     padding: 1px;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.5), rgba(168, 85, 247, 0.5));
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    background: linear-gradient(
+      135deg,
+      rgba(99, 102, 241, 0.5),
+      rgba(168, 85, 247, 0.5)
+    );
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
     pointer-events: none;
   }
 }
 
+/* ========================================
+   ACCESSIBILITY
+======================================== */
+
+:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
+
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
