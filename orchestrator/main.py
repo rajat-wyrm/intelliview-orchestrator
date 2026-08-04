@@ -1135,27 +1135,27 @@ async def mark_notification_as_read(notification_id: int, user_id: str):
 
 
 # ========== Session Tracking Endpoints ==========
-
-
 @app.get("/active-sessions")
 @http_cache.cached("active-sessions", ttl=2)
 async def get_active_sessions(
-    session_db: Session = Depends(get_db),
+    status=None,
+    since=None,
+    sort_by="start_time",
+    order="desc",
 ):
-    """
-    Get all currently active sessions
-
-    Returns sessions in states: CREATED, QUEUED, PROCESSING
-
-    Returns:
-        dict: List of active sessions with brief details
-    """
+   
     try:
-        active = session_tracker.get_active_sessions()
+        active = session_tracker.get_active_sessions(
+    status=status,
+    since=since,
+    sort_by=sort_by,
+    order=order,
+)
         return {"count": len(active), "sessions": active}
     except Exception as e:
         logger.error(f"Error fetching active sessions: {e!s}")
         raise HTTPException(status_code=500, detail="Error fetching active sessions")
+
 
 
 @app.get("/completed-sessions")
