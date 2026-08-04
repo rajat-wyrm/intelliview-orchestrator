@@ -196,7 +196,7 @@ class LoadBalancer:
             f"→ selected worker: {selected['worker_id'] if selected else None}"
         )
         return selected
-            return min(available, key=lambda w: w["active_tasks"])
+        return min(available, key=lambda w: w["active_tasks"])
 
         # For medium priority, select from least loaded
         if priority == "medium":
