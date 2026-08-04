@@ -1,5 +1,4 @@
-"""
-Worker entrypoint — runs the worker agent (registration + heartbeats) alongside
+"""Worker entrypoint — runs the worker agent (registration + heartbeats) alongside
 the Celery worker, with active task count tracked via Celery signals.
 """
 
@@ -20,7 +19,6 @@ logger = logging.getLogger(__name__)
 SUPPORTED_POOL = "solo"
 
 agent = None
-
 
 def _run_celery() -> None:
     # Validate the configured Celery pool before starting.
@@ -91,38 +89,18 @@ def main() -> int:
         agent.decrement_active()
 
     # Start the heartbeat loop managed by WorkerAgent
-    heartbeat_thread = threading.Thread(
-        target=agent.heartbeat_loop,
-        daemon=True,
-    )
-    heartbeat_thread.start()
+    threading.Thread(target=agent.heartbeat_loop, daemon=True).start()
 
     @worker_shutdown.connect
     def _on_worker_shutdown(**kwargs):
         logger.info("Shutting down worker")
-
         agent.deregister()
-
-        heartbeat_thread.join(timeout=5)
-
-        if heartbeat_thread.is_alive():
-            logger.warning("Heartbeat thread did not stop within timeout.")
 
     logger.info("Worker entrypoint ready; starting Celery")
 
     _run_celery()
 
     return 0
-
-
-@worker_shutdown.connect
-def _on_worker_shutdown(**kwargs):
-    global agent
-
-    logger.info("Shutting down worker")
-
-    if agent:
-        agent.deregister()
 
 
 if __name__ == "__main__":

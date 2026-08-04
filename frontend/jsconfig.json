@@ -11,6 +11,7 @@
     "isolatedModules": true,
     "noEmit": true,
     "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "paths": { "@/*": ["./src/*"] }
   },
   "include": ["next-env.d.ts", "**/*.js", "**/*.jsx", ".next/types/**/*.ts"],

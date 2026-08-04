@@ -5,7 +5,11 @@ FAILED only after Celery has exhausted its retries.
 """
 
 from celery import Celery, signals
-from opentelemetry.instrumentation.celery import CeleryInstrumentor
+from kombu import Queue
+
+"""
+from workers.tasks import send_mock_email_alert
+from celery import Celery, signals
 
 from config import REDIS_URL
 from metrics.prometheus_metrics import TASKS_PERMANENTLY_FAILED
