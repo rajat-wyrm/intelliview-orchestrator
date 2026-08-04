@@ -7,18 +7,56 @@ Responsibilities:
 - Deregister on graceful shutdown.
 """
 
+import json
 import logging
 import os
 import signal
 import sys
 import time
 from threading import Thread
+from typing import Any
 
 import httpx
 
 from config import API_TOKEN, WORKER_CONCURRENCY
 
 logger = logging.getLogger(__name__)
+
+
+class JSONFormatter(logging.Formatter):
+    """Formats log records as structured JSON strings."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        log_record: dict[str, Any] = {
+            "timestamp": self.formatTime(record, self.datefmt),
+            "level": record.levelname,
+            "message": record.getMessage(),
+            "logger": record.name,
+        }
+        if hasattr(record, "worker_id"):
+            log_record["worker_id"] = record.worker_id
+        if hasattr(record, "session_id"):
+            log_record["session_id"] = record.session_id
+
+        return json.dumps(log_record)
+
+
+def setup_logging() -> None:
+    """Configure logging based on LOG_FORMAT environment variable."""
+    log_format = os.getenv("LOG_FORMAT", "text").lower()
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+
+    handler = logging.StreamHandler(sys.stdout)
+    if log_format == "json":
+        handler.setFormatter(JSONFormatter())
+    else:
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+
+    root_logger.addHandler(handler)
 
 
 class WorkerAgent:
@@ -74,18 +112,40 @@ class WorkerAgent:
                 )
                 if r.status_code < 500:
                     return r.status_code < 400
-                logger.warning("API %s returned %s, retrying", path, r.status_code)
+                logger.warning(
+                    "API %s returned %s, retrying",
+                    path,
+                    r.status_code,
+                    extra={"worker_id": self.worker_id},
+                )
             except Exception as exc:
-                logger.warning("API %s failed (%s), retrying", path, exc)
+                logger.warning(
+                    "API %s failed (%s), retrying",
+                    path,
+                    exc,
+                    extra={"worker_id": self.worker_id},
+                )
             time.sleep(min(2**attempt, 15))
         return False
 
     def register(self) -> bool:
-        ok = self._post("/register-worker", {"worker_id": self.worker_id, "capacity": self.capacity})
+        ok = self._post(
+            "/register-worker",
+            {"worker_id": self.worker_id, "capacity": self.capacity},
+        )
         if ok:
-            logger.info("Worker %s registered with %s", self.worker_id, self.api_url)
+            logger.info(
+                "Worker %s registered with %s",
+                self.worker_id,
+                self.api_url,
+                extra={"worker_id": self.worker_id},
+            )
         else:
-            logger.error("Failed to register worker %s", self.worker_id)
+            logger.error(
+                "Failed to register worker %s",
+                self.worker_id,
+                extra={"worker_id": self.worker_id},
+            )
         return ok
 
     def deregister(self) -> None:
@@ -96,18 +156,30 @@ class WorkerAgent:
                 timeout=5.0,
             )
         except Exception as exc:
-            logger.debug("Deregister failed: %s", exc)
+            logger.debug(
+                "Deregister failed: %s",
+                exc,
+                extra={"worker_id": self.worker_id},
+            )
 
     def heartbeat_loop(self) -> None:
         while not self._stop:
             self._post(
                 "/worker/heartbeat",
-                {"worker_id": self.worker_id, "active_tasks": self.active_tasks},
+                {
+                    "worker_id": self.worker_id,
+                    "active_tasks": self.active_tasks,
+                },
             )
             time.sleep(self.heartbeat_interval)
 
     def _handle_shutdown(self, signum, frame) -> None:
-        logger.info("Received signal %s, shutting down worker %s", signum, self.worker_id)
+        logger.info(
+            "Received signal %s, shutting down worker %s",
+            signum,
+            self.worker_id,
+            extra={"worker_id": self.worker_id},
+        )
         self._stop = True
         self.deregister()
 
@@ -117,38 +189,21 @@ class WorkerAgent:
         if not self.register():
             sys.exit(1)
         Thread(target=self.heartbeat_loop, daemon=True).start()
-        logger.info("Worker agent started for %s", self.worker_id)
+        logger.info(
+            "Worker agent started for %s",
+            self.worker_id,
+            extra={"worker_id": self.worker_id},
+        )
 
     def increment_active(self) -> None:
         self.active_tasks += 1
 
     def decrement_active(self) -> None:
         self.active_tasks = max(0, self.active_tasks - 1)
-        self.tasks_completed += 1  # count each completed task
-
-        if self.tasks_completed >= self.max_tasks_before_restart:
-            if not self._restart_requested:
-                self._restart_requested = True
-                logger.info(
-                    "Worker %s has processed %d tasks (limit: %d) — requesting graceful restart.",
-                    self.worker_id,
-                    self.tasks_completed,
-                    self.max_tasks_before_restart,
-                )
-                self._request_restart()
-
-    def _request_restart(self) -> None:
-        logger.info(
-            "Worker %s initiating graceful shutdown for restart (active tasks remaining: %d)",
-            self.worker_id,
-            self.active_tasks,
-        )
-        self.deregister()
-        os.kill(os.getpid(), signal.SIGTERM)
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    setup_logging()
 
     api_url = os.getenv("API_URL", "http://fastapi:8000")
     worker_id = os.getenv("WORKER_ID", f"worker-{os.getpid()}")
@@ -159,4 +214,8 @@ if __name__ == "__main__":
     while not agent._stop:
         time.sleep(1)
 
-    logger.info("Worker agent %s has shut down cleanly", agent.worker_id)
+    logger.info(
+        "Worker agent %s has shut down cleanly",
+        agent.worker_id,
+        extra={"worker_id": agent.worker_id},
+    )

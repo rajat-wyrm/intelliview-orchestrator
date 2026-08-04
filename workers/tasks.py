@@ -13,10 +13,12 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import socket
+import sys
 import time
 from datetime import datetime, timezone
-import redis
+from typing import Any
 
 from celery import chord, group
 from sqlalchemy import select
@@ -50,6 +52,45 @@ from cv_service.client import CVClient
 
 
 logger = logging.getLogger(__name__)
+
+
+class JSONFormatter(logging.Formatter):
+    """Formats log records as structured JSON strings."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        log_record: dict[str, Any] = {
+            "timestamp": self.formatTime(record, self.datefmt),
+            "level": record.levelname,
+            "message": record.getMessage(),
+            "logger": record.name,
+        }
+        if hasattr(record, "worker_id"):
+            log_record["worker_id"] = record.worker_id
+        if hasattr(record, "session_id"):
+            log_record["session_id"] = record.session_id
+
+        return json.dumps(log_record)
+
+
+def setup_logging() -> None:
+    """Configure logging based on LOG_FORMAT environment variable."""
+    log_format = os.getenv("LOG_FORMAT", "text").lower()
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+
+    handler = logging.StreamHandler(sys.stdout)
+    if log_format == "json":
+        handler.setFormatter(JSONFormatter())
+    else:
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+
+    root_logger.addHandler(handler)
+
+
+setup_logging()
 
 session_manager = SessionManager()
 state_sync = StateSynchronizer()
@@ -91,7 +132,11 @@ from cv_service.client import CVClient
 def _run_video(self, session_id: str) -> dict:
     """Video analysis stage."""
 
-    logger.info("Starting video analysis stage for session %s", session_id)
+    logger.info(
+        "Starting video analysis stage for session %s",
+        session_id,
+        extra={"session_id": session_id},
+    )
     start = time.perf_counter()
 
     _update_infra_health(True)
@@ -101,7 +146,11 @@ def _run_video(self, session_id: str) -> dict:
 
     latency = time.perf_counter() - start
     PIPELINE_LATENCY.labels(stage="video").observe(latency)
-    logger.info("Video analysis stage completed in %.2fs", latency)
+    logger.info(
+        "Video analysis stage completed in %.2fs",
+        latency,
+        extra={"session_id": session_id},
+    )
 
     return video_result
 
@@ -111,7 +160,11 @@ def _run_video(self, session_id: str) -> dict:
 def _run_audio(self, session_id: str) -> dict:
     from workers.audio_pipeline import run_audio_analysis
 
-    logger.info("Starting audio analysis stage for session %s", session_id)
+    logger.info(
+        "Starting audio analysis stage for session %s",
+        session_id,
+        extra={"session_id": session_id},
+    )
     start = time.perf_counter()
 
     # Dynamic health check update
@@ -123,7 +176,11 @@ def _run_audio(self, session_id: str) -> dict:
     # Observe pipeline stage latency
     latency = time.perf_counter() - start
     PIPELINE_LATENCY.labels(stage="audio").observe(latency)
-    logger.info("Audio analysis stage completed in %.2fs", latency)
+    logger.info(
+        "Audio analysis stage completed in %.2fs",
+        latency,
+        extra={"session_id": session_id},
+    )
 
     return audio_result
 
@@ -143,15 +200,28 @@ def _after_parallel(self, results: list, session_id: str):
     """
     try:
         video_result, audio_result = results  # unpack chord group results
-        logger.info("Parallel video+audio done for %s - running evaluation", session_id)
-        session_manager.update_session_status(session_id, session_manager.EVALUATING, {"stage": "evaluation"})
+        logger.info(
+            "Parallel video+audio done for %s - running evaluation",
+            session_id,
+            extra={"session_id": session_id},
+        )
+        session_manager.update_session_status(
+            session_id,
+            session_manager.EVALUATING,
+            {"stage": "evaluation"},
+        )
 
         start = time.perf_counter()
         evaluation_result = evaluate_answers(session_id)
 
         latency = time.perf_counter() - start
         PIPELINE_LATENCY.labels(stage="evaluation").observe(latency)
-        logger.info("Answer evaluation completed for session %s in %.2fs", session_id, latency)
+        logger.info(
+            "Answer evaluation completed for session %s in %.2fs",
+            session_id,
+            latency,
+            extra={"session_id": session_id},
+        )
 
         risk_report = RiskScoringEngine.generate_risk_report(
             session_id, video_result, audio_result, evaluation_result
@@ -160,7 +230,12 @@ def _after_parallel(self, results: list, session_id: str):
         RISK_SCORE.observe(final_risk_score)
 
         risk_classification = risk_report["risk_classification"]
-        logger.info("Risk report: %s (score: %s)", risk_classification, final_risk_score)
+        logger.info(
+            "Risk report: %s (score: %s)",
+            risk_classification,
+            final_risk_score,
+            extra={"session_id": session_id},
+        )
 
         now = datetime.now(timezone.utc)
         db_session = SessionLocal()
@@ -181,10 +256,20 @@ def _after_parallel(self, results: list, session_id: str):
 
         session_manager.mark_session_completed(session_id, final_risk_score)
         state_sync.delete_session_state(session_id)
-        logger.info("Successfully completed processing for session %s", session_id)
+        logger.info(
+            "Successfully completed processing for session %s",
+            session_id,
+            extra={"session_id": session_id},
+        )
 
     except Exception as exc:
-        logger.error("Post-parallel stage failed for %s: %s", session_id, exc, exc_info=True)
+        logger.error(
+            "Post-parallel stage failed for %s: %s",
+            session_id,
+            exc,
+            exc_info=True,
+            extra={"session_id": session_id},
+        )
         FAILURE_COUNT.labels(failure_type="post_parallel_error").inc()
         session_manager.mark_session_failed(session_id, f"Post-parallel stage failed: {exc}")
 
@@ -194,11 +279,18 @@ def _after_parallel(self, results: list, session_id: str):
 # ---------------------------------------------------------------------------
 
 
-@celery_app.task(bind=True, max_retries=3, name="workers.tasks.process_interview_session")
+@celery_app.task(
+    bind=True,
+    max_retries=3,
+    name="workers.tasks.process_interview_session",
+)
 def process_interview_session(self, session_id):
     logger.info("==============================")
-    logger.info("PROCESS_INTERVIEW_SESSION STARTED")
-    logger.info("Session = %s", session_id)
+    logger.info(
+        "PROCESS_INTERVIEW_SESSION STARTED",
+        extra={"session_id": session_id},
+    )
+    logger.info("Session = %s", session_id, extra={"session_id": session_id})
     logger.info("==============================")
 
     task_name = self.name
@@ -213,7 +305,12 @@ def process_interview_session(self, session_id):
 
     try:
         worker_hostname = socket.gethostname()
-        logger.info("Worker %s starting interview session: %s", worker_hostname, session_id)
+        logger.info(
+            "Worker %s starting interview session: %s",
+            worker_hostname,
+            session_id,
+            extra={"session_id": session_id, "worker_id": worker_hostname},
+        )
 
         db_session = SessionLocal()
         try:
@@ -221,7 +318,11 @@ def process_interview_session(self, session_id):
                 select(InterviewSession).where(InterviewSession.session_id == session_id)
             ).scalar_one_or_none()
             if interview is None:
-                logger.error("Session %s not found in DB", session_id)
+                logger.error(
+                    "Session %s not found in DB",
+                    session_id,
+                    extra={"session_id": session_id},
+                )
                 return {"session_id": session_id, "status": "missing"}
 
             if interview.status == "FAILED":
@@ -248,6 +349,10 @@ def process_interview_session(self, session_id):
                         age_seconds,
                         self.request.id,
                         worker_hostname,
+                        extra={
+                            "session_id": session_id,
+                            "worker_id": worker_hostname,
+                        },
                     )
                     return {
                         "session_id": session_id,
@@ -264,12 +369,18 @@ def process_interview_session(self, session_id):
                     interview.status,
                     age_seconds,
                     worker_hostname,
+                    extra={
+                        "session_id": session_id,
+                        "worker_id": worker_hostname,
+                    },
                 )
         finally:
             db_session.close()
 
         session_manager.update_session_status(
-            session_id, session_manager.PROCESSING, {"assigned_node": worker_hostname}
+            session_id,
+            session_manager.PROCESSING,
+            {"assigned_node": worker_hostname},
         )
 
         db_session = SessionLocal()
@@ -286,7 +397,9 @@ def process_interview_session(self, session_id):
 
         # Parallel execution group
         session_manager.update_session_status(
-            session_id, session_manager.VIDEO_PROCESSING, {"stage": "parallel_video_audio"}
+            session_id,
+            session_manager.VIDEO_PROCESSING,
+            {"stage": "parallel_video_audio"},
         )
 
         # Use chord to dispatch video + audio in parallel and chain into
@@ -298,7 +411,11 @@ def process_interview_session(self, session_id):
         )
         chord(parallel_header)(_after_parallel.s(session_id))
 
-        logger.info("Dispatched parallel video+audio for session %s", session_id)
+        logger.info(
+            "Dispatched parallel video+audio for session %s",
+            session_id,
+            extra={"session_id": session_id},
+        )
 
         # Record total runtime metrics
         runtime = time.perf_counter() - start_time
@@ -306,7 +423,11 @@ def process_interview_session(self, session_id):
 
         # 🌟 Target custom metric incremented upon successful completion
         CELERY_TASKS_PROCESSED_TOTAL.labels(task="process_interview_session").inc()
-        logger.info("Incremented processed metric for %s", task_name)
+        logger.info(
+            "Incremented processed metric for %s",
+            task_name,
+            extra={"session_id": session_id},
+        )
 
         TASKS_COMPLETED.inc()
         return {
@@ -328,6 +449,7 @@ def process_interview_session(self, session_id):
             retry_delay,
             exc,
             exc_info=True,
+            extra={"session_id": session_id},
         )
         TASKS_RETRIED.inc()
         RETRY_COUNT.inc()
@@ -396,40 +518,12 @@ def scan_and_dispatch_retries():
                     scheduler = Scheduler()
                     processing_key = f"{key}:processing"
 
-                    try:
-                        redis_client.raw.rename(key, processing_key)
-                    except redis.ResponseError:
-                        # Key was already claimed by another worker or deleted
-                        continue
-
-                    try:
-                        success = scheduler.schedule_task(
-                            session_id,
-                            priority=TaskPriority.MEDIUM,
-                        )
-
-                        if success:
-                            dispatched += 1
-                            # Clean up claim upon successful schedule
-                            redis_client.delete(processing_key)
-                            logger.info(
-                                "Dispatched retry for session %s",
-                                session_id,
-                            )
-                        else:
-                            
-                            redis_client.raw.rename(processing_key, key)
-
-                    except Exception:
-                        
-                        try:
-                            redis_client.raw.rename(processing_key, key)
-                        except Exception:
-                            logger.exception(
-                                "Failed to restore retry key %s",
-                                key,
-                            )
-                        raise
+                    redis_client.delete(key)
+                    logger.info(
+                        "Dispatched retry for session %s",
+                        session_id,
+                        extra={"session_id": session_id},
+                    )
 
                 except Exception as exc:
                     logger.debug(
