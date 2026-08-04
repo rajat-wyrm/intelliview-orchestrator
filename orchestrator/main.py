@@ -23,7 +23,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Path
 from fastapi.middleware.cors import CORSMiddleware
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -1485,10 +1485,7 @@ async def create_candidate(
 
 
 @app.get("/candidates/{candidate_id}")
-async def get_candidate(
-    candidate_id: str,
-    session_db: Session = Depends(get_db),
-):
+async def get_candidate(candidate_id: str = Path(..., pattern=r"^candidate_[a-f0-9]{12}$")):
     """Get candidate details by ID"""
     try:
         candidate = candidate_manager.get_candidate(candidate_id)
@@ -1503,10 +1500,7 @@ async def get_candidate(
 
 
 @app.get("/candidates/{candidate_id}/history")
-async def get_candidate_history(
-    candidate_id: str,
-    session_db: Session = Depends(get_db),
-):
+async def get_candidate_history(candidate_id: str = Path(..., pattern=r"^candidate_[a-f0-9]{12}$")):
     """Get candidate interview history"""
     try:
         candidate = candidate_manager.get_candidate(candidate_id)
