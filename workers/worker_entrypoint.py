@@ -1,15 +1,6 @@
 """
 Worker entrypoint — runs the worker agent (registration + heartbeats) alongside
 the Celery worker, with active task count tracked via Celery signals.
-
-Drain mode:
-- Celery already supports a graceful ("warm") shutdown on SIGTERM: it stops
-  pulling new tasks and waits for the current task to finish before exiting.
-- We hook into Celery's `worker_shutting_down` signal (fired the moment that
-  graceful shutdown begins) to tell our WorkerAgent to enter drain mode at
-  the same time, so the orchestrator also stops routing new work here.
-- `worker_shutdown` fires after Celery has fully stopped, so we use it to
-  deregister the worker once everything is done.
 """
 
 import logging
@@ -17,7 +8,7 @@ import os
 import sys
 import threading
 
-from celery.signals import task_postrun, task_prerun, worker_shutdown, worker_shutting_down
+from celery.signals import task_postrun, task_prerun, worker_shutdown
 
 from config import WORKER_CONCURRENCY
 from workers.celery_app import celery_app
@@ -64,6 +55,14 @@ def main() -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
+    # Validate required configuration settings right at startup (Issue 1)
+    required_settings = ["API_URL", "API_TOKEN"]
+    missing_settings = [setting for setting in required_settings if not os.getenv(setting)]
+
+    if missing_settings:
+        logger.error(f"Startup failed: Missing required environment variables: {', '.join(missing_settings)}")
+        return 1
+
     start_worker_metrics()
 
     api_url = os.getenv("API_URL", "http://fastapi:8000")
@@ -92,32 +91,38 @@ def main() -> int:
         agent.decrement_active()
 
     # Start the heartbeat loop managed by WorkerAgent
-    threading.Thread(target=agent.heartbeat_loop, daemon=True).start()
-
-    # Celery begins its own graceful ("warm") shutdown here: it stops
-    # accepting new tasks and waits for the current task to finish.
-    # Put the agent into drain mode at the same moment so the orchestrator
-    # also stops routing new work to this worker while it winds down.
-    @worker_shutting_down.connect
-    def _on_worker_shutting_down(sig=None, how=None, exitcode=None, **kwargs):
-        logger.info(
-            "Celery %s shutdown initiated (signal=%s) — draining worker %s",
-            how,
-            sig,
-            worker_id,
-        )
-        agent.enter_drain_mode()
+    heartbeat_thread = threading.Thread(
+        target=agent.heartbeat_loop,
+        daemon=True,
+    )
+    heartbeat_thread.start()
 
     @worker_shutdown.connect
     def _on_worker_shutdown(**kwargs):
         logger.info("Shutting down worker")
+
         agent.deregister()
+
+        heartbeat_thread.join(timeout=5)
+
+        if heartbeat_thread.is_alive():
+            logger.warning("Heartbeat thread did not stop within timeout.")
 
     logger.info("Worker entrypoint ready; starting Celery")
 
     _run_celery()
 
     return 0
+
+
+@worker_shutdown.connect
+def _on_worker_shutdown(**kwargs):
+    global agent
+
+    logger.info("Shutting down worker")
+
+    if agent:
+        agent.deregister()
 
 
 if __name__ == "__main__":
