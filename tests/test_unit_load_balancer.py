@@ -10,10 +10,13 @@ class FakeRegistry:
         self._workers = workers
 
     def get_available_workers(self):
-        return [w for w in self._workers if w["status"] == "healthy" and w["active_tasks"] < w["capacity"]]
+        # Return healthy workers only.
+        # Capacity validation is handled by LoadBalancer.
+        return [w for w in self._workers if w["status"] == "healthy"]
 
     def get_least_loaded_worker(self):
         available = self.get_available_workers()
+
         return min(available, key=lambda w: w["active_tasks"]) if available else None
 
     def get_worker_statistics(self):
@@ -53,13 +56,17 @@ def _make_workers():
 
 def test_least_loaded_picks_minimum():
     lb = LoadBalancer(strategy=BalancingStrategy.LEAST_LOADED)
+
     lb.worker_registry = FakeRegistry(_make_workers())
+
     assert lb.select_worker()["worker_id"] == "w2"
 
 
 def test_round_robin_rotates():
     lb = LoadBalancer(strategy=BalancingStrategy.ROUND_ROBIN)
+
     lb.worker_registry = FakeRegistry(_make_workers())
+
     first = lb.select_worker()["worker_id"]
     second = lb.select_worker()["worker_id"]
     third = lb.select_worker()["worker_id"]
@@ -68,91 +75,153 @@ def test_round_robin_rotates():
 
 def test_no_workers_returns_none():
     lb = LoadBalancer()
+
     lb.worker_registry = FakeRegistry([])
+
     assert lb.select_worker() is None
 
 
 def test_unhealthy_workers_excluded():
     workers = _make_workers()
+
     workers[0]["status"] = "unhealthy"
     lb = LoadBalancer()
+
     lb.worker_registry = FakeRegistry(workers)
+
     assert lb.select_worker()["worker_id"] in {"w2", "w3"}
 
 
 def test_full_capacity_workers_excluded():
     workers = _make_workers()
-    workers[1]["active_tasks"] = 4  # w2 at capacity
+
+    # Worker w2 is at full capacity
+    workers[1]["active_tasks"] = 4
+
     lb = LoadBalancer()
     lb.worker_registry = FakeRegistry(workers)
-    assert lb.select_worker()["worker_id"] in {"w3"}
-def test_weighted_least_loaded_prefers_higher_weight_worker():
+
+    worker = lb.select_worker()
+
+    # Least-loaded valid worker should now be w3
+    assert worker["worker_id"] == "w3"
+
+def test_zero_capacity_worker_is_rejected(caplog):
     workers = [
         {
-            "worker_id": "w1",
-            "capacity": 10,
-            "active_tasks": 4,
+            "worker_id": "zero_capacity",
+            "capacity": 0,
+            "active_tasks": 0,
             "status": "healthy",
-            "weight": 1,
         },
         {
-            "worker_id": "w2",
-            "capacity": 10,
-            "active_tasks": 6,
+            "worker_id": "valid_worker",
+            "capacity": 4,
+            "active_tasks": 1,
             "status": "healthy",
-            "weight": 3,
         },
     ]
 
-
-def test_weighted_least_loaded_prefers_higher_weight_worker():
-    workers = [
-        {
-            "worker_id": "w1",
-            "capacity": 10,
-            "active_tasks": 4,
-            "status": "healthy",
-            "weight": 1,
-        },
-        {
-            "worker_id": "w2",
-            "capacity": 10,
-            "active_tasks": 6,
-            "status": "healthy",
-            "weight": 3,
-        },
-    ]
-
-    lb = LoadBalancer(strategy=BalancingStrategy.WEIGHTED_LEAST_LOADED)
+    lb = LoadBalancer(strategy=BalancingStrategy.LEAST_LOADED)
     lb.worker_registry = FakeRegistry(workers)
 
-    selected = lb.select_worker()
+    worker = lb.select_worker()
 
-    assert selected["worker_id"] == "w2"
-<<<<<<< HEAD
-def test_weighted_least_loaded_prefers_higher_weight():
-    workers = [
-        {
-            "worker_id": "w1",
-            "capacity": 4,
-            "active_tasks": 2,
-            "status": "healthy",
-            "weight": 1,
-        },
-        {
-            "worker_id": "w2",
-            "capacity": 4,
-            "active_tasks": 2,
-            "status": "healthy",
-            "weight": 2,
-        },
-    ]
-
-    lb = LoadBalancer(
-        strategy=BalancingStrategy.WEIGHTED_LEAST_LOADED
+    assert worker["worker_id"] == "valid_worker"
+    assert (
+        "Skipping worker zero_capacity because it has an invalid capacity (0)"
+        in caplog.text
     )
 
-=======
+def test_negative_capacity_worker_is_rejected(caplog):
+    workers = [
+        {
+            "worker_id": "negative_capacity",
+            "capacity": -1,
+            "active_tasks": 0,
+            "status": "healthy",
+        },
+        {
+            "worker_id": "valid_worker",
+            "capacity": 5,
+            "active_tasks": 2,
+            "status": "healthy",
+        },
+    ]
+
+    lb = LoadBalancer(strategy=BalancingStrategy.LEAST_LOADED)
+    lb.worker_registry = FakeRegistry(workers)
+
+    worker = lb.select_worker()
+
+    assert worker["worker_id"] == "valid_worker"
+    assert (
+        "Skipping worker negative_capacity because it has an invalid capacity (-1)"
+        in caplog.text
+    )
+
+
+def test_weighted_least_loaded_prefers_higher_weight_worker():
+    workers = [
+        {
+            "worker_id": "w1",
+            "capacity": 10,
+            "active_tasks": 4,
+            "status": "healthy",
+            "weight": 1,
+        },
+        {
+            "worker_id": "w2",
+            "capacity": 10,
+            "active_tasks": 6,
+            "status": "healthy",
+            "weight": 3,
+        },
+    ]
+
+    errors = []
+
+    def select():
+        try:
+            for _ in range(100):
+                lb.select_worker()
+                time.sleep(0.001)
+        except Exception as exc:
+            errors.append(exc)
+
+    def switch():
+        try:
+            for _ in range(100):
+                lb.switch_strategy(BalancingStrategy.ROUND_ROBIN)
+                lb.switch_strategy(BalancingStrategy.LEAST_LOADED)
+                time.sleep(0.001)
+        except Exception as exc:
+            errors.append(exc)
+
+    t1 = threading.Thread(target=select)
+    t2 = threading.Thread(target=switch)
+
+    t1.start()
+    t2.start()
+
+    t1.join()
+    t2.join()
+
+    assert not errors, f"Unexpected exceptions: {errors}"
+
+
+def test_round_robin_thread_safety():
+    """
+    Simulates many concurrent calls to select_worker() under ROUND_ROBIN
+    strategy and confirms tasks are distributed evenly.
+    """
+    workers = _make_workers()
+    lb = LoadBalancer(strategy=BalancingStrategy.ROUND_ROBIN)
+    lb.worker_registry = FakeRegistry(workers)
+
+    selected = lb.select_worker()
+
+    assert selected["worker_id"] == "w2"
 
 
 def test_weighted_least_loaded_prefers_higher_weight():
@@ -175,9 +244,25 @@ def test_weighted_least_loaded_prefers_higher_weight():
 
     lb = LoadBalancer(strategy=BalancingStrategy.WEIGHTED_LEAST_LOADED)
 
->>>>>>> issue-527-weighted-least-loaded-v3
     lb.worker_registry = FakeRegistry(workers)
 
     selected = lb.select_worker()
 
     assert selected["worker_id"] == "w2"
+=======
+    threads = [threading.Thread(target=call_select_worker) for _ in range(90)]
+
+    for t in threads:
+        t.start()
+
+    for t in threads:
+        t.join()
+
+    counts = Counter(results)
+
+    assert len(results) == 90
+    assert lb.round_robin_index == 90
+
+    for worker in workers:
+        assert counts[worker["worker_id"]] == 30
+>>>>>>> pr-465-head
