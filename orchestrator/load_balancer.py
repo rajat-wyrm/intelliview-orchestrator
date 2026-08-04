@@ -78,11 +78,8 @@ class LoadBalancer:
             logger.warning("No workers available for Round Robin selection")
             return None
 
-        # FIX: Sort by worker_id to ensure stable order independent of registry changes
-        available_sorted = sorted(available, key=lambda w: w["worker_id"])
-
-        # Select using round robin index on the sorted list
-        worker = available_sorted[self.round_robin_index % len(available_sorted)]
+        # Select using round robin index
+        worker = available[self.round_robin_index % len(available)]
         self.round_robin_index += 1
 
         logger.debug(f"Round Robin selected worker: {worker['worker_id']}")
@@ -110,6 +107,7 @@ class LoadBalancer:
         )
         return worker
 
+    
     def _select_weighted_least_loaded(self) -> dict[str, Any] | None:
         """
         Weighted Least Loaded Strategy

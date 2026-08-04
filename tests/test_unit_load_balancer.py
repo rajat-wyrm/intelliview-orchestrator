@@ -104,32 +104,12 @@ def test_weighted_least_loaded_prefers_higher_weight_worker():
         },
     ]
 
-
-def test_weighted_least_loaded_prefers_higher_weight_worker():
-    workers = [
-        {
-            "worker_id": "w1",
-            "capacity": 10,
-            "active_tasks": 4,
-            "status": "healthy",
-            "weight": 1,
-        },
-        {
-            "worker_id": "w2",
-            "capacity": 10,
-            "active_tasks": 6,
-            "status": "healthy",
-            "weight": 3,
-        },
-    ]
-
     lb = LoadBalancer(strategy=BalancingStrategy.WEIGHTED_LEAST_LOADED)
     lb.worker_registry = FakeRegistry(workers)
 
     selected = lb.select_worker()
 
     assert selected["worker_id"] == "w2"
-<<<<<<< HEAD
 def test_weighted_least_loaded_prefers_higher_weight():
     workers = [
         {
@@ -152,7 +132,6 @@ def test_weighted_least_loaded_prefers_higher_weight():
         strategy=BalancingStrategy.WEIGHTED_LEAST_LOADED
     )
 
-=======
 
 
 def test_weighted_least_loaded_prefers_higher_weight():
@@ -175,7 +154,8 @@ def test_weighted_least_loaded_prefers_higher_weight():
 
     lb = LoadBalancer(strategy=BalancingStrategy.WEIGHTED_LEAST_LOADED)
 
->>>>>>> issue-527-weighted-least-loaded-v3
+=======
+>>>>>>> pr-564-head
     lb.worker_registry = FakeRegistry(workers)
 
     selected = lb.select_worker()
