@@ -68,19 +68,6 @@ ACTIVE_PROCESSING_STATUSES = {
 
 
 # ---------------------------------------------------------------------------
-# Helper to set background infrastructure health states
-# ---------------------------------------------------------------------------
-
-
-def _update_infra_health(healthy: bool = True):
-    """Sets system infrastructure gauges to reflect live operations."""
-    state = 1.0 if healthy else 0.0
-    WORKERS_HEALTHY.set(state)
-    REDIS_HEALTH.set(state)
-    POSTGRES_HEALTH.set(state)
-
-
-# ---------------------------------------------------------------------------
 # Individual stage tasks
 # ---------------------------------------------------------------------------
 

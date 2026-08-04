@@ -1,10 +1,12 @@
 """
-Worker entrypoint — runs the worker agent (registration + heartbeats) alongside
-the Celery worker, with active task count tracked via Celery signals.
+Worker entrypoint — runs the worker agent (registration + heartbeats)
+alongside the Celery worker, with active task count tracked via
+Celery signals.
 """
 
 import logging
 import os
+import platform
 import sys
 import threading
 
@@ -23,14 +25,17 @@ agent = None
 
 
 def _run_celery() -> None:
-    # Validate the configured Celery pool before starting.
+    """
+    Start the Celery worker.
+    """
+
     pool = os.getenv("CELERY_POOL", SUPPORTED_POOL)
 
     if pool != SUPPORTED_POOL:
         raise RuntimeError(
             f"Unsupported Celery pool '{pool}'. "
-            f"Only '{SUPPORTED_POOL}' is supported because the "
-            "active task counter is process-local."
+            f"Only '{SUPPORTED_POOL}' is supported because "
+            "the active task counter is process-local."
         )
 
     argv = [
@@ -38,8 +43,15 @@ def _run_celery() -> None:
         "workers.celery_app",
         "worker",
         "--loglevel=info",
+
+        # Required for Flower monitoring
+        "--events",
+
+        # Worker configuration
         "--pool=solo",
         "--concurrency=1",
+
+        # Task limits
         "--time-limit=1800",
         "--soft-time-limit=1500",
     ]
@@ -48,6 +60,10 @@ def _run_celery() -> None:
 
 
 def main() -> int:
+    """
+    Register worker, start heartbeat, then launch Celery.
+    """
+
     global agent
 
     logging.basicConfig(
@@ -55,20 +71,14 @@ def main() -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
-    # Validate required configuration settings right at startup (Issue 1)
-    required_settings = ["API_URL", "API_TOKEN"]
-    missing_settings = [setting for setting in required_settings if not os.getenv(setting)]
+    api_url = os.getenv(
+        "API_URL",
+        "http://fastapi:8000"
+    )
 
-    if missing_settings:
-        logger.error(f"Startup failed: Missing required environment variables: {', '.join(missing_settings)}")
-        return 1
-
-    start_worker_metrics()
-
-    api_url = os.getenv("API_URL", "http://fastapi:8000")
     worker_id = os.getenv(
         "WORKER_ID",
-        f"worker-{os.uname().nodename}-{os.getpid()}",
+        f"worker-{platform.node()}-{os.getpid()}",
     )
 
     agent = WorkerAgent(
@@ -77,52 +87,58 @@ def main() -> int:
         capacity=WORKER_CONCURRENCY,
     )
 
+    # Register worker with FastAPI orchestrator
     if not agent.register():
-        logger.error("Could not register worker; exiting")
+        logger.error("Worker registration failed.")
         return 1
 
-    # Track active Celery tasks
+    logger.info("Worker registered successfully.")
+
+    # Track active tasks
+
     @task_prerun.connect
-    def _on_prerun(**_):
-        agent.increment_active()
+    def _on_task_start(**kwargs):
+        if agent:
+            agent.increment_active()
+
 
     @task_postrun.connect
-    def _on_postrun(**_):
-        agent.decrement_active()
+    def _on_task_finish(**kwargs):
+        if agent:
+            agent.decrement_active()
 
-    # Start the heartbeat loop managed by WorkerAgent
-    heartbeat_thread = threading.Thread(
+
+    # Start heartbeat thread
+
+    threading.Thread(
         target=agent.heartbeat_loop,
         daemon=True,
-    )
-    heartbeat_thread.start()
+    ).start()
 
-    @worker_shutdown.connect
-    def _on_worker_shutdown(**kwargs):
-        logger.info("Shutting down worker")
 
-        agent.deregister()
+    logger.info("Heartbeat thread started.")
+    logger.info("Starting Celery worker with events enabled...")
 
-        heartbeat_thread.join(timeout=5)
-
-        if heartbeat_thread.is_alive():
-            logger.warning("Heartbeat thread did not stop within timeout.")
-
-    logger.info("Worker entrypoint ready; starting Celery")
 
     _run_celery()
 
     return 0
 
 
+
 @worker_shutdown.connect
-def _on_worker_shutdown(**kwargs):
+def _shutdown(**kwargs):
+    """
+    Deregister worker when Celery shuts down.
+    """
+
     global agent
 
-    logger.info("Shutting down worker")
+    logger.info("Worker shutting down.")
 
     if agent:
         agent.deregister()
+
 
 
 if __name__ == "__main__":
