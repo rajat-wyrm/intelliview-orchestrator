@@ -48,44 +48,74 @@ class WorkerAgent:
             "Content-Type": "application/json",
         }
 
-        # Read the configured Celery worker pool.
-        # Default to 'solo' if not explicitly configured.
-        self.pool = os.getenv("CELERY_POOL", "solo")
+    def _post(
+        self,
+        path: str,
+        payload: dict,
+        retries: int = 5,
+        heartbeat: bool = False,
+    ) -> bool:
+        """
+        Send POST request with retry logic.
 
-        # Fail fast if an unsupported pool is used.
-        # In prefork mode, each worker process has its own
-        # copy of active_tasks, making heartbeat counts inaccurate.
-        if self.pool != "solo":
-            raise RuntimeError(
-                f"Unsupported Celery pool '{self.pool}'. "
-                "This worker only supports the 'solo' pool because "
-                "the active_tasks counter is process-local and is not "
-                "accurate with multiple worker processes."
-            )
+        - Normal API calls use exponential backoff.
+        - Heartbeat calls use only 2 retries with a fixed 1-second delay
+          so they always complete well within the heartbeat interval.
+        """
 
-    def _post(self, path: str, payload: dict, retries: int = 5) -> bool:
         for attempt in range(1, retries + 1):
             try:
-                r = httpx.post(
+                response = httpx.post(
                     f"{self.api_url}{path}",
                     json=payload,
                     headers=self._headers,
                     timeout=5.0,
                 )
-                if r.status_code < 500:
-                    return r.status_code < 400
-                logger.warning("API %s returned %s, retrying", path, r.status_code)
+
+                if response.status_code < 500:
+                    return response.status_code < 400
+
+                logger.warning(
+                    "API %s returned %s, retrying",
+                    path,
+                    response.status_code,
+                )
+
             except Exception as exc:
-                logger.warning("API %s failed (%s), retrying", path, exc)
-            time.sleep(min(2**attempt, 15))
+                logger.warning(
+                    "API %s failed (%s), retrying",
+                    path,
+                    exc,
+                )
+
+            if heartbeat:
+                time.sleep(1)
+            else:
+                time.sleep(min(2 ** attempt, 15))
+
         return False
 
     def register(self) -> bool:
-        ok = self._post("/register-worker", {"worker_id": self.worker_id, "capacity": self.capacity})
+        ok = self._post(
+            "/register-worker",
+            {
+                "worker_id": self.worker_id,
+                "capacity": self.capacity,
+            },
+        )
+
         if ok:
-            logger.info("Worker %s registered with %s", self.worker_id, self.api_url)
+            logger.info(
+                "Worker %s registered with %s",
+                self.worker_id,
+                self.api_url,
+            )
         else:
-            logger.error("Failed to register worker %s", self.worker_id)
+            logger.error(
+                "Failed to register worker %s",
+                self.worker_id,
+            )
+
         return ok
 
     def deregister(self) -> None:
@@ -102,8 +132,14 @@ class WorkerAgent:
         while not self._stop:
             self._post(
                 "/worker/heartbeat",
-                {"worker_id": self.worker_id, "active_tasks": self.active_tasks},
+                {
+                    "worker_id": self.worker_id,
+                    "active_tasks": self.active_tasks,
+                },
+                retries=2,
+                heartbeat=True,
             )
+
             time.sleep(self.heartbeat_interval)
 
     def _handle_shutdown(self, signum, frame) -> None:
@@ -112,51 +148,60 @@ class WorkerAgent:
         self.deregister()
 
     def start(self) -> None:
-        signal.signal(signal.SIGTERM, self._handle_shutdown)
-        signal.signal(signal.SIGINT, self._handle_shutdown)
+        signal.signal(
+            signal.SIGTERM,
+            lambda *_: self._stop or self.deregister(),
+        )
+        signal.signal(
+            signal.SIGINT,
+            lambda *_: self._stop or self.deregister(),
+        )
+
         if not self.register():
             sys.exit(1)
-        Thread(target=self.heartbeat_loop, daemon=True).start()
-        logger.info("Worker agent started for %s", self.worker_id)
+
+        Thread(
+            target=self.heartbeat_loop,
+            daemon=True,
+        ).start()
+
+        logger.info(
+            "Worker agent started for %s",
+            self.worker_id,
+        )
 
     def increment_active(self) -> None:
         self.active_tasks += 1
 
     def decrement_active(self) -> None:
-        self.active_tasks = max(0, self.active_tasks - 1)
-        self.tasks_completed += 1  # count each completed task
-
-        if self.tasks_completed >= self.max_tasks_before_restart:
-            if not self._restart_requested:
-                self._restart_requested = True
-                logger.info(
-                    "Worker %s has processed %d tasks (limit: %d) — requesting graceful restart.",
-                    self.worker_id,
-                    self.tasks_completed,
-                    self.max_tasks_before_restart,
-                )
-                self._request_restart()
-
-    def _request_restart(self) -> None:
-        logger.info(
-            "Worker %s initiating graceful shutdown for restart (active tasks remaining: %d)",
-            self.worker_id,
-            self.active_tasks,
+        self.active_tasks = max(
+            0,
+            self.active_tasks - 1,
         )
-        self.deregister()
-        os.kill(os.getpid(), signal.SIGTERM)
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
 
-    api_url = os.getenv("API_URL", "http://fastapi:8000")
-    worker_id = os.getenv("WORKER_ID", f"worker-{os.getpid()}")
-    agent = WorkerAgent(api_url=api_url, worker_id=worker_id)
+    api_url = os.getenv(
+        "API_URL",
+        "http://fastapi:8000",
+    )
+
+    worker_id = os.getenv(
+        "WORKER_ID",
+        f"worker-{os.getpid()}",
+    )
+
+    agent = WorkerAgent(
+        api_url=api_url,
+        worker_id=worker_id,
+    )
+
     agent.start()
 
-    # Block main thread until shutdown signal is received
-    while not agent._stop:
-        time.sleep(1)
-
-    logger.info("Worker agent %s has shut down cleanly", agent.worker_id)
+    while True:
+        time.sleep(60)
