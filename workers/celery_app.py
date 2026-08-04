@@ -4,6 +4,7 @@ and a `session_failed` signal that lets us mark the DB session as
 FAILED only after Celery has exhausted its retries.
 """
 
+
 from celery import Celery, signals
 from opentelemetry.instrumentation.celery import CeleryInstrumentor
 
@@ -12,7 +13,6 @@ from metrics.prometheus_metrics import TASKS_PERMANENTLY_FAILED
 
 celery_app = Celery("interview_tasks", broker=REDIS_URL, backend=REDIS_URL)
 CeleryInstrumentor().instrument()
-
 
 celery_app.conf.update(
     task_serializer="json",

@@ -31,6 +31,7 @@ class _CsvList(list):
     """Marker type that prevents pydantic-settings from JSON-parsing."""
 
 
+
 class Settings(BaseSettings):
     """Application configuration loaded from the environment."""
 
