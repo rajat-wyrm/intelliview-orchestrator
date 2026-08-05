@@ -26,7 +26,7 @@ python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 
 # === Monitoring / Observability ===
-prometheus-client==0.21.1
+prometheus-client==0.26.0
 opentelemetry-api
 opentelemetry-sdk
 opentelemetry-instrumentation-fastapi
