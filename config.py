@@ -7,16 +7,13 @@ should be overridden in production.
 """
 
 from functools import lru_cache
-from typing import List
 
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class _CsvList(list):
     """Marker type that prevents pydantic-settings from JSON-parsing."""
-
-    pass
 
 
 class Settings(BaseSettings):
@@ -97,7 +94,7 @@ class Settings(BaseSettings):
         return self.api_token == "dev-token-change-me"
 
     @property
-    def cors_allow_origins(self) -> List[str]:
+    def cors_allow_origins(self) -> list[str]:
         raw = (self.cors_allow_origins_raw or "").strip()
         if not raw or raw == "*":
             return ["*"]
