@@ -69,17 +69,23 @@ async def lifespan(app: FastAPI):
     Shutdown: best-effort graceful drain — flush the request-id log line,
     close the shared Redis client, and notify clients.
     """
+# Initialize database schema if tables do not already exist.
     Base.metadata.create_all(bind=engine)
+# Warn developers if the default API token is still being used.
     if API_TOKEN == "dev-token-change-me":
         logger.warning(
             "API_TOKEN is the built-in dev default — set a strong token "
             "in production via the API_TOKEN env var."
         )
+# Log server startup for monitoring and debugging.
     logger.info("AI Interview Orchestrator server starting...")
     try:
+# Transfer control to FastAPI while the application is running.
         yield
     finally:
+# Begin graceful shutdown of shared services.
         logger.info("AI Interview Orchestrator server shutting down...")
+# Close background resources to avoid connection leaks.
         for resource in (ws_manager, state_sync, metrics_collector):
             close = getattr(resource, "close", None)
             if callable(close):
