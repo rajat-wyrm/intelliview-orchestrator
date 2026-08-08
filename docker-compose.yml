@@ -239,22 +239,6 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NODE_ENV: production
-    depends_on:
-      fastapi:
-        condition: service_started
-    networks:
-      - ai-interview-network
-    restart: unless-stopped          
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: ai-interview-frontend
-    ports:
-      - "3000:3000"
-    environment:
       NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL:-http://localhost:8000}"
     depends_on:
       fastapi:
