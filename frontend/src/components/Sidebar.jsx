@@ -11,6 +11,7 @@ import {
   Shield,
   Video,
   UserCircle,
+  CircleHelp,
   Mail
 } from "lucide-react";
 import { jsx, jsxs } from "react/jsx-runtime";
@@ -22,6 +23,7 @@ const items = [
   { href: "/workers", label: "Workers", icon: Users },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/help", label: "Help", icon: CircleHelp },
   { href: "http://localhost:8080", label: "Digest Control", icon: Mail, external: true }
 ];
 function Sidebar({ mobile = false, onNavigate }) {
