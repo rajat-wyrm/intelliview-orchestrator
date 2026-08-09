@@ -499,6 +499,11 @@ class WorkerRegistry:
             list: Available worker details
         """
         available = []
+        from orchestrator.time_utils import utcnow
+        from datetime import datetime, timezone, timedelta
+        
+        timeout_threshold = utcnow() - timedelta(seconds=self.HEARTBEAT_TIMEOUT)
+        
         from datetime import datetime, timedelta, timezone
 
         from orchestrator.time_utils import utcnow
@@ -507,6 +512,13 @@ class WorkerRegistry:
 
         with self.lock:
             for worker in self.local_workers.values():
+                last_hb_raw = worker.get("last_heartbeat")
+                if not last_hb_raw:
+                    continue
+                last_hb = datetime.fromisoformat(last_hb_raw)
+                if last_hb.tzinfo is None:
+                    last_hb = last_hb.replace(tzinfo=timezone.utc)
+                    
                 last_hb_raw = worker.get("last_heartbeat")
                 if not last_hb_raw:
                     continue
