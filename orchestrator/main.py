@@ -95,6 +95,25 @@ async def lifespan(app: FastAPI):
     settings.validate_configuration()
     Base.metadata.create_all(bind=engine)
 
+    # Seed admin user
+    from database.db import SessionLocal
+    from database.models import User
+    from passlib.context import CryptContext
+    import uuid
+
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    with SessionLocal() as db:
+        if not db.query(User).first():
+            admin = User(
+                user_id=str(uuid.uuid4()),
+                email="admin@example.com",
+                password_hash=pwd_context.hash("admin123"),
+                role="admin"
+            )
+            db.add(admin)
+            db.commit()
+            logger.info("Created initial admin user: admin@example.com / admin123")
+
     # Initialize webhook subscriber store
     create_table()
 
@@ -338,6 +357,9 @@ app.include_router(risk_configs_router)
 
 app.include_router(metrics_router)
 app.include_router(analytics_router)
+
+from routers.auth import router as auth_router
+app.include_router(auth_router)
 
 
 @app.get("/risk-engine/weights/{role}")
