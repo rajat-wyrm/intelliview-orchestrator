@@ -192,18 +192,29 @@ class HealthMonitor:
             logger.debug("Could not compute Redis fragmentation ratio: %s", exc)
 
         fragmentation_status = HealthStatus.HEALTHY
+        from config import get_settings
+        
         if fragmentation_ratio is not None:
             if fragmentation_ratio >= self.redis_fragmentation_critical_threshold:
-                fragmentation_status = HealthStatus.CRITICAL
-                logger.error(
-                    "Redis memory fragmentation ratio critical (%s): %.2f >= %.2f "
-                    "(used_memory=%s, used_memory_rss=%s)",
-                    context,
-                    fragmentation_ratio,
-                    self.redis_fragmentation_critical_threshold,
-                    info.get("used_memory"),
-                    info.get("used_memory_rss"),
-                )
+                if get_settings().environment == "production":
+                    fragmentation_status = HealthStatus.CRITICAL
+                    logger.error(
+                        "Redis memory fragmentation ratio critical (%s): %.2f >= %.2f "
+                        "(used_memory=%s, used_memory_rss=%s)",
+                        context,
+                        fragmentation_ratio,
+                        self.redis_fragmentation_critical_threshold,
+                        info.get("used_memory"),
+                        info.get("used_memory_rss"),
+                    )
+                else:
+                    fragmentation_status = HealthStatus.DEGRADED
+                    logger.warning(
+                        "Redis memory fragmentation ratio high but ignored for non-prod (%s): %.2f >= %.2f",
+                        context,
+                        fragmentation_ratio,
+                        self.redis_fragmentation_critical_threshold,
+                    )
             elif fragmentation_ratio >= self.redis_fragmentation_warn_threshold:
                 fragmentation_status = HealthStatus.DEGRADED
                 logger.warning(
