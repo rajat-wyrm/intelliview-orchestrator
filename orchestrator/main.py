@@ -63,6 +63,7 @@ from orchestrator.state_sync import StateSynchronizer
 from orchestrator.store import DEFAULT_WEIGHTS
 from orchestrator.worker_registry import WorkerRegistry
 from routers.admin import create_admin_routes
+from routers.analytics import router as analytics_router
 from routers.candidates import create_candidate_routes
 from routers.health import create_health_routes
 from routers.metrics import router as metrics_router
@@ -336,6 +337,7 @@ app.include_router(
 app.include_router(risk_configs_router)
 
 app.include_router(metrics_router)
+app.include_router(analytics_router)
 
 
 @app.get("/risk-engine/weights/{role}")

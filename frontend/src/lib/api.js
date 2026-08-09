@@ -78,7 +78,8 @@ const endpoints = {
   deadLetterQueue: (limit = 50) => api.get(`/dead-letter-queue?limit=${limit}`),
 retrySession: (session_id) => api.post(`/retry-session/${session_id}`),
 detectFailures: () => api.post("/detect-failures"),
-reportWebVitals: (payload) => api.post("/metrics/web-vitals", payload)
+reportWebVitals: (payload) => api.post("/metrics/web-vitals", payload),
+analytics: () => api.get("/analytics")
 };
 export {
   ApiClient,
