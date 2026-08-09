@@ -23,7 +23,7 @@ from models import DigestFrequency, DigestPayload, DigestRecipient, InterviewEve
 from renderer import render_digest_html, render_digest_text
 from sender import send_digest_for_recipient
 
-from database import DB_FILE, get_db_conn, init_db
+from database import get_db_conn, init_db
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 # Configurable batch size: set env var DIGEST_BATCH_SIZE to override (default 5)
@@ -565,9 +565,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
                 html_path = result["output_html"]
                 txt_path = result["output_text"]
-                with open(html_path, "r", encoding="utf-8") as f:
+                with open(html_path, encoding="utf-8") as f:
                     html = f.read()
-                with open(txt_path, "r", encoding="utf-8") as f:
+                with open(txt_path, encoding="utf-8") as f:
                     text = f.read()
 
                 self.send_json(
@@ -586,10 +586,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 )
             except Exception as e:
                 error_id = uuid.uuid4().hex[:8]
-                print(f"==================================================")
+                print("==================================================")
                 print(f"ERROR [{error_id}]: Exception in /api/generate")
                 traceback.print_exc()
-                print(f"==================================================")
+                print("==================================================")
                 self.send_json(
                     500,
                     {
@@ -680,10 +680,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 )
             except Exception as e:
                 error_id = uuid.uuid4().hex[:8]
-                print(f"==================================================")
+                print("==================================================")
                 print(f"ERROR [{error_id}]: Exception in /api/send")
                 traceback.print_exc()
-                print(f"==================================================")
+                print("==================================================")
                 self.send_json(
                     500,
                     {
@@ -760,12 +760,12 @@ def main():
     if args.serve:
         server_address = (args.host, args.port)
         httpd = ThreadingHTTPServer(server_address, DashboardHandler)
-        print(f"==================================================")
+        print("==================================================")
         host_display = "localhost" if args.host == "127.0.0.1" else args.host
         print(f"Dashboard running at: http://{host_display}:{args.port}")
         print(f"Batch size limit    : {DIGEST_BATCH_SIZE} (DIGEST_BATCH_SIZE)")
-        print(f"Press Ctrl+C to terminate.")
-        print(f"==================================================")
+        print("Press Ctrl+C to terminate.")
+        print("==================================================")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:

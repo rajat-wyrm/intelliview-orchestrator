@@ -12,6 +12,7 @@ oauth2_scheme = OAuth2PasswordBearer(
     auto_error=False,
 )
 
+
 def get_db():
     db = SessionLocal()
     try:
@@ -23,7 +24,7 @@ def get_db():
 def get_current_user(
     token: str | None = Depends(oauth2_scheme),
     x_api_token: str | None = Header(default=None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Authenticate using either:
@@ -40,7 +41,11 @@ def get_current_user(
             if user_id:
                 user = db.query(User).filter(User.user_id == user_id).first()
                 if user:
-                    return {"role": user.role, "user_id": user.user_id, "email": user.email}
+                    return {
+                        "role": user.role,
+                        "user_id": user.user_id,
+                        "email": user.email,
+                    }
         # Fall back to checking if the bearer token is actually the raw API token
         if token == API_TOKEN:
             return {"role": "admin"}

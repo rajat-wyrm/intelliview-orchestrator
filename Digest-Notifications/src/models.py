@@ -9,7 +9,6 @@ the larger Orchestrator project without forcing an ORM choice.
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 
 class DigestFrequency(str, Enum):
@@ -31,8 +30,8 @@ class InterviewEvent:
     role_title: str
     interviewer_name: str
     scheduled_at: datetime
-    meeting_link: Optional[str] = None
-    location: Optional[str] = None
+    meeting_link: str | None = None
+    location: str | None = None
 
     @property
     def date_key(self) -> str:

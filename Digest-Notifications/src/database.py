@@ -51,7 +51,7 @@ def init_db():
     count_interviews = cursor.fetchone()[0]
     if count_interviews == 0 and os.path.exists(INTERVIEWS_FILE):
         try:
-            with open(INTERVIEWS_FILE, "r", encoding="utf-8") as f:
+            with open(INTERVIEWS_FILE, encoding="utf-8") as f:
                 interviews = json.load(f)
             for item in interviews:
                 cursor.execute(
@@ -76,7 +76,7 @@ def init_db():
     count_logs = cursor.fetchone()[0]
     if count_logs == 0 and os.path.exists(LOGS_FILE):
         try:
-            with open(LOGS_FILE, "r", encoding="utf-8") as f:
+            with open(LOGS_FILE, encoding="utf-8") as f:
                 logs = json.load(f)
             for item in logs:
                 cursor.execute(

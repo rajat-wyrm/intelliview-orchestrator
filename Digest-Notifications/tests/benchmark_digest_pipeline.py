@@ -30,8 +30,8 @@ import timeit
 SRC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src")
 sys.path.insert(0, os.path.abspath(SRC_DIR))
 
-from digest import _build_payload, get_upcoming_interviews  # noqa: E402
-from renderer import render_digest_html, render_digest_text  # noqa: E402
+from digest import _build_payload, get_upcoming_interviews
+from renderer import render_digest_html, render_digest_text
 
 
 def run_benchmark(runs: int, ref_date: str) -> None:

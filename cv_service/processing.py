@@ -5,7 +5,7 @@ from typing import Any
 try:
     import cv2
     import mediapipe as mp
-    import numpy as np
+
 
     HAS_MEDIAPIPE = True
 

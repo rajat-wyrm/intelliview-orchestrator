@@ -10,8 +10,9 @@ an adapter implementing this protocol, keeping this module provider-agnostic
 and easy to test with a fake.
 """
 
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Iterable, List, Protocol
+from typing import Protocol
 
 from digest_builder import build_digest
 from models import DigestRecipient, InterviewEvent
@@ -82,12 +83,12 @@ def send_digest_for_recipient(
 
 
 def send_digests_batch(
-    recipients: List[DigestRecipient],
+    recipients: list[DigestRecipient],
     interviews_by_user: dict,
     email_sender: EmailSenderProtocol,
     unsubscribe_base_url: str,
     now: datetime | None = None,
-) -> List[dict]:
+) -> list[dict]:
     """
     Sends digests for many recipients in one pass (e.g. invoked by a
     daily/weekly cron job or scheduler task in the main project).

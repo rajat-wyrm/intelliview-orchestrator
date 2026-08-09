@@ -96,10 +96,12 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
 
     # Seed admin user
+    import uuid
+
+    from passlib.context import CryptContext
+
     from database.db import SessionLocal
     from database.models import User
-    from passlib.context import CryptContext
-    import uuid
 
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
     with SessionLocal() as db:
@@ -108,7 +110,7 @@ async def lifespan(app: FastAPI):
                 user_id=str(uuid.uuid4()),
                 email="admin@example.com",
                 password_hash=pwd_context.hash("admin123"),
-                role="admin"
+                role="admin",
             )
             db.add(admin)
             db.commit()
@@ -359,6 +361,7 @@ app.include_router(metrics_router)
 app.include_router(analytics_router)
 
 from routers.auth import router as auth_router
+
 app.include_router(auth_router)
 
 
