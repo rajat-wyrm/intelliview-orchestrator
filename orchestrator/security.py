@@ -41,6 +41,11 @@ def get_current_user(
             if user_id:
                 user = db.query(User).filter(User.user_id == user_id).first()
                 if user:
+                    return {"role": user.role, "user_id": user.user_id, "email": user.email}
+            user_id = payload.get("sub")
+            if user_id:
+                user = db.query(User).filter(User.user_id == user_id).first()
+                if user:
                     return {
                         "role": user.role,
                         "user_id": user.user_id,
