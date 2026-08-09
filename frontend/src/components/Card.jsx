@@ -1,4 +1,8 @@
 "use client";
+/**
+ * Reusable Card component.
+ * Used in: page.jsx, analytics, candidates, interview, sessions, settings, workers
+ */
 import { memo } from "react";
 import { cn } from "@/lib/utils";
 
