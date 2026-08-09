@@ -1,5 +1,4 @@
-from sqlalchemy import Column, DateTime, String
-
+from sqlalchemy import Column, String, DateTime
 from database.models._base import Base, utcnow
 
 
