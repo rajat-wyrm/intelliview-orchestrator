@@ -122,6 +122,31 @@ class ReportMetadata(BaseModel):
     estimated_cost_usd: float | None = None
 
 
+class ReportSentimentSummary(BaseModel):
+    dominant_sentiment: str | None = None
+    confident_percentage: float | None = None
+    neutral_percentage: float | None = None
+    nervous_percentage: float | None = None
+    summary_text: str | None = None
+
+
+class ReportSentimentTimelineItem(BaseModel):
+    timestamp: float | None = None
+    start: float | None = None
+    end: float | None = None
+    text: str | None = None
+    sentiment: str | None = None
+    confidence: float | None = None
+    scores: dict[str, float] = Field(default_factory=dict)
+
+
+class ReportSentimentAnalysis(BaseModel):
+    sentiment: str | None = None
+    scores: dict[str, float] = Field(default_factory=dict)
+    summary: ReportSentimentSummary | None = None
+    timeline: list[ReportSentimentTimelineItem] = Field(default_factory=list)
+
+
 class InterviewReportResponse(BaseModel):
     """Comprehensive final interview report"""
 
@@ -133,6 +158,7 @@ class InterviewReportResponse(BaseModel):
     llm_feedback: ReportLLMFeedback
     risk_assessment: ReportRiskAssessment
     metadata: ReportMetadata
+    sentiment_analysis: ReportSentimentAnalysis | None = None
 
 
 class TaskStatusResponse(BaseModel):
@@ -203,6 +229,12 @@ def _build_risk_report_pdf(report: dict) -> Response:
         ("Created At", report.get("created_at")),
         ("Updated At", report.get("updated_at")),
     ]
+    audio_data = report.get("audio_analysis") or {}
+    if audio_data.get("sentiment"):
+        fields.append(("Sentiment", str(audio_data.get("sentiment"))))
+    summary_data = audio_data.get("sentiment_summary") or {}
+    if summary_data.get("summary_text"):
+        fields.append(("Sentiment Summary", str(summary_data.get("summary_text"))))
     for label, value in fields:
         c.drawString(50, y, f"{label}: {value}")
         y -= 22
@@ -466,6 +498,39 @@ def create_session_routes(
                 elif risk_score > 0.3:
                     classification = "MEDIUM"
 
+            audio_analysis = session_obj.audio_analysis or {}
+            sentiment_analysis_obj = None
+            if audio_analysis:
+                raw_summary = audio_analysis.get("sentiment_summary") or {}
+                summary_obj = None
+                if raw_summary:
+                    summary_obj = ReportSentimentSummary(
+                        dominant_sentiment=raw_summary.get("dominant_sentiment"),
+                        confident_percentage=raw_summary.get("confident_percentage"),
+                        neutral_percentage=raw_summary.get("neutral_percentage"),
+                        nervous_percentage=raw_summary.get("nervous_percentage"),
+                        summary_text=raw_summary.get("summary_text"),
+                    )
+                raw_timeline = audio_analysis.get("sentiment_timeline") or []
+                timeline_objs = [
+                    ReportSentimentTimelineItem(
+                        timestamp=item.get("timestamp"),
+                        start=item.get("start"),
+                        end=item.get("end"),
+                        text=item.get("text"),
+                        sentiment=item.get("sentiment"),
+                        confidence=item.get("confidence"),
+                        scores=item.get("scores", {}),
+                    )
+                    for item in raw_timeline
+                ]
+                sentiment_analysis_obj = ReportSentimentAnalysis(
+                    sentiment=audio_analysis.get("sentiment"),
+                    scores=audio_analysis.get("sentiment_scores", {}),
+                    summary=summary_obj,
+                    timeline=timeline_objs,
+                )
+
             return InterviewReportResponse(
                 session_id=session_id,
                 candidate=ReportCandidate(
@@ -507,6 +572,7 @@ def create_session_routes(
                     token_usage=None,  # Feature #3 not yet merged
                     estimated_cost_usd=None,
                 ),
+                sentiment_analysis=sentiment_analysis_obj,
             )
         except HTTPException:
             raise
