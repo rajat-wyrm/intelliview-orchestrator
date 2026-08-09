@@ -104,12 +104,18 @@ async def lifespan(app: FastAPI):
     from database.models import User
 
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+    def bcrypt_safe_password(password: str) -> str:
+        if len(password.encode("utf-8")) > 72:
+            raise ValueError("Password must be 72 bytes or fewer for bcrypt")
+        return password
+
     with SessionLocal() as db:
         if not db.query(User).first():
             admin = User(
                 user_id=str(uuid.uuid4()),
                 email="admin@example.com",
-                password_hash=pwd_context.hash("admin123"),
+                password_hash=pwd_context.hash(bcrypt_safe_password("admin123")),
                 role="admin",
             )
             db.add(admin)

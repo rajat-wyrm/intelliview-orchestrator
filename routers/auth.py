@@ -24,8 +24,14 @@ def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
 
+def bcrypt_safe_password(password: str) -> str:
+    if len(password.encode("utf-8")) > 72:
+        raise ValueError("Password must be 72 bytes or fewer for bcrypt")
+    return password
+
+
 def get_password_hash(password):
-    return pwd_context.hash(password)
+    return pwd_context.hash(bcrypt_safe_password(password))
 
 
 @router.post("/login")
