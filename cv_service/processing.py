@@ -6,7 +6,6 @@ try:
     import cv2
     import mediapipe as mp
 
-
     HAS_MEDIAPIPE = True
 
 except ImportError:
