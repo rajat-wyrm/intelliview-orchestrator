@@ -111,16 +111,19 @@ async def lifespan(app: FastAPI):
         return password
 
     with SessionLocal() as db:
-        if not db.query(User).first():
-            admin = User(
-                user_id=str(uuid.uuid4()),
-                email="admin@example.com",
-                password_hash=pwd_context.hash(bcrypt_safe_password("admin123")),
-                role="admin",
-            )
-            db.add(admin)
-            db.commit()
-            logger.info("Created initial admin user: admin@example.com / admin123")
+        try:
+            if not db.query(User).first():
+                admin = User(
+                    user_id=str(uuid.uuid4()),
+                    email="admin@example.com",
+                    password_hash=pwd_context.hash(bcrypt_safe_password("admin123")),
+                    role="admin",
+                )
+                db.add(admin)
+                db.commit()
+                logger.info("Created initial admin user: admin@example.com / admin123")
+        except ValueError as exc:
+            logger.error("Startup user initialization failed: %s", exc)
 
     # Initialize webhook subscriber store
     create_table()
