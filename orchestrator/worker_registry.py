@@ -499,11 +499,6 @@ class WorkerRegistry:
             list: Available worker details
         """
         available = []
-        from orchestrator.time_utils import utcnow
-        from datetime import datetime, timezone, timedelta
-        
-        timeout_threshold = utcnow() - timedelta(seconds=self.HEARTBEAT_TIMEOUT)
-        
         from datetime import datetime, timedelta, timezone
 
         from orchestrator.time_utils import utcnow
