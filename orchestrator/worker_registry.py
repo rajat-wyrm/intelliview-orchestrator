@@ -491,44 +491,35 @@ class WorkerRegistry:
         with self.lock:
             return dict(self.local_workers)
 
-    def get_available_workers(self) -> list[dict[str, Any]]:
-        """
-        Get workers that are healthy and have capacity
-
-        Returns:
-            list: Available worker details
+        def get_available_workers(self) -> list[dict[str, Any]]:
+            """
+        list: Available worker details
         """
         available = []
-        from datetime import datetime, timedelta, timezone
 
+        from datetime import datetime, timedelta, timezone
         from orchestrator.time_utils import utcnow
 
         timeout_threshold = utcnow() - timedelta(seconds=self.HEARTBEAT_TIMEOUT)
 
         with self.lock:
             for worker in self.local_workers.values():
-                last_hb_raw = worker.get("last_heartbeat")
-                if not last_hb_raw:
-                    continue
-                last_hb = datetime.fromisoformat(last_hb_raw)
-                if last_hb.tzinfo is None:
-                    last_hb = last_hb.replace(tzinfo=timezone.utc)
-                    
-                last_hb_raw = worker.get("last_heartbeat")
-                if not last_hb_raw:
-                    continue
-                last_hb = datetime.fromisoformat(last_hb_raw)
-                if last_hb.tzinfo is None:
-                    last_hb = last_hb.replace(tzinfo=timezone.utc)
+                if worker.get("status") == "healthy":
+                    last_hb_raw = worker.get("last_heartbeat")
+                    if not last_hb_raw:
+                        continue
 
-                if (
-                    last_hb >= timeout_threshold
-                    and worker["active_tasks"] < worker["capacity"]
-                ):
-                    available.append(worker)
+                    last_hb = datetime.fromisoformat(last_hb_raw)
+                    if last_hb.tzinfo is None:
+                        last_hb = last_hb.replace(tzinfo=timezone.utc)
+
+                    if (
+                        last_hb >= timeout_threshold
+                        and worker.get("active_tasks", 0) < worker.get("capacity", 0)
+                    ):
+                        available.append(worker)
 
         return available
-
     def get_least_loaded_worker(self) -> dict[str, Any] | None:
         """
         Get the worker with the lowest active task count
