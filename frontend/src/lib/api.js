@@ -1,3 +1,4 @@
+const CV_SERVICE_URL = process.env.NEXT_PUBLIC_CV_SERVICE_URL || "http://localhost:8001";
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 class ApiClient {
   token = null;
@@ -47,6 +48,21 @@ class ApiClient {
   delete(path) {
     return this.request("DELETE", path);
   }
+
+  async postFile(baseUrl, path, file) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${baseUrl}${path}`, { method: "POST", body: formData });
+    if (!res.ok) {
+      let detail = res.statusText;
+      try {
+        const data = await res.json();
+        if (data?.detail) detail = data.detail;
+      } catch {}
+      throw new Error(`POST ${path} failed (${res.status}): ${detail}`);
+    }
+    return res.json();
+  }
   /** Build the WebSocket URL with the token as a query param. */
   wsUrl(path) {
     const base = (process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000").replace(/^http/, "ws");
@@ -57,6 +73,7 @@ class ApiClient {
 const api = new ApiClient();
 const endpoints = {
   health: () => api.get("/health"),
+  parseResume: (file) => api.postFile(CV_SERVICE_URL, "/parse-resume", file),
   startInterview: (payload) => api.post("/start-interview", payload),
   sessionStatus: (id) => api.get(`/session-status/${id}`),
   activeSessions: () => api.get("/active-sessions"),
