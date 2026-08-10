@@ -162,6 +162,45 @@ function SessionDetailImpl({ sessionId, onClose }) {
                       </div>
                     )}
                   </div>
+
+                  {data.audio_analysis.sentiment_summary?.summary_text && (
+                    <div className="mt-2 rounded-md border border-border bg-bg-card px-3 py-2 text-xs text-zinc-300">
+                      <span className="font-medium text-emerald-400">Sentiment Summary: </span>
+                      {data.audio_analysis.sentiment_summary.summary_text}
+                      {data.audio_analysis.sentiment_summary.confident_percentage != null && (
+                        <div className="mt-1 flex items-center gap-3 text-[11px] text-muted">
+                          <span>Confident: {data.audio_analysis.sentiment_summary.confident_percentage}%</span>
+                          <span>Neutral: {data.audio_analysis.sentiment_summary.neutral_percentage}%</span>
+                          <span>Nervous: {data.audio_analysis.sentiment_summary.nervous_percentage}%</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {data.audio_analysis.sentiment_timeline?.length > 0 && (
+                    <div className="mt-2 rounded-md border border-border bg-bg-card p-3">
+                      <div className="mb-2 text-[10px] uppercase tracking-wide text-muted">Sentiment Timeline</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {data.audio_analysis.sentiment_timeline.map((item, idx) => {
+                          const badgeColor =
+                            item.sentiment === "Confident"
+                              ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                              : item.sentiment === "Nervous"
+                              ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                              : "bg-blue-500/20 text-blue-300 border-blue-500/30";
+                          return (
+                            <span
+                              key={idx}
+                              className={`rounded border px-2 py-0.5 text-[10px] font-medium ${badgeColor}`}
+                              title={`${item.text || ''} (${item.start}s - ${item.end}s)`}
+                            >
+                              {item.start}s: {item.sentiment} ({Math.round((item.confidence || 0) * 100)}%)
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
