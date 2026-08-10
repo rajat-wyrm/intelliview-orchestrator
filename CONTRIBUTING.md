@@ -83,6 +83,31 @@ Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `chore`,
 `ci`, `build`. Scopes: `orchestrator`, `workers`, `monitoring`,
 `database`, `frontend`, `ci`, `docs`.
 
+## Release and Changelog Workflow
+
+This project uses Conventional Commits to maintain a consistent commit
+history and support automated release management.
+
+Use the following commit types for project changes:
+
+- `feat`: Adds a new feature
+- `fix`: Fixes a bug
+- `chore`: Maintenance or tooling changes
+- `docs`: Documentation changes
+- `refactor`: Code restructuring without changing behavior
+- `test`: Adds or updates tests
+
+Examples:
+
+```text
+feat(orchestrator): add interview session management
+fix(workers): handle failed task execution
+docs: update contributing guide
+refactor(database): simplify connection handling
+test: add interview session tests
+chore: update project dependencies
+
+
 ## Reporting security issues
 
 See `SECURITY.md` for the disclosure policy. **Do not file public issues
