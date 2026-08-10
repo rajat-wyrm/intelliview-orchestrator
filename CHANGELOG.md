@@ -7,6 +7,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- JWT-based authentication and User table implementation.
+- Analytics dashboard with hiring analytics.
 - Production hardening: `pool_pre_ping` + `pool_recycle` on the SQLAlchemy
   engine so connections survive Postgres restarts.
 - Graceful lifespan shutdown that closes Redis-backed resources.
@@ -46,8 +48,19 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - README rewritten to reflect the actual production-grade surface area.
 
 ### Fixed
+- Fixed User model export in the models package.
+- Made startup user creation resilient to bcrypt `ValueError`.
+- Enforced the bcrypt 72-byte password limit.
+- Fixed worker availability checks to rely on worker status and ignore
+  system status where appropriate.
+- Reverted `get_available_workers` to rely on the status filter.
 - `RiskScoringEngine` was always returning 0.0 because pipelines returned
   empty booleans; now produces a non-trivial per-session signal.
+
+### Maintenance
+- Applied Black and isort formatting to maintain consistent code style.
+- Updated CI triggers for the `Stabilized-version` branch.
+- Applied Black and Ruff fixes to resolve CI test issues.
 
 ## [0.2.0] - 2026-06-21
 

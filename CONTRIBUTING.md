@@ -70,18 +70,16 @@ docker compose up -d --build
 6. Address review feedback by pushing additional commits (don't force-push
    while the PR is open unless asked).
 
+
 ## Commit messages
 
 We follow the [Conventional Commits](https://www.conventionalcommits.org/)
-style for the subject line:
+format for commit messages.
 
-```
+### Format
+
+```text
 <type>(<scope>): <subject>
-```
-
-Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `chore`,
-`ci`, `build`. Scopes: `orchestrator`, `workers`, `monitoring`,
-`database`, `frontend`, `ci`, `docs`.
 
 ## Reporting security issues
 
