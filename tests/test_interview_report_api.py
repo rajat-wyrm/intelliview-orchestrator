@@ -125,8 +125,12 @@ def test_get_interview_report_with_sentiment_analysis():
         start_time=datetime(2026, 7, 1, 10, 0, 0),
         end_time=datetime(2026, 7, 1, 10, 30, 0),
         questions_asked=[{"question_id": "q1", "text": "Describe your background."}],
-        answers_provided=[{"question_id": "q1", "answer_text": "I led the backend team."}],
-        feedback_generated=[{"question_id": "q1", "feedback": "Great leadership.", "score": 9.5}],
+        answers_provided=[
+            {"question_id": "q1", "answer_text": "I led the backend team."}
+        ],
+        feedback_generated=[
+            {"question_id": "q1", "feedback": "Great leadership.", "score": 9.5}
+        ],
         evaluation_analysis={
             "quality": 9.0,
             "llm_feedback": {
@@ -187,7 +191,10 @@ def test_get_interview_report_with_sentiment_analysis():
     assert data["sentiment_analysis"]["sentiment"] == "Confident"
     assert data["sentiment_analysis"]["scores"]["Confident"] == 0.75
     assert data["sentiment_analysis"]["summary"]["confident_percentage"] == 75.0
-    assert data["sentiment_analysis"]["summary"]["summary_text"] == "Candidate was confident 75% of the time"
+    assert (
+        data["sentiment_analysis"]["summary"]["summary_text"]
+        == "Candidate was confident 75% of the time"
+    )
     assert len(data["sentiment_analysis"]["timeline"]) == 1
     assert data["sentiment_analysis"]["timeline"][0]["sentiment"] == "Confident"
     assert data["sentiment_analysis"]["timeline"][0]["start"] == 0.0

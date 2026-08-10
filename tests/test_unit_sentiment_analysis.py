@@ -106,8 +106,16 @@ def test_generate_sentiment_timeline_with_segments():
         "text": "I led the project. Um, then we had issues. But we resolved them.",
         "duration_seconds": 30.0,
         "segments": [
-            {"start": 0.0, "end": 10.0, "text": "I led the project and successfully designed it."},
-            {"start": 10.0, "end": 20.0, "text": "Um, uh, we were not sure about the memory leak."},
+            {
+                "start": 0.0,
+                "end": 10.0,
+                "text": "I led the project and successfully designed it.",
+            },
+            {
+                "start": 10.0,
+                "end": 20.0,
+                "text": "Um, uh, we were not sure about the memory leak.",
+            },
             {"start": 20.0, "end": 30.0, "text": "The servers run on Linux."},
         ],
     }
@@ -138,7 +146,9 @@ def test_generate_sentiment_timeline_from_plain_text():
         "We achieved 99.9% uptime. "
         "Um, the database had some latency."
     )
-    timeline = generate_sentiment_timeline(raw_text, duration_seconds=60.0, session_id="test-sess-2")
+    timeline = generate_sentiment_timeline(
+        raw_text, duration_seconds=60.0, session_id="test-sess-2"
+    )
     assert len(timeline) >= 2
     assert timeline[0]["start"] == 0.0
     assert timeline[-1]["end"] <= 60.0
@@ -167,7 +177,11 @@ def test_analyze_audio_sentiment_end_to_end():
         "text": "I led the development of the high-throughput payment gateway.",
         "duration_seconds": 45.0,
         "segments": [
-            {"start": 0.0, "end": 45.0, "text": "I led the development of the high-throughput payment gateway."}
+            {
+                "start": 0.0,
+                "end": 45.0,
+                "text": "I led the development of the high-throughput payment gateway.",
+            }
         ],
     }
     result = analyze_audio_sentiment("session-sentiment-01", transcription)
@@ -205,7 +219,10 @@ def test_run_audio_analysis_includes_sentiment():
 
 def test_sentiment_analysis_exception_fallback():
     """If an internal exception occurs during classification, fallback safely without crashing."""
-    with patch("workers.audio_pipeline.classify_text_sentiment", side_effect=RuntimeError("Simulated Model Error")):
+    with patch(
+        "workers.audio_pipeline.classify_text_sentiment",
+        side_effect=RuntimeError("Simulated Model Error"),
+    ):
         result = analyze_audio_sentiment("error-session", {"text": "Some speech"})
         assert result["dominant_sentiment"] == "Neutral"
         assert result["sentiment_summary"]["neutral_percentage"] == 100.0
