@@ -1,0 +1,19 @@
+{
+  "name": "intelliview-orchestrator",
+  "version": "0.0.0-semantically-released",
+  "private": true,
+  "description": "Release automation for IntelliView Orchestrator. This package.json exists only to drive semantic-release; the application itself is Python (FastAPI) with a Next.js frontend in frontend/.",
+  "scripts": {
+    "release": "semantic-release",
+    "release:dry-run": "semantic-release --dry-run"
+  },
+  "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^11.0.1",
+    "@semantic-release/release-notes-generator": "^14.1.1",
+    "conventional-changelog-conventionalcommits": "^8.0.0",
+    "semantic-release": "^24.2.3"
+  }
+}

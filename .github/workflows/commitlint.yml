@@ -1,0 +1,32 @@
+name: Commit Lint
+
+# Enforces the Conventional Commits format documented in CONTRIBUTING.md
+# on every commit in a pull request, so that semantic-release can rely on
+# commit history to compute the next version and changelog entries.
+on:
+  pull_request:
+    branches: [main, Stabilized-version]
+
+permissions:
+  contents: read
+
+jobs:
+  commitlint:
+    name: Validate PR commit messages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install commitlint
+        run: npm install --no-save --no-audit --no-fund @commitlint/cli @commitlint/config-conventional
+
+      - name: Lint commits in this PR
+        run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose

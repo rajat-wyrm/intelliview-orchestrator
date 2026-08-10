@@ -1,0 +1,48 @@
+name: Release
+
+# Runs semantic-release on every push to a release branch. It inspects the
+# Conventional Commits since the last release, bumps the version, updates
+# CHANGELOG.md, tags the commit, and publishes a GitHub Release with
+# auto-generated notes. See .releaserc.json for the rules and
+# CONTRIBUTING.md for the commit message format.
+on:
+  push:
+    branches:
+      - main
+      - Stabilized-version
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: semantic-release
+    runs-on: ubuntu-latest
+    if: github.repository_owner != '' # placeholder guard, always true; keeps job explicit
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install release tooling
+        run: npm ci
+
+      - name: Run semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release
