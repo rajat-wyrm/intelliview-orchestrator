@@ -23,8 +23,88 @@ from workers.semantic_similarity import calculate_semantic_similarity
 logger = logging.getLogger(__name__)
 
 
+
 from workers._stubs import _seeded_unit
 from workers.prompt_categorization import categorize_prompt
+
+from workers._stubs import _seeded_unit  # noqa: E402
+def score_answer(question: str, answer: str) -> dict[str, Any]:
+    """Score a candidate answer using Gemini AI."""
+
+    prompt = f"""
+You are an expert technical interviewer.
+
+Evaluate the candidate's answer to the given interview question.
+
+Question:
+{question}
+
+Candidate Answer:
+{answer}
+
+Evaluate the answer based on:
+1. Technical accuracy
+2. Clarity
+3. Depth of explanation
+
+Give an overall score from 0 to 10.
+
+Return ONLY valid JSON in exactly this format:
+{{
+    "score": 0.0,
+    "reasoning": "Brief explanation for the score",
+    "strengths": ["strength 1", "strength 2"],
+    "gaps": ["area for improvement 1"]
+}}
+"""
+
+    try:
+        from workers.ai_client import HAS_GEMINI, gemini_generate
+
+        if not HAS_GEMINI:
+            return {
+                "score": 0.0,
+                "reasoning": "Gemini is not configured.",
+                "strengths": [],
+                "gaps": [],
+            }
+
+        response = gemini_generate(
+            prompt,
+            temperature=0.3,
+            max_output_tokens=512,
+        )
+
+        if not response:
+            raise ValueError("No response received from Gemini")
+
+        # Remove markdown code fences if Gemini returns them
+        response = response.strip()
+        if response.startswith("```json"):
+            response = response[7:]
+        if response.startswith("```"):
+            response = response[3:]
+        if response.endswith("```"):
+            response = response[:-3]
+
+        result = json.loads(response.strip())
+
+        return {
+            "score": float(result.get("score", 0.0)),
+            "reasoning": result.get("reasoning", ""),
+            "strengths": result.get("strengths", []),
+            "gaps": result.get("gaps", []),
+        }
+
+    except Exception as exc:
+        logger.warning("Answer scoring failed: %s", exc)
+        return {
+            "score": 0.0,
+            "reasoning": f"Unable to score the answer: {exc}",
+            "strengths": [],
+            "gaps": [],
+        }
+
 
 # ---------------------------------------------------------------------------
 # Real LLM-based evaluation helpers with fallback to seeded stubs
