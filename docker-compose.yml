@@ -71,11 +71,19 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+    volumes:
+      - subscriber_data:/app/data
     networks:
       - ai-interview-network
     command: uvicorn orchestrator.main:app --host 0.0.0.0 --port 8000 --workers 1
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=8)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=8)",
+        ]
       interval: 20s
       timeout: 10s
       start_period: 40s
@@ -116,7 +124,6 @@ services:
         condition: service_started
     volumes:
       - .:/app
-      
     networks:
       - ai-interview-network
     command: python -m workers.worker_entrypoint
@@ -137,17 +144,12 @@ services:
     build:
       context: ./cv_service
       dockerfile: Dockerfile
-
     container_name: ai-interview-cv-service
-
     ports:
       - "8001:8001"
-
     networks:
       - ai-interview-network
-
     restart: unless-stopped
-
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8001/health"]
       interval: 30s
@@ -235,6 +237,8 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - ai-interview-network
 
   jaeger:
     image: jaegertracing/all-in-one:latest
@@ -246,9 +250,8 @@ services:
       - "4317:4317"
     networks:
       - ai-interview-network
- 
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:16686/"]
       interval: 15s
       timeout: 5s
       start_period: 30s
@@ -258,7 +261,6 @@ services:
         limits:
           memory: 256M
           cpus: "0.5"
-       
 
   frontend:
     build:
@@ -314,6 +316,7 @@ volumes:
   postgres_data:
   prometheus_data:
   grafana_data:
+  subscriber_data:
 
 networks:
   ai-interview-network:
