@@ -107,4 +107,18 @@ class InterviewTemplate(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self):
-        return f"<InterviewTemplate(template_id='{self.template_id}', name='{self.name}', type='{self.interview_type}')>"
+        return
+    f"<InterviewTemplate(template_id='{self.template_id}', name='{self.name}', type='{self.interview_type}')>"
+class AuditLog(Base):
+    """Audit log for tracking important user actions"""
+
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user = Column(String(255), nullable=False, index=True)
+    action = Column(String(100), nullable=False, index=True)
+    timestamp = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    details = Column(JSON, nullable=True)
+
+    def __repr__(self):
+        return f"<AuditLog(user='{self.user}', action='{self.action}', timestamp='{self.timestamp}')>"
