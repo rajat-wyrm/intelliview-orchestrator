@@ -20,67 +20,39 @@ def get_tag(path, operation):
         return "Health"
 
     # Metrics / monitoring
-    if (
-        "/monitoring/" in path.lower()
-        or "metric" in text
-        or "dashboard" in text
-    ):
+    if "/monitoring/" in path.lower() or "metric" in text or "dashboard" in text:
         return "Metrics"
 
     # Workers
-    if (
-        "worker" in path.lower()
-        or "worker" in text
-    ):
+    if "worker" in path.lower() or "worker" in text:
         return "Workers"
 
     # Candidates
-    if (
-        "candidate" in path.lower()
-        or "candidate" in text
-    ):
+    if "candidate" in path.lower() or "candidate" in text:
         return "Candidates"
 
     # Interviews
-    if (
-        "interview" in path.lower()
-        or "interview" in text
-    ):
+    if "interview" in path.lower() or "interview" in text:
         return "Interviews"
 
     # Questions
-    if (
-        "question" in path.lower()
-        or "question" in text
-    ):
+    if "question" in path.lower() or "question" in text:
         return "Questions"
 
     # Notifications
-    if (
-        "notification" in path.lower()
-        or "notification" in text
-    ):
+    if "notification" in path.lower() or "notification" in text:
         return "Notifications"
 
     # Configuration
-    if (
-        "config" in path.lower()
-        or "configuration" in text
-    ):
+    if "config" in path.lower() or "configuration" in text:
         return "Configurations"
 
     # Retrieval
-    if (
-        "retrieval" in path.lower()
-        or "retrieval" in text
-    ):
+    if "retrieval" in path.lower() or "retrieval" in text:
         return "Retrieval"
 
     # Scheduler
-    if (
-        "schedul" in path.lower()
-        or "schedul" in text
-    ):
+    if "schedul" in path.lower() or "schedul" in text:
         return "Scheduler"
 
     # Authentication
@@ -113,11 +85,7 @@ tag_names = [
 ]
 
 data["tags"] = [
-    {
-        "name": tag,
-        "description": f"{tag} related APIs"
-    }
-    for tag in tag_names
+    {"name": tag, "description": f"{tag} related APIs"} for tag in tag_names
 ]
 
 

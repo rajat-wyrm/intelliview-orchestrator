@@ -491,13 +491,11 @@ class WorkerRegistry:
         with self.lock:
             return dict(self.local_workers)
 
-        def get_available_workers(self) -> list[dict[str, Any]]:
-            """
-        list: Available worker details
-        """
+    def get_available_workers(self) -> list[dict[str, Any]]:
+        """Return healthy workers with remaining capacity and a recent heartbeat."""
+
         available = []
 
-        from datetime import datetime, timedelta, timezone
         from orchestrator.time_utils import utcnow
 
         timeout_threshold = utcnow() - timedelta(seconds=self.HEARTBEAT_TIMEOUT)
@@ -513,13 +511,13 @@ class WorkerRegistry:
                     if last_hb.tzinfo is None:
                         last_hb = last_hb.replace(tzinfo=timezone.utc)
 
-                    if (
-                        last_hb >= timeout_threshold
-                        and worker.get("active_tasks", 0) < worker.get("capacity", 0)
-                    ):
+                    if last_hb >= timeout_threshold and worker.get(
+                        "active_tasks", 0
+                    ) < worker.get("capacity", 0):
                         available.append(worker)
 
         return available
+
     def get_least_loaded_worker(self) -> dict[str, Any] | None:
         """
         Get the worker with the lowest active task count

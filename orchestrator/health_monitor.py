@@ -193,8 +193,6 @@ class HealthMonitor:
 
         fragmentation_status = HealthStatus.HEALTHY
         from config import get_settings
-        
-        from config import get_settings
 
         if fragmentation_ratio is not None:
             if fragmentation_ratio >= self.redis_fragmentation_critical_threshold:
