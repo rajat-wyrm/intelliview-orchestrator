@@ -44,3 +44,5 @@ frontend/*.tsbuildinfo
 .env.local
 subscribers.db
  data/
+# Node dependencies
+node_modules/

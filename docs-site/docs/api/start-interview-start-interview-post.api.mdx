@@ -1,0 +1,85 @@
+---
+id: start-interview-start-interview-post
+title: "Start Interview"
+description: "Start a new interview session using intelligent scheduling"
+sidebar_label: "Start Interview"
+hide_title: true
+hide_table_of_contents: true
+api: eJztV1Fv4jgQ/ivWPN1JKW25PemUN7ZFOqS9a4/C3UmlQm4yBG8dO7WdAkL576uxQxKg0NU+70tLPJPPk5lvvrG3kKJNjCic0ApieHDcOMaZwhUTyqF5E7hiFq0VWrHSCpX5dSlFhsoxmywxLaVQ2UzN1HCNSUlIbCH1Kp6p6x67McgdNhBCsZQ7/swtsl+s4660MbsZDweT4e2vM9XvsRueLPf8x5gKO1O/9di0SD2Wf405zf6ZDqfD25n61GNTi+whRIOGbJ0w5YZxa0WmaH2lzQuamfq9xybcvrCitEtMyeI3Yq8llsi4Si+1qV8LZltgIhYiaRBmamAyG88UY4wZfC3RupiNjtJWm9hKuCVLuEqF/4wUHRfSEs4YXWnUDqpBeAgAY7SFVhbjOplpg1xDBGS0TuTevOLCMSdy9NhcWNxB/zmZ3A/XCfp6x+xOsYQgfcm4kKVBiEAXaPzaKIUYLFFi3pBhfvhcaOsgAotJaYTbQPy4hbtB6Zb9e27tSpv0M3KDBuLHp+opgoIbnqNDY72r4jlCDOsLXogLp19QQQSCuLhEnqKBCCh/wmAK8YJLixEQ63IO8Ra42twtPI7bFOijNUJlUEXNiiqlBNrYCSdp4f+LQSEuJn6rigx1fT7rdEOY7XbOlBhBopVD5fx2RSFF4nNz+dVSx2w7wRSGMucEWnpqCj0XKT3vBxhBztdfUGVuCfF1/48IcqGa5zbYm4YuoxSig26dKvFaYodSIkXlxEKggSrqRBCSfDpde9H0r67Opa+N6G9CrSIotBUhou/c4bp/dof7HR5hG6EDrY4RG/+dz2F+7hQyvYiZ1KuI5ZiKMo/YUmRL77ngpXQQQzBAVUW7HfTzV0zcHvMe9+vZidZLZtOy48Clo1DqdZbrFCVbaMN8H5GectVKLVQVxWHqjvdE6l9d0b8DoS6TBK1dlJLt5AF+mKq1nJwgavOhteiMUipMEOGz/sGDiBhka87dj/bsTvgGbp/Y5yPeax5Kq7Avc5to834zqDJ/9p1zOo6xsC/swSNUETSKOyfFnZPivgtM5c0+QB426v0fqfeEsD6iZKduTUGik0Q9NVbe4WowdMh6dBaoifqp3z/m5r9c0v7ElaEx2vw4McN8o1/CYW6PHaRO9qzfwa2mGE9tdrkxfNMhzhcdAqQi5zY7x7G/0FqeeToEl9OuPhlsQtaKZlxR+oS09aEFordbd2Cayjesplyu3YfsoNyE8Gu/DhfaEoUKnU7FbSjBe5vtXOhQcQQY+OF4RmO+5Z6lKHJ0S01ni/rsUHCaCnDpJfGiFcP2VEEnuzyU/P2zRZsuTmaIgI6ggTG1ayCaLjwMxUYngKmRtLPUmdhxmkg5bo8EwzXPC4nHI70t8OGgbS3taOysNSOtGT3EhoXukmEw6hwk70yyROsMd76ZDoZcY6SGG9yPfMOmgvZ7LklQ2uYtjKapEeJ4Q2MDxHXvqndVT3KXc9+S9ZeEC8GoU5K93bdtZ/+8O/y8OzQaQQJ1WUguvISWRoZGpDZ/hMM2f4pgSUIQP8J2S9WdGllVtPxaoqEbxVMEb9wI/ky98UjCXV8OSOlTYcnQXg9OMvRUfC+4ObqCvHFZkqcfHcHhJgBdeAVvPY4GWvvGIKF0nfXtyuH93cMEIniuLyI0fiEGw6nt6K//Au0/zCubX9uC5CoraQbFEDBJxUgG35PF+kdnRHK16URYS+EuKdwfMyc7qezM0f3XdiI7Twz6SwiXtgHJDFdu7t+rnqqq+gZGhMQL
+sidebar_class_name: "post api-method"
+info_path: docs/api/ai-interview-orchestrator
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Start Interview"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/start-interview"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Start a new interview session using intelligent scheduling
+
+Execution flow:
+1. Create session in database (status: CREATED)
+2. Cache session in Redis
+3. Update status to QUEUED
+4. Use Scheduler to intelligently assign to worker
+5. Task pushed to Redis queue and/or assigned to specific worker
+
+Args:
+    request: Interview session request with candidate details
+
+Returns:
+    InterviewSessionResponse: Created session details with estimated wait time
+
+Raises:
+    HTTPException: On creation failure
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./start-interview-start-interview-post.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./start-interview-start-interview-post.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./start-interview-start-interview-post.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

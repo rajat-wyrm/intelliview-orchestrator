@@ -1,0 +1,84 @@
+---
+id: get-session-status-session-status-session-id-get
+title: "Get Session Status"
+description: "Get current status of an interview session"
+sidebar_label: "Get Session Status"
+hide_title: true
+hide_table_of_contents: true
+api: eJztVktv2zgQ/ivEnFpAabLBnnTzJt6sgbT2+rGXxDAYcSSzoUiVpJwYhv57MaRky06TFtnTAnvSY4Yf5/F9Q+5AoMusrLw0GlK4Qc+y2lrUnjnPfe2YyRnXTGqPdiPxiTl0Thp9r+/1FL2VuEHHLHJ15mWJnZlJnRtbch/fM1ULqYv0Xp+xq2P8D1fT4WA+vE7Y34vhgp6T6fhqOJuNvtwk7Gr8eXI7DOY/B6Pb4fVHgphK98hcZiwymTO+4VLxB4VkmliTUQi6YNoI7MdB5rks0XleVo4SGNjCpfeaMdbFvZIiZaPTZJkUqL3MJdo279rqbuUs+sxCOlN0ldEO00OaLUSbLteCCfRcqhDBlEuHHdJf8/lk+Jxh6EbKRvl+sTae5abWAhIwFdqQz0hACgX6VRd73OL0c3VIbbUq0EMCFbe8RI/WQXq3A81LhBQOfpCAJDpU3K8hAYvfamlRQOptjQm4bI0lh3QHfluFld5KXUACXnpFP9qasJGAplkSQiyLo0WXFxf0OGberM6ob3mtWFdDSCAz2qP25M6rSsksJH7+1dGaXS+QylJZvIw79DL5xSATiNV60z96NAlkXAspuMef7HDV+bV7WOkeV4G3ISO9HeehAe16XZcPaKFJen+UAipghxiYPwsITQLcOVloFCui+g8h25Deghy0IOwLgcRKWL8iNb8XckYIQWuEh1r8K7ShFnusuqJyihX370VbRAQ28NA0SedmHr5i5o+4fncsiJYfJ81fvqDT8RyA5ITnnYGVRqBiubEnEwKahuL6/fLypUj+4Yp2Juehtca+XyFxBNGb9Fi6lw7KZEfWXyg1nREF8Xd5qCu3lm97irg1MUDqZemKt8TzGZ3jReh6dHndNRSDzcna0Oiq6lCQzjwKP0i3/rkHs+/5Xq5Uy+ef84JqE8Nv/XosOLQoduj1UlzHFvxos86FDoQXgJEfnhc0vGHs12gpgBL92rQnQhjxfg0pnLfkOovkOt8dON0QqTGrrfTbGdEkNn48qP36csKdezJW/IHcou0XjZMZEsiVeYq8aV0j3UwVYChC84h6YRVFoUwhdctsOpH73RmMegfu2GZrdN5yH9h9TP+DkRQwmIyCfIQkPjzUJOrDNaXa3wMggQ1aFyF++3Tx6YKaUhnnSx400h5/dPfpjoRZJ/ajAHYHtf1/U/oP3JRaypKmzyvFZZg6tVWRtaSP/Yw/24/3tDf1lwmsjfPkt9s9cIcLq5qGfn+r0W4hvVsmsOFWUk3DcBTS0buANOfK4RsE+jBtJ8pH9lqo3eDQNDY2XNX0BQk84vb4uhYm7hq5IKne7VqHQUYF6i19cUA0/blxM5xD03wHE6k2Zw==
+sidebar_class_name: "get api-method"
+info_path: docs/api/ai-interview-orchestrator
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Get Session Status"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"get"}
+  path={"/session-status/{session_id}"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Get current status of an interview session
+
+Retrieves real-time session information including:
+- Current status (CREATED, QUEUED, PROCESSING, COMPLETED, FAILED)
+- Risk score if available
+- Processing node information
+- Timestamps
+
+Args:
+    session_id: Interview session identifier
+
+Returns:
+    SessionStatusResponse: Current session status and details
+
+Raises:
+    HTTPException: If session not found
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./get-session-status-session-status-session-id-get.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./get-session-status-session-status-session-id-get.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./get-session-status-session-status-session-id-get.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

@@ -1,0 +1,1 @@
+{"parameters":[{"name":"interview_type","in":"query","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Interview Type"}},{"name":"limit","in":"query","required":false,"schema":{"type":"integer","default":100,"title":"Limit"}}]}

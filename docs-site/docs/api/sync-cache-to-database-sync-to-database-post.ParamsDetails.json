@@ -1,0 +1,1 @@
+{"parameters":[{"name":"session_id","in":"query","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Session Id"}},{"name":"x-api-token","in":"header","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"X-Api-Token"}}]}

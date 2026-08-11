@@ -1,0 +1,1 @@
+{"title":"Body","body":{"content":{"application/json":{"schema":{"properties":{"session_id":{"type":"string","title":"Session Id"},"category":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Category"}},"type":"object","required":["session_id"],"title":"AskQuestionRequest","description":"Request model for getting next question in a session"}}},"required":true}}

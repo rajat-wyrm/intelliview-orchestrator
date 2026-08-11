@@ -1,0 +1,75 @@
+---
+id: get-task-status-task-status-task-id-get
+title: "Get Task Status"
+description: "Get the status of a Celery task by its ID."
+sidebar_label: "Get Task Status"
+hide_title: true
+hide_table_of_contents: true
+api: eJzdVU1vGzcQ/SvEnGxga7tGT3tTnSAR0MKGrfQiCwK1HGkZU+RmOCtHEPa/F0OupJUdO0WPOWnFGc7He2+GOzAYK7IN2+ChhE/IimtUkTW3UYWl0uoGHdJWsY5ParFVlqMaf7h49I9+RKtYPnqlVLLOrSlPvK1Bz3ZpkdQZIbfk0UiIlKGq0bQO6TyFuk/mfbSJjk8PqYR7jE3wEUt10xKh5xy5r097owhj61jZpdIbbZ1eOLyAAkKDpKWrsYESVsjzVGK+ePI972ufz1fIUECjSa+RkSKU0x14vUYooXeCAqwA1WiuoQDCb60lNFAytViAdLXWUO6At41ci0zWr6AAtuzkQFpTYwNdN5PrubsoN66vruTnlJCHtqowxmXr1B4KKKAKntGzuOumcbZKnV5+jXJnN6iiIcGBbc4QMUYbvLTxToUP2SsVWRz6/i8tFZAhfTd69uhS863LPfjt7TKBrY2x0op2d4PKM7Z9xLD4ihVDVxxy+NY5EDj3Oe5z5K57eWlI2HQIRzHgt+9hdtrgqRyheMHT3qDWwaBTy0Ank9Dr9ayNeQIu5fS3fHq563N35xfQdVL1H9fXr6Xwj3bWJKLVR6JA/18HBllbJ1+WcR1fO7hQnViPBJ3SOiDBesYVEnSzI+qaSG8H3P8VcoHC/jqu3pPJ3xijXiEcgr3tmsBQE7F2Mp1NmwDZm8fpoCug4u+DMAdF7P1uBMvvP1eNYJPL7/0GQjlSlBl6G4oPmYIfJdu7fJ5M7l4FzPpgvZLlBLdcI0kBa+Q69IsurTCuoYQfq0wkjlVLlrcPIpBM+e2o5fr6Tsf4HMj8iZqQhnBpMUMBSxees2J61yy00KQwUlt4Qv+FnOR3YWV9r2nrl2HIy2isxp6RNhaf1S1VNUYmzUnXp8I/GkX7o7txGi9jRQmLltEoewjUUJB9mRWyQYo5xO8XVxdXQkcTIq91mo5+scuTlzZYv5leZN8dh+wXeh17VkXwl43TNo1kSy4TK+KZwkA8UEC5X5CzAuoQWTx2u4WO+IVc18nxtxZpC+V0VsBGk5VcaWcYG+XbQLnULuI7AJ/d94N2rt4qcj9PXqZpo10r/6CAJ9wOXum0hWrURkQ83fXWUVVhw4N7r5ZmN5ylTx8n0HX/ArmCK14=
+sidebar_class_name: "get api-method"
+info_path: docs/api/ai-interview-orchestrator
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Get Task Status"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"get"}
+  path={"/task-status/{task_id}"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Get the status of a Celery task by its ID.
+
+Args:
+    task_id: Celery task identifier (returned by the scheduler).
+
+Returns:
+    TaskStatusResponse: Current task status and result if available.
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./get-task-status-task-status-task-id-get.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./get-task-status-task-status-task-id-get.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./get-task-status-task-status-task-id-get.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

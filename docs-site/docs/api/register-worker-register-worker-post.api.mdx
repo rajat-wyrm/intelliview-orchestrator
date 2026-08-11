@@ -1,0 +1,75 @@
+---
+id: register-worker-register-worker-post
+title: "Register Worker"
+description: "Register a new worker node"
+sidebar_label: "Register Worker"
+hide_title: true
+hide_table_of_contents: true
+api: eJzNVsFu2zgQ/RViTruA3GSDnHRzuwVqYBcJHLddwDEKWhrLbCiSHVJxDEP/XgwpWbK9abu39cUmOXwcvvdm6AOU6AtSLihrIIc5VsoHJCGFwZ3YWXpCEsaW+GgezZQqnz8aIYQg/NagD7n4nEIobiTJOKLEIJX24re0/4sqM1FIJwsV9r8z0BxDQ6bHKlURcjEfIxTWbBTVcQAZWIdpYVZCDtQl+aWDPx876wNk4CTJGgOSh3x5ACNrhBxeJtKpSbBPyMCKL71FWSJBBnwpRVhCvpHaYwa+2GItIT+ANPu7TcQJe8c4PpAyFbTZccY0WkO7yiCooHnin8nUqckiHtXyQkfaW1vuGXM4LlCDGRTWBDQhHuecVkW88tVXz9IcRsk4YkKCQs+jI8k8OM1uyKWTaVZCm0GvxWiDMgGrSEK/410flEGJG9noAPlt22b9Drv+ikU4YW05ymV1fvZY33kiIkKf2i/Oi9qWqMXGUu/Asb2gbTkNQu+s8YmDm+tr/jpFe2iKAr3fNFrMu2D4dZbTKbc3N5fAn6RWZTLqeyJL/wH1TLtUKfxLBaz9ZYC2xcnqL/iwl7JdDWJJIrkfifuXLTouM6h99SPn/I3eywrhCPZ6aCRDLHi15dpyTSSkX57FCfZfeBnBHI10dB5z+RLgZ2ZjblL6XdzIc4NESaHXqfgzSfBvh/UhHxaL+wvA5I8gK24vncc9p1Bj2FruU8c+FLaQw1XfpibJ05CBx6IhFfYP7I6k9920Cdube+n9zlL5FiUhjbmSvAwZbLTdJbt0ocll1kUYTozbzkfSfLK2lerLhh05H/rQ+xdZO41nfWSQdmgVt1HSjR0rOp2JmQlIzwp34o6KLcYijRVxWjLDIlfN9H4Wq7vkolbrJmAp1BHIkeW6TQk8I/kE8ceb6zfXLCTzWstYV11TPz5bn3tqT04/DOX5f33hOn3Z91dOSxUrsyGdJGYDLeHcQKsMtmyxfAmHw1p6/Ei6bXn6W4O0h3y5yuBZkpJrVmvJ/aB767iBlMrzwvDavcrZa/k94f7iRX2WuuHI2JFSwLsENImNYYi46JPDjmlRoAs/jB0X2v3dwwIyWHfvKr8e/DdB7rhhyF26gY0XizUT5w6gpakabm05JEz+fAcH4ipM
+sidebar_class_name: "post api-method"
+info_path: docs/api/ai-interview-orchestrator
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Register Worker"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/register-worker"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Register a new worker node
+
+Args:
+    request: Worker registration details (worker_id, capacity)
+
+Returns:
+    dict: Registration confirmation
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./register-worker-register-worker-post.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./register-worker-register-worker-post.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./register-worker-register-worker-post.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

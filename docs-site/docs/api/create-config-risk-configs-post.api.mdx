@@ -1,0 +1,71 @@
+---
+id: create-config-risk-configs-post
+title: "Create a risk weight configuration for a job position"
+description: "Create a new risk weight configuration for a specific job position."
+sidebar_label: "Create a risk weight configuration for a job position"
+hide_title: true
+hide_table_of_contents: true
+api: eJztWE1v2zgQ/SsDXrobKI4d7F4EbAEnLXZTtJsgSbeHJDAocSwzoUiFH3Zcw/+9GFG25Y842R5344slkTPzNJx5j+KMeV44lt6wU6OHsgiWe2m0Y3cJE+hyKyu6Zyk7tcg9AgeNE7DSPcAEZTHykLcNYWgscHAV5nIoc7g3GVTGSRrr3OpbfQgHB/cmGyweHhykELR8DAialwjYKTpwy67M0E+4RfioC6kR7S2LtjGoI7MK7aGTheaqgeLgF64UvP8DuglwDwq582A0wnvo/hrtWy9FPkx9xRVo49HV6P1IuualWMJMhfHNzgRLWV4nYRBHB5SF5toN6I08S5jFx4DOnxgxZemM5UZ71J4ueVUpmdfOju4dJXXGXD7CktNVZSmUl+jorp0iuvfTClnKnLdSE6ySP31GXfgRS3vdbsJKqZf3CfPSK5r+yWRwsfCyuaCfWkvTyv27rdS/Y/OENRneRup5NnAT6fMRIVtB1aHM0LIamixDydLuCtg1z+BqabSJ7FssrHoxeAZL74Bj1N7V84c8KM/S3jxhmTUTh3bAcy/H0k9fC+Ik2kF/YbcHhwuukrk0wUETDnjbrAWHByHNQGqP1oYqdtMrEfXJFM7WTPeAqiPBY+BK+ilI5wJuJacMystK4aBC6/4FlC+NHVw0dntwLGJAEwMEesw9ik0wOddCCuognjnUOb4WzenCEPqN4R44yyjU1FBZdNSAG1AK/h0HAseSb7TYXhx/8u8IH5ZWe0CQfxDSYl73F9em5Epur0/G84fCmqDFQBvpXp2Rk6Ud/F3b7cGyigF1DFA4RrWOZJ4swprsHnPK1yLUpXQP35r234xypoUcSxG4WtOEMVehoVPk+QgiTXdudV+tyLoMzkOGNV934HqEUyDa0cZSqr6jIA53uSHKAy9LvNXOgKd5wtRrqxEFeAMulPTX6xBTrQGcMa6n50OW3uzl0N+73XnSSrxSbH63ysCHlstdmSLOlxYF6egac6948249n1Fto6ZuJfUySghkRkxjRdM8ysJz6tthc8K1wuFtwPqBq4x2kamPuz36W491FfIcnRsGBZfNZJb8rGpJsUurFu99Jmh5XlK2ndr1JkBvAvQmQG8C9F8SoFcLTtJ8dogB97sYc0h4PUsZldwh4WzlLkqMgL4nR6ESP+voazStHb0ggZL67hkdXE/P2qutwduply2F2lTMOABRmcCiD1ajgGwK9EmIWlRGau9qoZwn7Lfj420t/Icraltql4/WGvvzQijQc6lqSfRY7hAtZfK10VcUCRF6gZbN71bp59byaWuRPpsIkNa6dMU+ff2CzvEC2dLZ81PrZMA1jc4TJnUVYvksdL1+QGXqn1puttr4lHL59HL5UG4i/GZeqxZWSxRX6PlUfIhLsI9X/rq+vthyGOujRD8y9MXffNVXnLaJ7Ig45rD55D9iCXOYByv99IoKIS7teT/40fEFd25irDhBbtG208JpmLpNmUmsjGZqLChT1W4ItnlA/dUqiqtMIXVTu1R8l6tTho9PvKwUbp8arBaytXfa2C31du1ees/sIXq71Ly3U1V72wLX26U1vU2+XBU+k3po2nXWP4s7k7HECZzbfITOW+7rPl33sRqkXu5fnNVCICT5zgKxmFw6qqyhDXBM1Bitiy56nW6nSyioAEpedzsdkrRPwl46BWsffm1ibJ0M/V+P1pqGIE44qhSXNWsFq2JPUL/dsHa/sYQRFYyoI9MbNptl3OFXq+ZzevwY0E5ZenOXsDG3kmdUMzfElSPkglrwZsYecLogIu0Pa0aj6SrUDLJJ8ES+0aKf51j5vXPvWqRxcX51zRKWNWeApRFkY/mEmI5PWMrqk8Xl1rx+NmOK6yIQJ6cs+qTfD5zmi0s=
+sidebar_class_name: "post api-method"
+info_path: docs/api/ai-interview-orchestrator
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Create a risk weight configuration for a job position"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/risk-configs/"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Create a new risk weight configuration for a specific job position.
+
+- **job_position**: unique name e.g. "Software Engineer"
+- **weights**: per-signal weights (all >= 0, at least one > 0)
+- **description**: optional notes for this config
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./create-config-risk-configs-post.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./create-config-risk-configs-post.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

@@ -1,0 +1,76 @@
+---
+id: get-high-risk-sessions-high-risk-sessions-get
+title: "Get High Risk Sessions"
+description: "Get high-risk completed sessions"
+sidebar_label: "Get High Risk Sessions"
+hide_title: true
+hide_table_of_contents: true
+api: eJzdVU1v2zAM/SsCTxvgtlmxAYNv2Qe2ABtatNkuaVAoNmNrlSWPotsGgf77QNux3aU97LpTEunxkeJ7ZPaQY8jI1Gy8gxS+IKvSFOUJmXCnMl/VFhlzFTAE4124cTduTkVIb5xSSnFJGEpv81RdSUDIPOF4ql7NTt4kKsetbiynanb6/nUXaE1lOFXf9aOpmmqgV+wVITfk1Ksh6t3staS9as8PmXOTcaq+mcDKbyclH5ggAV8jaXnXIocUCuRbgd0K7PYAe+6oQIYEak26QkYKkK724HSFkMLwNEjASMN+N0g7SIDwd2MIc0i32gZMIGQlVhrSPfCullDXVBskSKB/GKSz0/cJsGEr18uBOcZkyNf26d9zGcdYPE32bjbm+tayxrgWrlB7FzBI9PlsJh9PLXHdZBmGsG2suurBkEDmHaNjgeu6tiZrO332K0jMfqwoxhgTeHt+fkz8U1uTt2HqM5Gnf2CFmkRdNl3dObI2Vr4ZxiocA6zPntxqt7vYtrr2DQtMxhUgnf+rhXEdk8OZJtIiwNBH3xUIMYEqFBMBer4R+h1D0AXCQPYytG2GWsptFOXrpm3I4XrRHsQEMn6c0PjNL8x4QvNRevkoMidHmNFBq7Y3Xfk9bj1yjBJ1Cr3cik+dBM8lO0C+LpeXR4SdP1gXMmZwwSWSFFAhl74f23YYuYQUzoY5P5nMecCsIcO7a3FHp/fFvOHy/FKH8OAp/4CakKa90nINCWytf+js0kM7l/m6pZHC/B26H2QlufWFcdAVbNzWT0WZL9TCMdK9wQd1QVmJgUmz70Zw6vrxUow/v1yorSeVG7HBppFdawaimryMXmePe6TQUbw5nZ3ORIvaB650Oxr9vpD9/dUUZbeOr8cmPSliPw7af7Xxe3nF9me11aYdzIZsp7BYaAXPWGidQOkDy+1+v9EBf5CNUY67jSt7IjdBb+xk597h7q//g3ttG0nfbpEX8Id9PmLX8oOMgCFdybIpUedi19W+D5pnGdbTqKPdGKcj8+XzEmL8Awa/s30=
+sidebar_class_name: "get api-method"
+info_path: docs/api/ai-interview-orchestrator
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Get High Risk Sessions"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"get"}
+  path={"/high-risk-sessions"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Get high-risk completed sessions
+
+Args:
+    threshold: Risk score threshold (0-1, default: 0.8)
+    limit: Maximum sessions to return (default: 50)
+
+Returns:
+    dict: List of high-risk sessions
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./get-high-risk-sessions-high-risk-sessions-get.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./get-high-risk-sessions-high-risk-sessions-get.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./get-high-risk-sessions-high-risk-sessions-get.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

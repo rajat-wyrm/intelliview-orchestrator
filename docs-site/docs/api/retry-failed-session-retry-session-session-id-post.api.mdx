@@ -1,0 +1,77 @@
+---
+id: retry-failed-session-retry-session-session-id-post
+title: "Retry Failed Session"
+description: "Retry a failed interview session"
+sidebar_label: "Retry Failed Session"
+hide_title: true
+hide_table_of_contents: true
+api: eJzdVcFu4zYQ/RViLm0BOUmDnnRzuy1qoIWDxFsUcAyDkcYWd2lSOxwlNgz++2IoyZbquOhee7JMDt88zrw3PEKJoSBTs/EOcnhEpoPSaqONxVIZx0ivBt9UwBCMd8/u2U2ZcVdzUOwVYSgqLBuLiivso5TZKMOq0sF9xwr3BWKJpdrpvSJkMhhuEhBtQ/7slFL9wbUpczX7oPzmBJWSMB3kwCNyQ64/U5qCc9Uy7lgYtxVKjWXIwNdIWu41KyGHBLJu77Xu07WL/b/1mcV6XfsgIAGLhgwfIF8eYT5tuLp/0CG8eSp/Rk1IkC9XcZVBrUnvkJFCCnV6h5DDGREyMFLhWnMFGRB+aQxhCTlTgxnIBXYa8iPwoU4nmYzbQgZs2MrCU1eQWQkxZqcM+4muzYT9Z3R9igp1iTRKstE2jLJod5hvEtNxPkHuVlxjLcjVegZ/T6a1mSxSqigbhKH2LmAQxPu7O/kZ6+mpKQoMYdNY9dgFQwaFd4yOE4+6tqZIbbr9FOTM8cwyxhgz+On+/hL4L21NmY6pX4k8fQMq1CTSYNPyLpG1sfJlGHfhMsD6YrT7H0onvtkiQVzFrF/TRPow6OcfviUIMYNd2P5b6//EEPQW4QR2PTQVQy1kN4oc6iYVpN+epYWYQcH7AYx/+YQFD2B+kVruWZR2EXNW1TLVpqXfxQ3kcm5R26HrpfjQtuC9ZH3I74vFwwVgqw/WW/EczLlCEgI75MqL5zsPJ8vlcJvcPukseXs8ezMOjP4kMmkb/77dz0XTsg0ZbKx/a3XThbZy83WCEYZimY9khYT1W+OgZW7cxg+7M52p2WnizqmoMDBpTuoey/+8KQ6YPszUxpMqjejhpeHR6K7JiwdbnbwihRbix5u7mztpilRpp5NHupnSztTf2jegmzv/pHA8++1/9Wp0zRX139ZWm+TPhmzbXxHSEkZCggzywZhfZVCJ7PIlHI8vOuBHsjHK8pcGSd6RVQavmox+kZ4vj1CaIN/nKX21zt8/dtb7QV1j2jvMib9etW3kH2TwGQ/j5yiNpu6l+DYW11K3Kcbv0YmBDMc2YFoUWPNg72JYx6GHH+ZPC8hAvPae97qPwTQeX73zW89Op+do0ftxMLLHx3onrwvCEh0bbcMJZEva8Tqdi6sY41ezLDkZ
+sidebar_class_name: "post api-method"
+info_path: docs/api/ai-interview-orchestrator
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Retry Failed Session"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/retry-session/{session_id}"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Retry a failed interview session
+
+Attempts to reschedule the session if it hasn't exceeded max retries.
+
+Args:
+    session_id: ID of session to retry
+
+Returns:
+    dict: Retry scheduling result
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./retry-failed-session-retry-session-session-id-post.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./retry-failed-session-retry-session-session-id-post.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./retry-failed-session-retry-session-session-id-post.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      
