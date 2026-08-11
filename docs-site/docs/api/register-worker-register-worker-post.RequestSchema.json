@@ -1,0 +1,1 @@
+{"title":"Body","body":{"required":true,"content":{"application/json":{"schema":{"properties":{"worker_id":{"type":"string","title":"Worker Id"},"capacity":{"type":"integer","title":"Capacity","default":4}},"type":"object","required":["worker_id"],"title":"WorkerRegistrationRequest","description":"Request model for worker registration"}}}}}

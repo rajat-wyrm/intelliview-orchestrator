@@ -1,0 +1,78 @@
+---
+id: worker-heartbeat-worker-heartbeat-post
+title: "Worker Heartbeat"
+description: "Process heartbeat from worker node"
+sidebar_label: "Worker Heartbeat"
+hide_title: true
+hide_table_of_contents: true
+api: eJzlVU1v4zYQ/SvEnLqAvHGDnnTzfgAx0CJB4m0LJEFAi2ObG4nUDkd2DEP/vRhSluS42e6em0sscvhmOO/N4wEMhoJszdY7yOGGfIEhqA1q4iVqVivyldp5ekZSzht8cA/ur/gZVEBnVI1kvbHFcCYo9so6YwvNqHiDe6UJlS7tFh+cdkb2CWtPrIqGCB0rXbDdomIdnlXhG8eSZ0brkD84pZQi/NZg4Fxd9ZUZzVr9kkp7sibrMJ4EI7yT87fIDbkjhLHFyfnCu5WlSserZ+BrpPh7biCHDra/09PZQu0DQwa1Jl0hIwXI7w/gdIWQw8tE13bC/hkF2kprN6gNEmQgV7GEBvKVLgNmEIoNVhryA2i3v15FHN7XghOYrFtDm/UrrilLaB8zYMulLPw9mdV2soipWtnoWvXBm71gDumYGsyg8I7RcUxX16WQZL27+BpEAIdRMTVJS9hikK++z/JxWt1QSxKGmhtoMxjTMTpkHeM6NuJ4apa4X8TAts2OkX75FQs+6dj9qI5XGR5fl9EzfZsaAtkrsXfrqvIGS7XydNR5TzK0rdRDGGrvQmrE5XQq/06h7ppC5mbVlOq2C4Yfb3XK8tvl5Tnwn7q0Jh5Tn4k8/QTqKwINsral/LKMVTgPKH1xsvsDYjxy2T4OrGkivR+x+7tPBYokqrD+nnz+wBD0GqEHezs0NkMtZLeVAaub2JDj9jwutBkU/DKC6RV1jPsovXzh/1Sd9CaV38WN1DZQlBh6uxWfEgX/luwYcrVY3JwBJn2wXovHdOqOgq+QN17sqjcj3kAOF0nHF4OOMwhYNGR5fyfySIRfzxreXN7oEHaezAfUhDRulpZtyGBV+l3SSxeaZObrCCOVifl8oVJSl35tXTc3IsnbwY0+v+iqLvGVmwzcnhrGNPK68mNaZ3M1d4y0tbhT11RsMDBpjmNxOjfDpozO7GYe59tYSbZsGI2yPVCdHr1UxBYpJIhf30/fT4VNaW6l43B19t753NWovyfpD8OQ/p+f1E5IMmEXdalt9ICGyqQlkerRzyGDQayPGWxEz/k9HA5LHfALlW0ry98apD3k948ZbDVZvRRV3Iv5dK+ruJWxQTaG9/VNat4q8Rn3Z2/4VpeNREb7SwEfE9AkutAQcWbKw4lZUWDN340dT/XN9d0CMlh2L7m8U5AD6Z24k96lG/h4sTifce0ApXbrRnw0h4Qpf/8ASLR6oA==
+sidebar_class_name: "post api-method"
+info_path: docs/api/ai-interview-orchestrator
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Worker Heartbeat"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/worker/heartbeat"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Process heartbeat from worker node
+
+Workers send periodic heartbeats to indicate they are alive
+and to report current active task count
+
+Args:
+    request: Heartbeat data (worker_id, active_tasks)
+
+Returns:
+    dict: Heartbeat confirmation
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./worker-heartbeat-worker-heartbeat-post.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./worker-heartbeat-worker-heartbeat-post.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./worker-heartbeat-worker-heartbeat-post.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

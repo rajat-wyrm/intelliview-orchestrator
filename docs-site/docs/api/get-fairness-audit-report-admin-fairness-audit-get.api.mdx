@@ -1,0 +1,73 @@
+---
+id: get-fairness-audit-report-admin-fairness-audit-get
+title: "Get Fairness Audit Report"
+description: "Return a lightweight fairness audit report for recent scoring patterns."
+sidebar_label: "Get Fairness Audit Report"
+hide_title: true
+hide_table_of_contents: true
+api: eJztVU1v20YQ/SuLOVOya+Skm9ImqYAENhwlKCAbxno5Ejde7m5mhpYFgf+9mKVkSVENtPde9LEzfBy+ee9xCzWyI5/FpwgTuEXpKBprgl81skb9NEvrKSKzsV3txRDmRGKWiQyhwyiGXSIfVyZbEaTI47t4F+eNZ4OxzslHMR0jG2nQ4Itn0eb33vJUAROZBjvSY1dQd3Cj2nNGYp/iXSR89rgem5kYz8ZHwagj2xA2xsdlotYO/42NtakTsompzBqsQ2PNsgvhLrrU5uBtdGgSHT0YMzK3+ixLsi2uEz2NoYKUkQrurIYJrFAe9pc8FC4eBi4ebN36+GtthQIVZKuAgsQwWWwh2hZhAi8jm/1I0hNGqMAr9Q3aGgkqIPzZecIaJksbGCtg12BrYbIFGzfXy4Ijm6w4LMoU9NXrSexCgP6+AvES9OCv0TT70bzcqtcCIecUGVkRry4v9etUBV8755B52QVzu2uGClwqrJc5cg7eFWYufrBesz1M2fd9X8G7q6tz4O82+LpcZj4QJfoPqJBJtyF+mLtGsT7oLy/Y8nlDSO6k+i+oU1WtkKC/76v9mSWyGziw+TkNA0JfQcsrRT7FO7R+QWa7QngFe7u1kGHmWu1VDrkrhOzLs3LQV+Dk5QgmPf5AJ0cwvyuXLwL9Yf7XnoOqFoWbYfxd35FcDisaNvQ2FX8MK/inm+1b/pzPb84AB32IXakj4FoaJB2gRWnSzmbFN9LABC6KtS721hoVa0EFjK4jL5uvqo9h49fTTpqrG8u8TlS/R0tIx2xZLUMFy5DWg2B2rYPOUi4wOpp65RsFvX1IKx9hGFlz5ngt05mZRUHSZDLX5BpkIStF1qe6PxRV+tObWcm52qsQHjvBuiTaAJQpqfkGgTwP+QcT+G18Ob7UbeTE0tpijl2YfEIxH/dRViLV3JZc+nWO7cFt/yf9adLvRKL2ucjB+mLwjsKgE5XiAooUVUCnYryvoEks2rHdPlrGbxT6Xo9/dkgbmCzuK3i25O2jymah6bILe42j2rMWDnH/5sreGvMJN2evlGcbOu0s+TY0TJ3DLEe1s7ztj2346cMc+v5vjfHf+Q==
+sidebar_class_name: "get api-method"
+info_path: docs/api/ai-interview-orchestrator
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Get Fairness Audit Report"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"get"}
+  path={"/admin/fairness-audit"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Return a lightweight fairness audit report for recent scoring patterns.
+
+This endpoint uses the existing BiasAuditor heuristic for scoring-dispersion
+review. It is intentionally informational and does not replace a full
+compliance or fairness assessment framework.
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./get-fairness-audit-report-admin-fairness-audit-get.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./get-fairness-audit-report-admin-fairness-audit-get.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./get-fairness-audit-report-admin-fairness-audit-get.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

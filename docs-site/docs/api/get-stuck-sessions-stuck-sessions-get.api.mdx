@@ -1,0 +1,75 @@
+---
+id: get-stuck-sessions-stuck-sessions-get
+title: "Get Stuck Sessions"
+description: "Get sessions that appear to be stuck in PROCESSING"
+sidebar_label: "Get Stuck Sessions"
+hide_title: true
+hide_table_of_contents: true
+api: eJzVVE1v00AQ/SurOYFkaCicfAtQlUhAqiZwSatqY0/sbde7ZnbcEkX739H4o3YbeuDIKcnO7NuXN2/eAXIMGZmajXeQwjmyChiC8S4oLjUrXdeoSbFXW1SBm+xOGacuLpefzlarxffzK3fl5lSE9MoppRSbCn3DN5VxDWNI1bo7UFwShtLbXK73VfUqx51uLKfq/ey1IF0iN+QGsNxknKqvJrDyu/7xgR0k4GskLcQXOaRQIN+0LTdDy/OfBTIkUGvSFTJSgHRzAKcrhBSe8YYEjOjxq0HaQwKEvxpDmEO60zZgAiErsdKQHoD3tQAYx1ggQQL9f4L0/SwBNmylPMjwrceP8VpQQ+1dwCA4p7OZfDydx6rJMgxh11h12TdDApl3jI6lXde1NVmrwsltkDuHkVuMMSbw4fT0GPintiZvr6kzIk//gAo1ifJsOt45sjZWvhnGKhw3WJ89qWq3X+5a7XvpApNxBcTkSMx4HZPhTBNpGcWg6FffEYSYQBWKySh6vLH1G4agC4RHsJdbWzHUWqpRPFA3rSBDedEexAQy/j2B8dtbzHgC80m0/M0QR/6PPaOXNq02Hf2+73rEGEfUTehlKT53I/jbY0PLl/X64giw8wfrQlYBllwiCYEKufT9SrULwyWkcNJu05vJ/gXMGjK8X4kzulkv5w2Xpxc6hAdP+UfUhDTVSUsZEthZ/9BZpW/tHObrFkZI+Tt0P8jKw9YXxkFH1ridnw5kvlALx0j3Bh/UkrISA5Nm3y3i1PFjUUw/v1ionSeVG7HAtmGUYBqAavKydp017pFCB/Hu7eztTOZQ+8CVbteizw8JzlUbUKtRoCcEDuOC/V8x289O/HxSW23ajWvIduMTb2zgmTeuEyh9YKkcDlsd8AfZGOW4C1RZ/twEvbWTSL3D/V+D+F7bRgiAROa9JiPXIN1INpSoc3HY5tBfn2cZ1jy5dRRlcerw87M1xPgHw/9wpg==
+sidebar_class_name: "get api-method"
+info_path: docs/api/ai-interview-orchestrator
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Get Stuck Sessions"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"get"}
+  path={"/stuck-sessions"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Get sessions that appear to be stuck in PROCESSING
+
+Args:
+    timeout_minutes: Timeout threshold in minutes (default: 30)
+
+Returns:
+    dict: List of stuck sessions
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./get-stuck-sessions-stuck-sessions-get.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./get-stuck-sessions-stuck-sessions-get.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./get-stuck-sessions-stuck-sessions-get.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

@@ -1,0 +1,75 @@
+.heroBanner {
+  padding: 6rem 0;
+  text-align: center;
+}
+
+.heroTitle {
+  font-size: 3.5rem;
+  margin-bottom: 1rem;
+}
+
+.heroSubtitle {
+  font-size: 1.6rem;
+  font-weight: 500;
+  margin-bottom: 1rem;
+}
+
+.heroDescription {
+  max-width: 700px;
+  margin: 0 auto 2rem;
+  font-size: 1.1rem;
+  line-height: 1.7;
+}
+
+.buttons {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.features {
+  padding: 5rem 0;
+}
+
+.featureCard {
+  height: 100%;
+  padding: 2rem;
+  text-align: center;
+  border-radius: 12px;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.featureCard:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--ifm-global-shadow-md);
+}
+
+.featureIcon {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.featureCard h3 {
+  margin-bottom: 0.75rem;
+}
+
+.featureCard p {
+  line-height: 1.6;
+}
+
+.apiSection {
+  padding: 5rem 0;
+  background: var(--ifm-color-emphasis-100);
+}
+
+.apiSection h2 {
+  font-size: 2.2rem;
+  margin-bottom: 1rem;
+}
+
+.apiSection p {
+  font-size: 1.1rem;
+  margin-bottom: 1.5rem;
+}

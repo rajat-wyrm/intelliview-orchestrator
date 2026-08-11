@@ -1,0 +1,75 @@
+---
+id: get-failed-sessions-failed-sessions-get
+title: "Get Failed Sessions"
+description: "Get sessions that failed during processing"
+sidebar_label: "Get Failed Sessions"
+hide_title: true
+hide_table_of_contents: true
+api: eJzVVE1v2zAM/SsCz9qaFTv5ln0H2NBi7XZJi0GxaVubLHkU3TYI9N8HWk7tLtthx51si+QT/d4jD1BhLMn2bIOHAt4jq4gx2uCj4tawqo11WKlqIOsb1VMoJeybG3/j19TE4sYrpZSzneVCfTIPths65Yduh6RCfayfQYMi5IG8AHwe344YlS25UB9t5D8V3ltuVYVsrIugIfRIRrreVFBAg/wtF3w7Fpx8N8igoTdkOmSkCMX2AN50CAWM7YMGKyT8HJD2oIHw52AJKyhq4yJqiGWLnYHiALzvpcx6xgYJNFRYm8ExFC9WKw1s2Un84wib0q2AxT74iFHKz1creTzl/moohdt6cOrzlAwayuAZPUu66Xtny/Gnz75HqTnMLaWUkoaX5+enwF+Ns9VYpt4SBfoHVOhJiGab+870y5tl7OJpggvlk6jx+4t6JHpiLLL4CJI+4TDdJn08M0RGFHjkMeQGIWnoYrNQYMKbUz9hjKZBeAT7e+pIhrqWaBLp+2Ek5BjejAdJQ8kPC5iw+44lL2BeC5cPIrM+yZkttB25ye1PebczxixRVujvVLzJEvzpsmPKh+vryxPA7A82jfgeLrhFkgY65DZMEzROB7dQwFmenWfH2QENEcuBLO+vxBpZ7Iv1wO35pYnxPlD1Cg0hLYkyEgYNtQv32StTarZY6EcY6Sr8QP+FnNzsQmM95G6tr8NSkfVGbTwj3Vm8VxdUthiZDIc8gEvLz0Fx/fpyo+pAqrLigd3AWCn7CDTvNNBwhxQzxIvnq+crEaIPkTszzsW0LWRLvsvr6Wpm6EkHh3nE/qOlOikndj7rnbHjwA3ksnhijS38bo1bDW2ILKHDYWcifiGXkhznPSrDX9lodm6xSX/gfrF174wb5F6QRXlnyEoyFFvZCC2aSmy1PUxF67LEfll1ssDS0tfv315DSr8Ata1nHA==
+sidebar_class_name: "get api-method"
+info_path: docs/api/ai-interview-orchestrator
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Get Failed Sessions"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"get"}
+  path={"/failed-sessions"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Get sessions that failed during processing
+
+Args:
+    limit: Maximum number of failed sessions to return
+
+Returns:
+    dict: List of failed sessions with details
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./get-failed-sessions-failed-sessions-get.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./get-failed-sessions-failed-sessions-get.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./get-failed-sessions-failed-sessions-get.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

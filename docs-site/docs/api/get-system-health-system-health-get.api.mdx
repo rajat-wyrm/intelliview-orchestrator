@@ -1,0 +1,68 @@
+---
+id: get-system-health-system-health-get
+title: "Get System Health"
+description: "Get comprehensive system health status"
+sidebar_label: "Get System Health"
+hide_title: true
+hide_table_of_contents: true
+api: eJzdUk1v2zAM/SsCz2qb9ehbBgxtTu2aFTskQaHITKzFFjWSThYY/u+DbHdtuv2C6SKIH49PfK+DEsVzSBooQgF3qMZTkxgrjBKOaOQsio2p0NVaGVGnrazjOj4i74gbec34Cv1BDMViHa/ME5ZBjKcY0Ws4Bj3n6HfiA7KJVKLk9zzn0AiKBIpD6GuLLZqt84ea9nnOE2rLUYp1NMaYMngtzPIfnIyLpWlQOXgBC5SQXf7UooQC9qgv40dexqYPrz0qWGCURFFQoOjgdjbL1+V6lq33KLJra/M0FYMFT1Exai53KdXBD4Nvfkju6UB8hY2DouvzsaBuL1Cs4H6YDRsLDWpFE0+wkJxWUMDNyPFq5AgWBH3LQc/LDDiyfJi3Wt0+OpETcfkZHSPnuJ4TQgHkchos7Go6DQ1pKh2JURpgMik6YHzmOs+taR8ijGRD3NEAGLTOiPOFWURFPgY8mQf2FYqyU2KwH3b1lgwUzfxxYXbEpgyiHLatYmnCH6DElPca4h4sHJFlhPh0PbueQW8hkWjjhm1G1+Bk1MkG96/7uZjfvcny/7h6klXxl96k2mWVLLRZtW5yzQouXbOxUJFoTnTd1gk+c933OfyzRT5DsdpYODoObpv1XW16CxW6Mtto1cEBz1l07zFlZx5d3WYCf9m8f+/iuy/foO9/AxQFjfE=
+sidebar_class_name: "get api-method"
+info_path: docs/api/ai-interview-orchestrator
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Get System Health"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"get"}
+  path={"/system-health"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Get comprehensive system health status
+
+Performs health checks on:
+- Redis connectivity
+- Worker nodes
+- Active sessions
+- Queue backlog
+
+Returns:
+    dict: System health status and metrics
+
+<ParamsDetails>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./get-system-health-system-health-get.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./get-system-health-system-health-get.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

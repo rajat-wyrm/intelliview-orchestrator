@@ -1,0 +1,77 @@
+---
+id: deregister-worker-deregister-worker-worker-id-delete
+title: "Deregister Worker"
+description: "Deregister a worker node (remove from active pool)"
+sidebar_label: "Deregister Worker"
+hide_title: true
+hide_table_of_contents: true
+api: eJzdVcFu4zYQ/RViTruAvEmDnnRzNwFqYIsEWact4AQGI40sbiiSOxzZMQT+e0FRtuS6LrrXnixzhm+eZt4bdVCiL0g5VtZADrdIuFGekYQUO0tvSMLYEsUHwsZuUVRkGyELVlsUzlr98dk8myePgmvlxa5GM15UXjikRho0rPciIZQJgmsUfu8Zmwgwp43Pn40QYri7VmUuFrfCVgcwtqI8kot3HpFbModrpSo4Fwf6JOP7iMKaSlHT/4EMrMMUWJSQw4i2Hmqen6yPbNbrEjUyQgZOkmyQkTzkqw6MbBByOGZCBiq20kmuIQPC760iLCFnajEDX9TYSMg74L2LFz2TMhvIgBXrePBHeuFFCSFkR/z3mXRqxvYNzaFCjbJEOqlRSe1Pikizv696nqflIvJwYlqtIbyMBP6czZ2aLftSIQYIvbPGo4+IN9fX8edUN1/bokDvq1aLxyEZMiisYTTc83BOq6Lv/tU3H+90I8sQQsjg55ubc+DfpVZlmuYdkaUfQAVHceKsEu8SWSodnxRj488TtC1Oov+hdcowbpAgvITscCaJ5H4yzi82EYSQQeM3/zb539B7uUE4gl1O7ZshljEaohxc2zfkEF70ByGDgt8nMPb1GxY8gfkce/nOUWlnOaOqVn1vEv0hbyKXcURpQpdbcZtG8E/FDim/LpcPZ4BJHyw30XGDP3yk0CDXNpn5aE6uIYer0cuz5Myr7ujQABl4LFpSvP8a1ZLmfz9vub55kN7vLJW/oCSkae9kDEMGlba7JJ8hNanOuh4mEo3OeSIdeWi7UQbSCyhT2emQ5guxMIy0VbgT91TU2G+uXuSnLhiD0Qjzh4WoLIkybjr12jKWQh2BHNloxSSXLZJPED99uv50HWfjrOdG9lYZVstk6afe/r1+N3ru//2FGEYdLXHltFS9aVvSadpRWSs4UxZkkI/b/yWD2nqOmV33Kj0+kQ4hHn9vkfaQr14y2EpS8jWKYNVBqXx8Hrf3xd5/eBws+VFcIntwnom+20rdxn+QwRvuTz5S/cYaPiA/RuJS5VTh9DN1JBB3ZkqYFwU6nsTOdniYGvv27svd8g5C+AvVDQWO
+sidebar_class_name: "delete api-method"
+info_path: docs/api/ai-interview-orchestrator
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Deregister Worker"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"delete"}
+  path={"/deregister-worker/{worker_id}"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Deregister a worker node (remove from active pool)
+
+Use this when a worker is permanently removed from the system
+
+Args:
+    worker_id: ID of worker to deregister
+
+Returns:
+    dict: Deregistration confirmation
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./deregister-worker-deregister-worker-worker-id-delete.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./deregister-worker-deregister-worker-worker-id-delete.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./deregister-worker-deregister-worker-worker-id-delete.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

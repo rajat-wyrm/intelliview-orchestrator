@@ -1,0 +1,1 @@
+{"parameters":[{"name":"time_range_hours","in":"query","required":false,"schema":{"type":"integer","default":24,"title":"Time Range Hours"}}]}
