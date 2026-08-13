@@ -282,3 +282,16 @@ volumes:
 networks:
   ai-interview-network:
     driver: bridge
+services:
+  # ... other services like backend, database ...
+
+  frontend:        # <--- First occurrence
+    image: intelliview-frontend
+    ports:
+      - "3000:3000"
+    # ... configurations ...
+
+  frontend:        # <--- DUPLICATE ERROR (Causes Docker Compose to crash)
+    image: intelliview-frontend
+    ports:
+      - "3000:3000"
