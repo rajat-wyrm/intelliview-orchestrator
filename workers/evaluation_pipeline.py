@@ -23,11 +23,12 @@ from workers.semantic_similarity import calculate_semantic_similarity
 logger = logging.getLogger(__name__)
 
 
-
 from workers._stubs import _seeded_unit
 from workers.prompt_categorization import categorize_prompt
 
 from workers._stubs import _seeded_unit  # noqa: E402
+
+
 def score_answer(question: str, answer: str) -> dict[str, Any]:
     """Score a candidate answer using Gemini AI."""
 
