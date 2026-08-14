@@ -7,14 +7,27 @@
 # --- Local virtualenvs / caches ---
 .venv
 venv
+**/.venv
+**/venv
+
+__pycache__
 **/__pycache__
+*.pyc
 **/*.pyc
+*.pyo
 **/*.pyo
+*.pyd
 **/*.pyd
+
+.mypy_cache
 **/.mypy_cache
+.pytest_cache
 **/.pytest_cache
+.ruff_cache
 **/.ruff_cache
+.coverage
 **/.coverage
+htmlcov
 **/htmlcov
 
 # --- Frontend build artefacts (we install inside the image; no need to copy source) ---
