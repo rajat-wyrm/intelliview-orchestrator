@@ -1,26 +1,37 @@
 # syntax=docker/dockerfile:1.6
-FROM python:3.11-slim AS base
+
+# ---------- Build stage ----------
+FROM python:3.11-slim-bullseye AS builder
 
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Create a non-root user; bind to the standard 8000 port.
-RUN groupadd --system --gid 1001 app \
-    && useradd  --system --uid 1001 --gid app --create-home app
-
 WORKDIR /app
 
-# System deps. We drop postgresql-client (orchestrator uses SQLAlchemy via
-# libpq in psycopg2-binary — the CLI is not needed at runtime).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends gcc \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir --user torch --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --user --retries 10 --timeout 100 -r requirements.txt
+# ---------- Final stage ----------
+FROM python:3.11-slim-bullseye AS base
 
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH=/home/app/.local/bin:$PATH
+
+RUN groupadd --system --gid 1001 app \
+    && useradd --system --uid 1001 --gid app --create-home app \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends curl procps \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=builder /root/.local /home/app/.local
 COPY --chown=app:app . .
 
 USER app
