@@ -47,8 +47,8 @@ jobs:
       ENABLE_PROMETHEUS: "true"
       CORS_ALLOW_ORIGINS: "*"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -56,13 +56,63 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install ruff
+          pip install ruff black isort
+      - name: Black format check
+        run: black --check .
+      - name: isort import check
+        run: isort --check-only --profile black .
       - name: Ruff lint
-        run: ruff check orchestrator workers monitoring database tests
+        run: ruff check orchestrator workers monitoring database tests scripts
       - name: Ruff format check
-        run: ruff format --check orchestrator workers monitoring database tests
+        run: ruff format --check orchestrator workers monitoring database tests scripts
       - name: Pytest
         run: pytest tests/ --ignore=tests/test_e2e_smoke.py -v
+
+  e2e:
+    name: End-to-end smoke test
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      API_TOKEN: test-token
+      API_BASE_URL: http://localhost:8000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install httpx pytest
+
+      - name: Bring up full stack (redis, postgres, api, worker)
+        run: docker compose up -d --build redis postgres fastapi worker
+
+      - name: Wait for API to become healthy
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS "$API_BASE_URL/health"; then
+              echo "API is up"
+              exit 0
+            fi
+            echo "Waiting for API... ($i)"
+            sleep 2
+          done
+          echo "API never became healthy" >&2
+          docker compose logs
+          exit 1
+
+      - name: Run end-to-end smoke tests
+        run: pytest tests/test_e2e_smoke.py -v -m e2e
+
+      - name: Dump service logs on failure
+        if: failure()
+        run: docker compose logs --tail=300
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose down -v
 
   frontend:
     name: Frontend
@@ -71,8 +121,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: npm
@@ -81,3 +131,22 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Lint
         run: npm run lint
+
+  docker-build:
+    name: Docker build validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker images
+        run: docker compose --progress=plain build fastapi worker
+
+      - name: Verify built images
+        run: docker compose images fastapi worker
+# Trigger CI check
+      - name: Test
+        run: npm run test
