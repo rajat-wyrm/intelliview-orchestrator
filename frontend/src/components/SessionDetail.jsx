@@ -7,9 +7,11 @@ import { StatusBadge, Badge } from "@/components/Badge";
 import { Shimmer } from "@/components/Shimmer";
 import { useAppStore } from "@/lib/store";
 import { formatDate, riskColor, formatRelative } from "@/lib/utils";
-import { Activity, Calendar, Cpu, Hash, RefreshCw, User, Film, Mic, MessageSquare, Clock } from "lucide-react";
+import { Activity, Calendar, Cpu, Hash, RefreshCw, User, Film, Mic, MessageSquare, Clock, GraduationCap, ListChecks } from "lucide-react";
 import useSWR from "swr";
+import Link from "next/link";
 import { MomentTimeline } from "@/hooks/useMomentTracking";
+import QuestionProgression from "@/components/interview/QuestionProgression";
 
 function SessionDetailImpl({ sessionId, onClose }) {
   const token = useAppStore((s) => s.token);
@@ -22,6 +24,14 @@ function SessionDetailImpl({ sessionId, onClose }) {
   const { data: momentsData } = useSWR(
     open && token ? `/moments/${sessionId}` : null,
     { refreshInterval: 5000 },
+  );
+
+  // Feature 11.3 — adaptive difficulty progression comes from the existing
+  // interview report endpoint. A missing report is not an error for this
+  // dialog: the section is simply not rendered.
+  const { data: reportData } = useSWR(
+    open && token ? `/interviews/${sessionId}/report` : null,
+    { refreshInterval: 5000, shouldRetryOnError: false },
   );
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -66,6 +76,16 @@ function SessionDetailImpl({ sessionId, onClose }) {
                   <Pipeline current={data.status} />
                 </div>
               </div>
+
+              {data.status === "completed" && (
+                <Link
+                  href={`/coaching?session=${sessionId}`}
+                  className="flex items-center justify-center gap-2 rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-sm font-medium text-accent-light transition-colors hover:bg-accent/20"
+                >
+                  <GraduationCap size={14} />
+                  View coaching report
+                </Link>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Candidate" value={data.candidate_id} icon={User} />
                 <Field label="Assigned worker" value={data.assigned_node ?? "—"} icon={Cpu} />
@@ -173,6 +193,18 @@ function SessionDetailImpl({ sessionId, onClose }) {
                       <MessageSquare size={12} className="mt-0.5 shrink-0 text-accent" />
                       <p className="text-sm text-zinc-300">{data.ai_feedback}</p>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {reportData?.questions?.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-medium uppercase tracking-wide text-muted flex items-center gap-1.5">
+                    <ListChecks size={10} />
+                    Question difficulty progression
+                  </h3>
+                  <div className="mt-2">
+                    <QuestionProgression questions={reportData.questions} />
                   </div>
                 </div>
               )}

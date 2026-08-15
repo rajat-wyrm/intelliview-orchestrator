@@ -126,7 +126,7 @@ def _get_audio_duration(audio_path: str, segments: list[dict[str, Any]]) -> floa
     return 0.0
 
 
-def _real_transcribe(session_id: str, audio_url: str | None = None) -> dict[str, Any] | None:
+def _real_transcribe(session_id: str, audio_url: str | None = None, language: str | None = "en") -> dict[str, Any] | None:
     """Transcribe audio using local Whisper model."""
     audio_path = session_id
     vad_ran = False
@@ -134,6 +134,7 @@ def _real_transcribe(session_id: str, audio_url: str | None = None) -> dict[str,
         import numpy as np
 
         from workers.ai_client import transcribe_audio_file
+        from workers.vad import VoiceActivityDetector
 
         detector = VoiceActivityDetector(cfg=vad_config)
         vad_segments = detector.process_audio(session_id) or []
@@ -148,7 +149,7 @@ def _real_transcribe(session_id: str, audio_url: str | None = None) -> dict[str,
         if not url and not vad_ran:
             logger.debug("Transcription skipped: no audio URL configured.")
             return None
-        result = transcribe_audio_file(session_id)
+        result = transcribe_audio_file(session_id, language=language)
         if result is None:
             logger.warning(
                 "transcribe_audio_file returned None for session %s",
@@ -176,7 +177,7 @@ def _real_transcribe(session_id: str, audio_url: str | None = None) -> dict[str,
         return {
             "text": result.get("text", ""),
             "confidence": confidence,
-            "language": result.get("language", "en"),
+            "language": result.get("language", language or "en"),
             "duration_seconds": _get_audio_duration(session_id, result.get("segments", [])),
             "timestamp": time.time(),
         }
@@ -351,7 +352,30 @@ def transcribe_speech(session_id: str) -> dict[str, Any]:
     """Convert speech to text — real Whisper with seeded stub fallback."""
     logger.info(f"Transcribing audio for session {session_id}")
 
-    real = _real_transcribe(session_id, audio_url=None)
+    from database.db import SessionLocal
+    from database.models import InterviewSession
+    from sqlalchemy import select
+
+    language = "en"
+    db_session = SessionLocal()
+    try:
+        interview = db_session.execute(
+            select(InterviewSession).where(
+                InterviewSession.session_id == session_id
+            )
+        ).scalar_one_or_none()
+        if interview and hasattr(interview, "language") and interview.language:
+            language = interview.language
+    except Exception as exc:
+        logger.warning(
+            "Failed to retrieve language from database for session %s: %s",
+            session_id,
+            exc,
+        )
+    finally:
+        db_session.close()
+
+    real = _real_transcribe(session_id, audio_url=None, language=language)
     if real is not None:
         return real
 
@@ -367,7 +391,7 @@ def transcribe_speech(session_id: str) -> dict[str, Any]:
     return {
         "text": text,
         "confidence": round(0.6 + _seeded_unit(session_id, "asr_conf") * 0.35, 3),
-        "language": "en",
+        "language": language,
         "duration_seconds": round(120 + _seeded_unit(session_id, "duration") * 600, 1),
         "timestamp": None,
     }

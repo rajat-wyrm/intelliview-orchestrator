@@ -177,6 +177,7 @@ class StateSynchronizer:
             return {
                 "session_id": interview.session_id,
                 "candidate_id": interview.candidate_id,
+                "language": interview.language,
                 "status": interview.status,
                 "risk_score": interview.risk_score,
                 "assigned_node": interview.assigned_node,

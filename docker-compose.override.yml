@@ -13,7 +13,7 @@ services:
       - .env
     volumes:
       - .:/app   # bind-mount: code changes are reflected without rebuild (restart container to pick up)
-    command: uvicorn orchestrator.main:app --host 0.0.0.0 --port 8000
+    command: sh -c "alembic upgrade head && uvicorn orchestrator.main:app --host 0.0.0.0 --port 8000"
     environment:
       API_TOKEN: "${API_TOKEN:-ci-dev-token-local}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"

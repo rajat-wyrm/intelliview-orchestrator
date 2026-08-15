@@ -3,6 +3,7 @@ Unit tests for the SessionManager state machine.
 """
 
 import itertools
+from unittest.mock import MagicMock, patch
 
 from orchestrator.session_manager import SessionManager
 
@@ -58,3 +59,43 @@ def test_unknown_state_is_invalid():
     sm = SessionManager()
     assert not sm._is_valid_transition("UNKNOWN", sm.QUEUED)
     assert not sm._is_valid_transition(sm.QUEUED, "UNKNOWN")
+
+def test_create_session_preserves_language():
+    sm = SessionManager()
+    sm.state_sync = MagicMock()
+
+    db_session = MagicMock()
+    candidate = MagicMock()
+    db_session.execute.return_value.scalar_one_or_none.return_value = candidate
+    with patch(
+        "orchestrator.session_manager.SessionLocal",
+        return_value=db_session,
+    ):
+            session_id = sm.create_session(
+            candidate_id="candidate-1",
+            position="Software Engineer",
+            candidate_name="Test Candidate",
+            language="hi",
+            )
+            created_session = db_session.add.call_args.args[0]
+            assert created_session.language == "hi"
+def test_create_session_defaults_to_english():
+    sm = SessionManager()
+    sm.state_sync = MagicMock()
+
+    db_session = MagicMock()
+    candidate = MagicMock()
+    db_session.execute.return_value.scalar_one_or_none.return_value = candidate
+
+    with patch(
+        "orchestrator.session_manager.SessionLocal",
+        return_value=db_session,
+    ):
+        session_id = sm.create_session(
+            candidate_id="candidate-2",
+            position="Software Engineer",
+            candidate_name="Test Candidate",
+        )
+
+        created_session = db_session.add.call_args.args[0]
+        assert created_session.language == "en"

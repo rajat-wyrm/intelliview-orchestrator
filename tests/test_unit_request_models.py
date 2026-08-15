@@ -48,3 +48,10 @@ def test_optional_fields_stripped():
     )
     assert req.candidate_name == "Mukta Redij"
     assert req.position == "Senior Engineer"
+
+def test_language_default_is_english():
+    req = StartInterviewRequest(candidate_id="c1")
+    assert req.language == "en"
+def test_language_accepts_explicit_value():
+    req = StartInterviewRequest(candidate_id="c1", language="hi")
+    assert req.language == "hi"

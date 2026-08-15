@@ -52,6 +52,11 @@ class InterviewSession(Base):
     candidate_id = Column(
         String(255), ForeignKey("candidates.candidate_id"), nullable=False, index=True
     )
+    language = Column(
+    String(10),
+    nullable=False,
+    default="en",
+    )
     status = Column(String(50), nullable=False, default="pending", index=True)
     assigned_node = Column(String(255), nullable=True)
     start_time = Column(DateTime, nullable=True, default=utcnow)

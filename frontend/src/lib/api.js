@@ -1,4 +1,5 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 class ApiClient {
   token = null;
   setToken(token) {
@@ -64,6 +65,13 @@ const endpoints = {
   failedSessions: (limit = 50) => api.get(`/failed-sessions?limit=${limit}`),
   sessionStatistics: () => api.get("/session-statistics"),
   highRiskSessions: (threshold = 0.8) => api.get(`/high-risk-sessions?threshold=${threshold}`),
+  // Coaching portal: reuses the existing final-report payload
+  // (see docs/interview_report_api.md) as the source of coaching content
+  // (strengths / improvements / detailed_feedback / per-question scoring).
+  // TODO(Harsha): swap/extend this once a dedicated coaching response
+  // structure lands — see CoachingReport's normalizeCoachingData().
+  interviewReport: (sessionId) => api.get(`/interviews/${sessionId}/report`),
+  candidateHistory: (candidateId) => api.get(`/candidates/${candidateId}/history`),
   workers: () => api.get("/workers"),
   workerStats: () => api.get("/worker-statistics"),
   registerWorker: (worker_id, capacity = 4) => api.post("/register-worker", { worker_id, capacity }),
@@ -76,9 +84,9 @@ const endpoints = {
   faultStatistics: () => api.get("/fault-statistics"),
   failureLog: (limit = 50) => api.get(`/failure-log?limit=${limit}`),
   deadLetterQueue: (limit = 50) => api.get(`/dead-letter-queue?limit=${limit}`),
-retrySession: (session_id) => api.post(`/retry-session/${session_id}`),
-detectFailures: () => api.post("/detect-failures"),
-reportWebVitals: (payload) => api.post("/metrics/web-vitals", payload)
+  retrySession: (session_id) => api.post(`/retry-session/${session_id}`),
+  detectFailures: () => api.post("/detect-failures"),
+  reportWebVitals: (payload) => api.post("/metrics/web-vitals", payload)
 };
 export {
   ApiClient,

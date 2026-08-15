@@ -15,6 +15,7 @@ from database.models import Candidate, InterviewSession
 from metrics.prometheus_metrics import SESSIONS_ACTIVE, SESSIONS_CREATED
 from orchestrator import http_cache
 from orchestrator.scheduler import TaskPriority
+from workers.adaptive_difficulty import get_next_difficulty
 from orchestrator.security import get_current_user, require_role
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,11 @@ class StartInterviewRequest(BaseModel):
     )
     candidate_name: str | None = Field(default=None, max_length=200)
     position: str | None = Field(default=None, max_length=120)
+    language: str = Field(
+    default="en",
+    max_length=10,
+    description="Interview language code",
+    )
     priority: str = Field(default="medium", description="One of: low, medium, high")
 
     @field_validator("candidate_id")
@@ -61,6 +67,7 @@ class InterviewSessionResponse(BaseModel):
     status: str
     created_at: str | None = None
     candidate_id: str
+    language: str = "en"
     risk_score: float | None = None
     estimated_wait_time: int | None = None
 
@@ -71,6 +78,7 @@ class SessionStatusResponse(BaseModel):
     session_id: str
     status: str
     candidate_id: str
+    language: str = "en"
     risk_score: float | None = None
     assigned_node: str | None = None
     start_time: str | None = None
@@ -133,6 +141,26 @@ class InterviewReportResponse(BaseModel):
     llm_feedback: ReportLLMFeedback
     risk_assessment: ReportRiskAssessment
     metadata: ReportMetadata
+
+
+class CoachingQuestionFeedback(BaseModel):
+    question_id: str
+    question: str
+    answer: str | None = None
+    score: float | None = None
+    feedback: str | None = None
+
+
+class CoachingResponse(BaseModel):
+    session_id: str
+    candidate_id: str
+    overall_score: float | None = None
+    strengths: list[str] = Field(default_factory=list)
+    focus_areas: list[str] = Field(default_factory=list)
+    action_items: list[str] = Field(default_factory=list)
+    question_feedback: list[CoachingQuestionFeedback] = Field(default_factory=list)
+    recommendation: str | None = None
+    detailed_feedback: str | None = None
 
 
 class TaskStatusResponse(BaseModel):
@@ -281,6 +309,7 @@ def create_session_routes(
                 candidate_id=request.candidate_id,
                 candidate_name=request.candidate_name,
                 position=request.position,
+                language=request.language,
             )
 
             # Increment total interview sessions created
@@ -314,6 +343,7 @@ def create_session_routes(
                 status=session_manager.QUEUED,
                 created_at=session_data.get("created_at"),
                 candidate_id=request.candidate_id,
+                language=request.language,
                 risk_score=None,
                 estimated_wait_time=wait_time if wait_time >= 0 else None,
             )
@@ -360,6 +390,7 @@ def create_session_routes(
                 session_id=session_id,
                 status=session_data.get("status"),
                 candidate_id=session_data.get("candidate_id"),
+                language=session_data.get("language", "en"),
                 risk_score=session_data.get("risk_score"),
                 assigned_node=session_data.get("assigned_node"),
                 start_time=session_data.get("start_time"),
@@ -513,6 +544,110 @@ def create_session_routes(
         except Exception as e:
             logger.error(f"Error fetching interview report: {e!s}")
             raise HTTPException(status_code=500, detail=f"Error fetching report: {e!s}")
+
+    @router.get(
+        "/interviews/{session_id}/coaching",
+        response_model=CoachingResponse,
+    )
+    async def get_interview_coaching(
+        session_id: str,
+        db: Session = Depends(get_db),
+    ):
+        """Get structured coaching feedback for an interview session."""
+        try:
+            session_obj = db.execute(
+                select(InterviewSession).where(
+                    InterviewSession.session_id == session_id
+                )
+            ).scalar_one_or_none()
+
+            if not session_obj:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Session not found",
+                )
+
+            # Get questions, answers, and generated feedback.
+            q_asked = session_obj.questions_asked or []
+            a_provided = session_obj.answers_provided or []
+            f_generated = session_obj.feedback_generated or []
+
+            # Build question lookup by question_id.
+            q_dict = {q.get("question_id"): q for q in q_asked if q.get("question_id")}
+
+            # Attach answers to their questions.
+            for answer in a_provided:
+                q_id = answer.get("question_id")
+                if q_id in q_dict:
+                    q_dict[q_id]["answer"] = answer.get("answer_text")
+
+            # Attach feedback and score to their questions.
+            for feedback in f_generated:
+                q_id = feedback.get("question_id")
+                if q_id in q_dict:
+                    q_dict[q_id]["feedback"] = feedback.get("feedback")
+                    q_dict[q_id]["score"] = feedback.get("score")
+
+            # Convert mapped questions into coaching question feedback.
+            question_feedback = [
+                CoachingQuestionFeedback(
+                    question_id=q_id,
+                    question=q_data.get("text", ""),
+                    answer=q_data.get("answer"),
+                    score=q_data.get("score"),
+                    feedback=q_data.get("feedback"),
+                )
+                for q_id, q_data in q_dict.items()
+            ]
+
+            # Get overall evaluation feedback.
+            eval_analysis = session_obj.evaluation_analysis or {}
+            llm_feedback = eval_analysis.get("llm_feedback", {})
+
+            strengths = eval_analysis.get(
+                "strengths",
+                llm_feedback.get("strengths", []),
+            )
+
+            improvements = eval_analysis.get(
+                "improvements",
+                llm_feedback.get("improvements", []),
+            )
+
+            recommendation = eval_analysis.get(
+                "recommendation",
+                llm_feedback.get("recommendation"),
+            )
+
+            detailed_feedback = eval_analysis.get(
+                "detailed_feedback",
+                llm_feedback.get("detailed_feedback"),
+            )
+
+            return CoachingResponse(
+                session_id=session_obj.session_id,
+                candidate_id=session_obj.candidate_id,
+                overall_score=session_obj.overall_score,
+                strengths=strengths,
+                focus_areas=improvements,
+                action_items=[],
+                question_feedback=question_feedback,
+                recommendation=recommendation,
+                detailed_feedback=detailed_feedback,
+            )
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(
+                "Error fetching interview coaching: %s",
+                e,
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail="Error fetching interview coaching",
+            )
 
     @router.get("/session-status/{session_id}/risk-report")
     async def get_session_risk_report(session_id: str, format: str = "json"):
@@ -773,10 +908,19 @@ def create_session_routes(
             asked_ids = session_data.get("questions_asked", [])
             question = question_bank.get_next_question(
                 category=request.category,
+                difficulty=session_data.get("next_difficulty"),
                 exclude_ids=(
                     [q.get("question_id") for q in asked_ids] if asked_ids else []
                 ),
             )
+            if not question and session_data.get("next_difficulty"):
+                question = question_bank.get_next_question(
+                    category=request.category,
+                    exclude_ids=(
+                        [q.get("question_id") for q in asked_ids] if asked_ids else []
+                    ),
+                )
+                  
             if not question:
                 raise HTTPException(
                     status_code=404, detail="No more questions available"
@@ -812,11 +956,18 @@ def create_session_routes(
 
             question_bank.record_usage(request.question_id, score=request.score)
 
-            from workers.evaluation_pipeline import score_answer
+            next_difficulty = None
+            if request.score is not None:
+                next_difficulty = get_next_difficulty(request.score)
 
-            ai_result = score_answer(question["text"], request.answer_text)
-            score = ai_result["score"]
-            feedback = ai_result["reasoning"]
+            feedback = f"Answer recorded for: {question['text'][:80]}..."
+            if request.score is not None:
+                if request.score >= 7:
+                    feedback = f"Strong answer ({request.score}/10). Good demonstration of knowledge."
+                elif request.score >= 5:
+                    feedback = f"Acceptable answer ({request.score}/10). Some areas for improvement."
+                else:
+                    feedback = f"Needs improvement ({request.score}/10). Consider reviewing core concepts."
 
             questions_asked = session_data.get("questions_asked", [])
             questions_asked.append(
@@ -853,6 +1004,7 @@ def create_session_routes(
             session_data["answers_provided"] = answers
             session_data["feedback_generated"] = feedbacks
             session_data["overall_score"] = overall_score
+            session_data["next_difficulty"] = next_difficulty
             session_manager.state_sync.set_session_state(
                 request.session_id, session_data
             )

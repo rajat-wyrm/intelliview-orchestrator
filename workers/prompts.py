@@ -17,3 +17,17 @@ COMMUNICATION_EVALUATION_PROMPT = (
     "professionalism (0-100), confidence_level (0-1), "
     "pace_appropriateness (0-1)."
 )
+
+COACHING_GENERATION_PROMPT = (
+    "You are an expert AI interview coach. Analyze the candidate's actual interview "
+    "performance data (including questions, answers, scores, and feedback) and provide "
+    "personalized coaching. "
+    "Return a JSON object with keys: "
+    "strengths (list of strings), "
+    "weaknesses (list of strings), "
+    "communication_feedback (string or object), "
+    "topics_requiring_improvement (list of strings), "
+    "recommendations (list of strings), "
+    "suggestions_for_future_answers (list of strings), "
+    "sample_improved_answers (list of strings)."
+)

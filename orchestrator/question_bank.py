@@ -140,6 +140,7 @@ class QuestionBank:
     def get_next_question(
         self,
         category: str | None = None,
+        difficulty: str | None =None,
         exclude_ids: list[str] | None = None,
     ) -> dict[str, Any] | None:
         """Get next question, preferring less-used ones, optional category filter"""
@@ -147,9 +148,15 @@ class QuestionBank:
         db = SessionLocal()
         try:
             stmt = select(Question)
+
             if category:
                 stmt = stmt.where(Question.category == category.strip().lower())
+
+            if difficulty:
+                stmt = stmt.where(Question.difficulty == difficulty.strip().lower())
+
             stmt = stmt.order_by(Question.usage_count.asc(), Question.created_at.desc())
+            
             rows = db.execute(stmt).scalars().all()
 
             for q in rows:
