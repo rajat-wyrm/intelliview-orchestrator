@@ -134,8 +134,8 @@ services:
 
   cv-service:
     build:
-      context: ./cv_service
-      dockerfile: Dockerfile
+      context: . 
+      dockerfile: ./cv_service/Dockerfile
 
     container_name: ai-interview-cv-service
 

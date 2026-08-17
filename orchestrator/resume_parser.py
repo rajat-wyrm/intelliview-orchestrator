@@ -14,7 +14,6 @@ import re
 
 from pypdf import PdfReader
 
-
 # Skills that the parser knows how to detect.
 # This list can be expanded as the project grows.
 KNOWN_SKILLS = [
@@ -155,11 +154,7 @@ def extract_education(text: str) -> list[str]:
         List of education-related lines.
     """
 
-    lines = [
-        line.strip()
-        for line in text.splitlines()
-        if line.strip()
-    ]
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
 
     education_keywords = [
         "education",

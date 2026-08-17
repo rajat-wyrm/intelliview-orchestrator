@@ -1,14 +1,12 @@
-
 import os
 import tempfile
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from processing import run_video_analysis
 from pydantic import BaseModel
 
-from processing import run_video_analysis
 from orchestrator.resume_parser import parse_resume as parse_resume_file
-
 
 app = FastAPI(
     title="CV Processing Service",
@@ -49,9 +47,6 @@ async def analyze_video(request: VideoRequest):
 ALLOWED_CONTENT_TYPES = {"application/pdf"}
 
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
-
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
-
 
 
 @app.post("/parse-resume")
@@ -110,13 +105,7 @@ async def parse_resume(file: UploadFile = File(...)):
             temp_file.write(raw)
             temp_path = temp_file.name
 
-
         # Use the shared resume parsing logic.
-        parsed_resume = parse_resume_file(temp_path)
-
-        # Return parsed information to the frontend.
-
-        # Use the resume parsing logic from orchestrator/resume_parser.py
         parsed_resume = parse_resume_file(temp_path)
 
         # Return the parsed information to the frontend
@@ -141,9 +130,5 @@ async def parse_resume(file: UploadFile = File(...)):
     finally:
 
         # Always remove the temporary PDF.
-        if temp_path and os.path.exists(temp_path):
-            os.remove(temp_path)
-
-        # Always remove the temporary PDF after parsing.
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
