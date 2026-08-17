@@ -1,12 +1,15 @@
+
 import os
 import tempfile
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from processing import run_video_analysis
 from pydantic import BaseModel
 
+from database.db import SessionLocal
+from database.models.candidate import Candidate
 from orchestrator.resume_parser import parse_resume as parse_resume_file
+from processing import run_video_analysis
 
 app = FastAPI(
     title="CV Processing Service",
