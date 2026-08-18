@@ -78,7 +78,6 @@ ignore = [
     "UP031",  # % formatting — kept for log clarity
     "RUF002", # ambiguous dashes in docstrings
     "ASYNC230",
-    "ASYNC240",
     "SIM105", # contextlib.suppress — try/except is clearer with logging
 ] 
 

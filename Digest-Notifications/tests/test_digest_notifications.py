@@ -127,7 +127,7 @@ class TestDigestNotifications(unittest.TestCase):
     # ── 5. Engine & Spec Compliance Tests ──
     def test_upcoming_interviews_cap_at_five(self):
         # get_upcoming_interviews must limit results to the configured batch limit (default 5)
-        events, _total_count = get_upcoming_interviews("2026-06-01")
+        events, _ = get_upcoming_interviews("2026-06-01")
         self.assertLessEqual(len(events), 5)
 
     def test_generate_digest_html_output(self):
@@ -252,7 +252,9 @@ class TestDigestNotifications(unittest.TestCase):
 
         handler = FakeHandler()
         handler.send_json(200, {})
-        for keyword, _value in handler.headers_sent:
+
+        for keyword, _ in handler.headers_sent:
+
             self.assertNotEqual(keyword.lower(), "access-control-allow-origin")
 
     def test_api_send_invokes_sender_module(self):
