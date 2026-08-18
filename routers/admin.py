@@ -287,7 +287,8 @@ def create_admin_routes(state_sync, load_balancer) -> APIRouter:
         """
         try:
             dashboard_path = (
-                Path(__file__).parent.parent /  "monitoring", "dashboard.html"
+                Path(__file__).parent.parent / "monitoring",
+                "dashboard.html",
             )
 
             if await dashboard_path.exists():
