@@ -23,6 +23,19 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from fastapi import Depends, FastAPI, Header, HTTPException, Response
+from fastapi.middleware.cors import CORSMiddleware
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
+
 from config import (
     API_TOKEN,
     CORS_ALLOW_ORIGINS,
@@ -32,8 +45,6 @@ from config import (
 )
 from database.db import engine, get_db
 from database.models import Base, Candidate, InterviewSession
-from fastapi import Depends, FastAPI, Header, HTTPException, Response
-from fastapi.middleware.cors import CORSMiddleware
 from metrics.prometheus_metrics import (
     POSTGRES_HEALTH,
     REDIS_HEALTH,
@@ -51,12 +62,7 @@ from metrics.prometheus_metrics import (
 from monitoring.dashboard_api import create_dashboard_routes
 from monitoring.metrics_collector import MetricsCollector
 from monitoring.websocket_manager import ws_manager
-from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from orchestrator import http_cache
+from orchestrator import http_cache, store
 from orchestrator.auth import create_access_token
 from orchestrator.candidate_manager import CandidateManager
 from orchestrator.fault_manager import FaultManager
@@ -66,23 +72,17 @@ from orchestrator.load_balancer import BalancingStrategy, LoadBalancer
 from orchestrator.logging_config import configure_logging, log_event
 from orchestrator.question_bank import QuestionBank
 from orchestrator.rate_limiter import RateLimiterMiddleware
-from orchestrator.redis_client import (
-    circuit_breaker,
-    get_redis_client,
-)
+from orchestrator.redis_client import circuit_breaker, get_redis_client
 from orchestrator.request_validation import RequestValidationMiddleware
 from orchestrator.retry_manager import RetryManager, RetryStrategy
+from orchestrator.router import router as risk_config_router
 from orchestrator.scheduler import Scheduler, TaskPriority
 from orchestrator.security import get_current_user, require_role
 from orchestrator.session_manager import SessionManager
 from orchestrator.session_tracker import SessionTracker
 from orchestrator.state_sync import StateSynchronizer
 from orchestrator.worker_registry import WorkerRegistry
-from pydantic import BaseModel, Field, field_validator
-from routers.admin import create_admin_routes
 from routers.candidates import create_candidate_routes
-from routers.health import create_health_routes
-from routers.metrics import router as metrics_router
 from routers.questions import create_question_routes
 from routers.schedule import create_schedule_routes
 from routers.sessions import (  # noqa: F401 (re-exported for tests)
@@ -92,10 +92,6 @@ from routers.sessions import (  # noqa: F401 (re-exported for tests)
 from routers.settings import create_settings_routes
 from routers.templates import create_template_routes
 from routers.workers import create_worker_routes
-from sqlalchemy import or_, select
-from sqlalchemy.orm import Session
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request as StarletteRequest
 from workers.bias_auditor import BiasAuditor
 
 # Configure logging after imports so startup messages are structured.
@@ -119,9 +115,10 @@ async def lifespan(app: FastAPI):
     # Seed admin user
     import uuid
 
+    from passlib.context import CryptContext
+
     from database.db import SessionLocal
     from database.models import User
-    from passlib.context import CryptContext
 
     try:
         pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -383,40 +380,6 @@ app.include_router(dashboard_routes, prefix="/monitoring", tags=["monitoring"])
 # ========== Request/Response Models ==========
 
 
-class StartInterviewRequest(BaseModel):
-    """Request model for starting an interview"""
-
-    candidate_id: str = Field(
-        min_length=1, max_length=128, description="Unique candidate identifier"
-    )
-    candidate_name: str | None = Field(default=None, max_length=200)
-    position: str | None = Field(default=None, max_length=120)
-    priority: str = Field(default="medium", description="One of: low, medium, high")
-
-    @field_validator("candidate_id")
-    @classmethod
-    def _candidate_id_format(cls, v: str) -> str:
-        v = v.strip()
-        if not re.match(r"^[A-Za-z0-9._-]+$", v):
-            raise ValueError(
-                "candidate_id may only contain letters, digits, '.', '_', '-'"
-            )
-        return v
-
-    @field_validator("priority")
-    @classmethod
-    def _priority_valid(cls, v: str) -> str:
-        v = v.strip().lower()
-        if v not in {"low", "medium", "high"}:
-            raise ValueError("priority must be one of: low, medium, high")
-        return v
-
-    @field_validator("candidate_name", "position")
-    @classmethod
-    def _strip_optional(cls, v):
-        return v.strip() if isinstance(v, str) else v
-
-
 class WorkerRegistrationRequest(BaseModel):
     """Request model for worker registration"""
 
@@ -657,6 +620,7 @@ async def get_fairness_audit_report():
 
 if ENABLE_PROMETHEUS:
     from fastapi.responses import Response as _Response
+
     from metrics.prometheus_metrics import get_metrics_text
 
     @app.get("/metrics")
@@ -1050,10 +1014,28 @@ def _build_risk_report_pdf(report: dict) -> Response:
     )
 
 
+@app.get("/risk-engine/weights/{job_position}")
+def get_risk_weights(job_position: str):
+    """Return risk weights for a job position, falling back to defaults."""
+    config = store.get_config_by_position(job_position)
+
+    if config:
+        return {
+            "weights": config.weights,
+            "is_custom": True,
+        }
+
+    return {
+        "weights": store.DEFAULT_WEIGHTS,
+        "is_custom": False,
+    }
+
+
 app.include_router(create_candidate_routes(candidate_manager=candidate_manager))
 app.include_router(create_schedule_routes())
 app.include_router(create_question_routes(question_bank=question_bank))
 app.include_router(create_settings_routes())
+app.include_router(risk_config_router)
 app.include_router(
     create_template_routes(interview_template_manager=interview_template_manager)
 )
