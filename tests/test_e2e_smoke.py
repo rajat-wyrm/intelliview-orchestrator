@@ -95,7 +95,7 @@ def test_worker_register_requires_token(api_base_url):
     r = httpx.post(
         f"{api_base_url}/register-worker",
         json={"worker_id": "test-w", "capacity": 2},
-        headers={"X-API-Token": "dev-token-change-me"},
+        headers=API_HEADERS,
         timeout=5.0,
     )
     assert r.status_code == 200, r.text
@@ -164,7 +164,7 @@ def test_worker_lifecycle(api_base_url):
     """End-to-end: register a worker, send a heartbeat, see it listed, then deregister it."""
     _wait_for_api(api_base_url)
     worker_id = f"e2e-worker-{uuid.uuid4().hex[:8]}"
-    headers = {"X-API-Token": "test-token"}
+    headers = API_HEADERS
 
     r = httpx.post(
         f"{api_base_url}/register-worker",

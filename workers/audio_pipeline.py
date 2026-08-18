@@ -61,7 +61,7 @@ def split_audio_into_chunks(
 
 
 # ---------------------------------------------------------------------------
-# Real detection helpers (Whisper / pyannote / OpenAI) with fallback to stubs
+# Real detection helpers (Whisper / pyannote / OpenAI / HF) with fallback to stubs
 # ---------------------------------------------------------------------------
 class TranscriptionResult(TypedDict):
     text: str
@@ -86,12 +86,428 @@ class SuspiciousPatternResult(TypedDict):
     details: dict[str, Any]
 
 
+class SentimentTimelineItem(TypedDict):
+    timestamp: float
+    start: float
+    end: float
+    text: str
+    sentiment: str
+    confidence: float
+    scores: dict[str, float]
+
+
+class SentimentSummary(TypedDict):
+    dominant_sentiment: str
+    confident_percentage: float
+    neutral_percentage: float
+    nervous_percentage: float
+    summary_text: str
+
+
 class AudioAnalysisResult(TypedDict):
     session_id: str
     transcription: TranscriptionResult
     background_voices: BackgroundVoiceResult
     suspicious_conversation: SuspiciousPatternResult
+    sentiment: str
+    sentiment_scores: dict[str, float]
+    sentiment_summary: SentimentSummary
+    sentiment_timeline: list[SentimentTimelineItem]
     risk_score: float
+
+
+# ---------------------------------------------------------------------------
+# Hugging Face Transformers Sentiment Analysis Pipeline (Lazy loaded)
+# ---------------------------------------------------------------------------
+_hf_sentiment_pipeline = None
+_hf_sentiment_pipeline_attempted = False
+
+
+def _get_hf_sentiment_pipeline():
+    """Lazily load the Hugging Face sentiment classification pipeline."""
+    global _hf_sentiment_pipeline, _hf_sentiment_pipeline_attempted
+    if not _hf_sentiment_pipeline_attempted:
+        _hf_sentiment_pipeline_attempted = True
+        try:
+            from transformers import pipeline
+
+            model_name = os.getenv(
+                "SENTIMENT_MODEL",
+                "distilbert/distilbert-base-uncased-finetuned-sst-2-english",
+            )
+            try:
+                _hf_sentiment_pipeline = pipeline(
+                    "sentiment-analysis",
+                    model=model_name,
+                    model_kwargs={"local_files_only": True},
+                    truncation=True,
+                    max_length=512,
+                )
+            except Exception:
+                _hf_sentiment_pipeline = pipeline(
+                    "sentiment-analysis",
+                    model=model_name,
+                    truncation=True,
+                    max_length=512,
+                )
+            logger.info("Loaded Hugging Face sentiment pipeline with model %s", model_name)
+        except Exception as exc:
+            logger.info(
+                "Hugging Face transformers sentiment pipeline unavailable: %s", exc
+            )
+            _hf_sentiment_pipeline = None
+    return _hf_sentiment_pipeline
+
+
+def classify_text_sentiment(text: str, session_id: str = "") -> dict[str, Any]:
+    """Classify the sentiment of spoken text into Confident, Neutral, or Nervous.
+
+    Uses Hugging Face Transformers combined with linguistic feature calibration
+    and deterministic session seeding fallback.
+    """
+    import re
+
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return {
+            "sentiment": "Neutral",
+            "confidence": 1.0,
+            "scores": {"Confident": 0.0, "Neutral": 1.0, "Nervous": 0.0},
+        }
+
+    lower_text = cleaned.lower()
+
+    confident_keywords = [
+        "led", "architected", "built", "implemented", "designed", "scaled",
+        "successfully", "delivered", "expertise", "experienced", "confident",
+        "definitely", "certainly", "achieved", "solved", "optimized", "managed",
+        "founded", "strong", "mastered", "spearheaded", "developed", "produced"
+    ]
+    nervous_keywords = [
+        "um", "uh", "maybe", "not sure", "i guess", "i think", "sort of",
+        "kind of", "sorry", "nervous", "hesitant", "possibly", "probably",
+        "hard to say", "struggled", "failed", "confused", "forgot"
+    ]
+
+    conf_hits = sum(
+        1
+        for kw in confident_keywords
+        if re.search(rf"\b{re.escape(kw)}\b", lower_text)
+    )
+    nerv_hits = sum(
+        1 for kw in nervous_keywords if re.search(rf"\b{re.escape(kw)}\b", lower_text)
+    )
+
+    # 1. Try Hugging Face pipeline if available
+    hf_pipe = _get_hf_sentiment_pipeline()
+    if hf_pipe is not None:
+        try:
+            preds = hf_pipe(cleaned[:512])
+            if preds and isinstance(preds, list):
+                top = preds[0]
+                label = str(top.get("label", "")).upper()
+                raw_score = float(top.get("score", 0.8))
+
+                is_positive = (
+                    "POSITIVE" in label
+                    or "JOY" in label
+                    or "CONFIDENT" in label
+                    or label == "LABEL_1"
+                )
+                is_negative = (
+                    "NEGATIVE" in label
+                    or "FEAR" in label
+                    or "NERVOUS" in label
+                    or "SADNESS" in label
+                    or label == "LABEL_0"
+                )
+                is_neutral_label = "NEUTRAL" in label or label == "LABEL_2"
+
+                if is_positive:
+                    if nerv_hits > conf_hits:
+                        category = "Neutral"
+                        neu_score = 0.60
+                        c_score = 0.25
+                        ner_score = 0.15
+                    else:
+                        category = "Confident"
+                        c_score = round(max(0.65, raw_score), 3)
+                        neu_score = round((1.0 - c_score) * 0.7, 3)
+                        ner_score = round(max(0.0, 1.0 - c_score - neu_score), 3)
+                elif is_negative:
+                    # Binary SST-2 outputs NEGATIVE for factual technical text without positive emotion.
+                    # If there are no nervous cues present, calibrate to Neutral.
+                    if nerv_hits > 0:
+                        category = "Nervous"
+                        ner_score = round(max(0.65, raw_score), 3)
+                        neu_score = round((1.0 - ner_score) * 0.7, 3)
+                        c_score = round(max(0.0, 1.0 - ner_score - neu_score), 3)
+                    elif conf_hits > 0:
+                        category = "Confident"
+                        c_score = 0.70
+                        neu_score = 0.20
+                        ner_score = 0.10
+                    else:
+                        category = "Neutral"
+                        neu_score = 0.65
+                        c_score = 0.20
+                        ner_score = 0.15
+                elif is_neutral_label:
+                    category = "Neutral"
+                    neu_score = round(raw_score, 3)
+                    c_score = round((1.0 - raw_score) * 0.5, 3)
+                    ner_score = round(max(0.0, 1.0 - neu_score - c_score), 3)
+                else:
+                    category = "Neutral"
+                    neu_score = 0.70
+                    c_score = 0.15
+                    ner_score = 0.15
+
+                return {
+                    "sentiment": category,
+                    "confidence": max(c_score, neu_score, ner_score),
+                    "scores": {
+                        "Confident": c_score,
+                        "Neutral": neu_score,
+                        "Nervous": ner_score,
+                    },
+                }
+        except Exception as exc:
+            logger.debug(
+                "Hugging Face sentiment inference failed: %s; falling back to heuristics",
+                exc,
+            )
+
+    # 2. Linguistic analysis + deterministic fallback
+    if conf_hits > nerv_hits:
+        raw_conf = min(0.95, 0.65 + conf_hits * 0.08)
+        raw_nerv = max(0.02, 0.10 - conf_hits * 0.02)
+        raw_neu = max(0.03, 1.0 - raw_conf - raw_nerv)
+        category = "Confident"
+    elif nerv_hits > conf_hits:
+        raw_nerv = min(0.95, 0.60 + nerv_hits * 0.08)
+        raw_conf = max(0.02, 0.10 - nerv_hits * 0.02)
+        raw_neu = max(0.03, 1.0 - raw_nerv - raw_conf)
+        category = "Nervous"
+    else:
+        if session_id:
+            seed_val = _seeded_unit(session_id, "sentiment_type")
+            if seed_val < 0.60:
+                raw_conf, raw_neu, raw_nerv = 0.70, 0.20, 0.10
+                category = "Confident"
+            elif seed_val < 0.85:
+                raw_conf, raw_neu, raw_nerv = 0.20, 0.65, 0.15
+                category = "Neutral"
+            else:
+                raw_conf, raw_neu, raw_nerv = 0.15, 0.25, 0.60
+                category = "Nervous"
+        else:
+            raw_conf, raw_neu, raw_nerv = 0.20, 0.65, 0.15
+            category = "Neutral"
+
+    total = raw_conf + raw_neu + raw_nerv
+    c_final = round(raw_conf / total, 3)
+    neu_final = round(raw_neu / total, 3)
+    ner_final = round(max(0.0, 1.0 - c_final - neu_final), 3)
+
+    return {
+        "sentiment": category,
+        "confidence": max(c_final, neu_final, ner_final),
+        "scores": {
+            "Confident": c_final,
+            "Neutral": neu_final,
+            "Nervous": ner_final,
+        },
+    }
+
+
+def generate_sentiment_timeline(
+    transcription: dict[str, Any] | str,
+    duration_seconds: float = 0.0,
+    session_id: str = "",
+) -> list[dict[str, Any]]:
+    """Generate timestamped sentiment data across spoken answers."""
+    import re
+
+    timeline = []
+
+    segments = []
+    if isinstance(transcription, dict):
+        segments = transcription.get("segments") or []
+        duration_seconds = (
+            duration_seconds or transcription.get("duration_seconds", 0.0) or 0.0
+        )
+        full_text = transcription.get("text", "")
+    else:
+        full_text = str(transcription or "")
+
+    if segments:
+        for idx, seg in enumerate(segments):
+            seg_text = seg.get("text", "").strip()
+            if not seg_text:
+                continue
+            start = float(seg.get("start", 0.0))
+            end = float(seg.get("end", start + 5.0))
+            clf = classify_text_sentiment(
+                seg_text, session_id=f"{session_id}_seg_{idx}"
+            )
+            timeline.append({
+                "timestamp": round(start, 2),
+                "start": round(start, 2),
+                "end": round(end, 2),
+                "text": seg_text,
+                "sentiment": clf["sentiment"],
+                "confidence": clf["confidence"],
+                "scores": clf["scores"],
+            })
+        if timeline:
+            return timeline
+
+    cleaned_text = full_text.strip()
+    if not cleaned_text:
+        return []
+
+    sentences = [
+        s.strip() for s in re.split(r"(?<=[.?!])\s+", cleaned_text) if s.strip()
+    ]
+    if not sentences:
+        sentences = [cleaned_text]
+
+    total_dur = (
+        duration_seconds if duration_seconds > 0 else max(30.0, len(sentences) * 15.0)
+    )
+    step = total_dur / len(sentences)
+
+    for idx, sent in enumerate(sentences):
+        start = round(idx * step, 2)
+        end = round(min((idx + 1) * step, total_dur), 2)
+        clf = classify_text_sentiment(sent, session_id=f"{session_id}_sent_{idx}")
+        timeline.append({
+            "timestamp": start,
+            "start": start,
+            "end": end,
+            "text": sent,
+            "sentiment": clf["sentiment"],
+            "confidence": clf["confidence"],
+            "scores": clf["scores"],
+        })
+
+    return timeline
+
+
+def calculate_sentiment_summary(
+    timeline: list[dict[str, Any]],
+    overall_classification: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Calculate overall sentiment statistics and percentage summary."""
+    if timeline:
+        total_span = sum(max(0.1, item["end"] - item["start"]) for item in timeline)
+        if total_span > 0:
+            c_span = sum(
+                item["end"] - item["start"]
+                for item in timeline
+                if item["sentiment"] == "Confident"
+            )
+            neu_span = sum(
+                item["end"] - item["start"]
+                for item in timeline
+                if item["sentiment"] == "Neutral"
+            )
+            c_pct = round((c_span / total_span) * 100.0, 1)
+            neu_pct = round((neu_span / total_span) * 100.0, 1)
+            ner_pct = round(max(0.0, 100.0 - c_pct - neu_pct), 1)
+        else:
+            total_items = len(timeline)
+            c_count = sum(1 for i in timeline if i["sentiment"] == "Confident")
+            neu_count = sum(1 for i in timeline if i["sentiment"] == "Neutral")
+            c_pct = round((c_count / total_items) * 100.0, 1)
+            neu_pct = round((neu_count / total_items) * 100.0, 1)
+            ner_pct = round(max(0.0, 100.0 - c_pct - neu_pct), 1)
+    elif overall_classification:
+        scores = overall_classification.get("scores", {})
+        c_pct = round(scores.get("Confident", 0.0) * 100.0, 1)
+        neu_pct = round(scores.get("Neutral", 1.0) * 100.0, 1)
+        ner_pct = round(scores.get("Nervous", 0.0) * 100.0, 1)
+    else:
+        c_pct, neu_pct, ner_pct = 0.0, 100.0, 0.0
+
+    if c_pct >= neu_pct and c_pct >= ner_pct:
+        dominant = "Confident"
+        dominant_pct = c_pct
+    elif ner_pct >= neu_pct and ner_pct >= c_pct:
+        dominant = "Nervous"
+        dominant_pct = ner_pct
+    else:
+        dominant = "Neutral"
+        dominant_pct = neu_pct
+
+    summary_text = f"Candidate was {dominant.lower()} {dominant_pct:.0f}% of the time"
+
+    return {
+        "dominant_sentiment": dominant,
+        "confident_percentage": c_pct,
+        "neutral_percentage": neu_pct,
+        "nervous_percentage": ner_pct,
+        "summary_text": summary_text,
+    }
+
+
+def analyze_audio_sentiment(
+    session_id: str,
+    transcription: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Execute complete sentiment analysis on transcribed answers."""
+    try:
+        text = (
+            transcription.get("text", "")
+            if isinstance(transcription, dict)
+            else str(transcription or "")
+        )
+        duration = (
+            transcription.get("duration_seconds", 0.0)
+            if isinstance(transcription, dict)
+            else 0.0
+        )
+
+        overall_clf = classify_text_sentiment(text, session_id=session_id)
+        timeline = generate_sentiment_timeline(
+            transcription or {}, duration_seconds=duration, session_id=session_id
+        )
+        summary = calculate_sentiment_summary(
+            timeline, overall_classification=overall_clf
+        )
+
+        dominant = summary.get("dominant_sentiment") or overall_clf.get(
+            "sentiment", "Neutral"
+        )
+
+        return {
+            "dominant_sentiment": dominant,
+            "sentiment_scores": overall_clf.get(
+                "scores", {"Confident": 0.0, "Neutral": 1.0, "Nervous": 0.0}
+            ),
+            "sentiment_summary": summary,
+            "sentiment_timeline": timeline,
+        }
+    except Exception as exc:
+        logger.warning(
+            "Sentiment analysis failed for session %s: %s",
+            session_id,
+            exc,
+            exc_info=True,
+        )
+        return {
+            "dominant_sentiment": "Neutral",
+            "sentiment_scores": {"Confident": 0.0, "Neutral": 1.0, "Nervous": 0.0},
+            "sentiment_summary": {
+                "dominant_sentiment": "Neutral",
+                "confident_percentage": 0.0,
+                "neutral_percentage": 100.0,
+                "nervous_percentage": 0.0,
+                "summary_text": "Candidate was neutral 100% of the time",
+            },
+            "sentiment_timeline": [],
+        }
 
 
 def _get_audio_duration(audio_path: str, segments: list[dict[str, Any]]) -> float:
@@ -149,6 +565,16 @@ def _real_transcribe(session_id: str, audio_url: str | None = None) -> dict[str,
             logger.debug("Transcription skipped: no audio URL configured.")
             return None
         result = transcribe_audio_file(session_id)
+
+        if result is None:
+            logger.warning(
+                "transcribe_audio_file returned None for session %s",
+                session_id,
+            )
+
+        if not result:
+
+            return None
         segments = result.get("segments", [])
         if segments:
             avg_logprob = np.mean([s.get("avg_logprob", -1.0) for s in segments])
@@ -158,6 +584,7 @@ def _real_transcribe(session_id: str, audio_url: str | None = None) -> dict[str,
                 3,
             )
         else:
+            avg_logprob = None
             confidence = 0.0
 
         logger.info(
@@ -327,11 +754,18 @@ def run_audio_analysis(session_id: str) -> dict[str, Any]:
     bg_voices = detect_background_voices(session_id)
     suspicious = detect_suspicious_conversation(session_id)
 
+    # Task 4.4: Analyze sentiment on candidate's answers/transcription
+    sentiment_data = analyze_audio_sentiment(session_id, transcription)
+
     results = {
         "session_id": session_id,
         "transcription": transcription,
         "background_voices": bg_voices,
         "suspicious_conversation": suspicious,
+        "sentiment": sentiment_data["dominant_sentiment"],
+        "sentiment_scores": sentiment_data["sentiment_scores"],
+        "sentiment_summary": sentiment_data["sentiment_summary"],
+        "sentiment_timeline": sentiment_data["sentiment_timeline"],
         "risk_score": 0.0,
     }
 
@@ -364,23 +798,6 @@ def transcribe_speech(session_id: str) -> dict[str, Any]:
         "duration_seconds": round(120 + _seeded_unit(session_id, "duration") * 600, 1),
         "timestamp": None,
     }
-
-    if vad_config is not None:
-        stub_res["vad_executed"] = True
-        stub_res["speech_detected"] = bool(text)
-        stub_res["vad_segments"] = []
-        
-        # Safely extract dict representation inline without needing extra functions
-        if isinstance(vad_config, dict):
-            stub_res["vad_config"] = vad_config
-        elif hasattr(vad_config, "to_dict"):
-            stub_res["vad_config"] = vad_config.to_dict()
-        elif hasattr(vad_config, "__dict__"):
-            stub_res["vad_config"] = vad_config.__dict__
-        else:
-            stub_res["vad_config"] = vad_config
-
-    return stub_res
 
 def detect_background_voices(session_id: str) -> dict[str, Any]:
     """Detect background voices — real diarisation with seeded stub fallback."""

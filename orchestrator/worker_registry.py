@@ -487,24 +487,33 @@ class WorkerRegistry:
             return self.local_workers.get(worker_id)
 
     def get_all_workers(self) -> dict[str, dict[str, Any]]:
-        """Get all registered workers"""
+        """Get all registered workers."""
         with self.lock:
             return dict(self.local_workers)
 
     def get_available_workers(self) -> list[dict[str, Any]]:
-        """
-        Get workers that are healthy and have capacity
+        """Get healthy workers that are not full and have a recent heartbeat."""
+        from orchestrator.time_utils import utcnow
 
-        Returns:
-            list: Available worker details
-        """
         available = []
+        timeout_threshold = utcnow() - timedelta(seconds=self.HEARTBEAT_TIMEOUT)
+
         with self.lock:
             for worker in self.local_workers.values():
-                if (
-                    worker["status"] == "healthy"
-                    and worker["active_tasks"] < worker["capacity"]
-                ):
+                if worker.get("status") != "healthy":
+                    continue
+
+                last_hb_raw = worker.get("last_heartbeat")
+                if not last_hb_raw:
+                    continue
+
+                last_hb = datetime.fromisoformat(last_hb_raw)
+                if last_hb.tzinfo is None:
+                    last_hb = last_hb.replace(tzinfo=timezone.utc)
+
+                if last_hb >= timeout_threshold and worker.get(
+                    "active_tasks", 0
+                ) < worker.get("capacity", 0):
                     available.append(worker)
 
         return available

@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, Stabilized-version]
   pull_request:
-    branches: [main]
+    branches: [main, Stabilized-version]
 
 permissions:
   contents: read
@@ -46,6 +46,7 @@ jobs:
       JSON_LOGGING: "0"
       ENABLE_PROMETHEUS: "true"
       CORS_ALLOW_ORIGINS: "*"
+      RATE_LIMIT_PER_MINUTE: "10000"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -78,6 +79,7 @@ jobs:
     env:
       API_TOKEN: test-token
       API_BASE_URL: http://localhost:8000
+      POSTGRES_PASSWORD: postgres
       XDG_CACHE_HOME: /tmp/.cache
       HOME: /tmp
       TMPDIR: /tmp
@@ -95,10 +97,10 @@ jobs:
           pip install httpx pytest
 
       - name: Validate API import path
-        run: docker compose run --rm -e XDG_CACHE_HOME=/tmp/.cache -e HOME=/tmp -e TMPDIR=/tmp fastapi python -c "import orchestrator.main; print('ok')"
+        run: docker compose -f docker-compose.yml run --rm fastapi python -c "import orchestrator.main; print('ok')"
 
       - name: Bring up full stack (redis, postgres, api, worker)
-        run: docker compose up -d --build redis postgres fastapi worker
+        run: docker compose -f docker-compose.yml up -d --build redis postgres fastapi worker
 
       - name: Wait for API to become healthy
         run: |
@@ -111,7 +113,7 @@ jobs:
             sleep 2
           done
           echo "API never became healthy" >&2
-          docker compose logs
+          docker compose -f docker-compose.yml logs
           exit 1
 
       - name: Run end-to-end smoke tests
@@ -119,11 +121,11 @@ jobs:
 
       - name: Dump service logs on failure
         if: failure()
-        run: docker compose logs --tail=300
+        run: docker compose -f docker-compose.yml logs --tail=300
 
       - name: Tear down stack
         if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose.yml down -v
 
   frontend:
     name: Frontend

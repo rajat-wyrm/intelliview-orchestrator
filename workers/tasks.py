@@ -16,8 +16,7 @@ import socket
 import time
 from datetime import datetime, timezone
 
-from celery import group
-from celery.exceptions import TimeoutError
+from celery import chord, group
 from sqlalchemy import select
 
 from database.db import SessionLocal
@@ -27,7 +26,6 @@ from monitoring.prometheus_metrics import (
     PIPELINE_LATENCY,
     POSTGRES_HEALTH,
     REDIS_HEALTH,
-    RETRY_COUNT,
     RISK_SCORE,
     WORKERS_HEALTHY,
 )
@@ -136,8 +134,13 @@ def _run_audio(self, session_id: str) -> dict:
 
 
 @celery_app.task(bind=True, max_retries=3, name="workers.tasks._after_parallel")
-def _after_parallel(self, session_id: str, video_result: dict, audio_result: dict):
-    """Runs after video + audio group completes; then evaluation + risk."""
+def _after_parallel(self, results: list, session_id: str):
+    """Runs after video + audio group completes; then evaluation + risk.
+
+    Chord callback: first argument is the list of results from the parallel
+    group [video_result, audio_result], followed by the session_id from .s().
+    """
+    video_result, audio_result = results[0], results[1]
     try:
         logger.info("Parallel video+audio done for %s - running evaluation", session_id)
         session_manager.update_session_status(
@@ -291,7 +294,7 @@ def process_interview_session(self, session_id):
         finally:
             db_session.close()
 
-        # Parallel execution group
+        # Parallel execution via chord: group runs video+audio, then callback runs _after_parallel
         session_manager.update_session_status(
             session_id,
             session_manager.VIDEO_PROCESSING,
@@ -303,20 +306,11 @@ def process_interview_session(self, session_id):
             _run_audio.s(session_id),
         )
 
-        result = parallel_group.apply_async()
+        # Chord: runs parallel_group, then _after_parallel with results.
+        # chord(self)(callback) applies the chord and returns an AsyncResult.
+        chord(parallel_group)(_after_parallel.s(session_id))
 
-        # Wait for both to finish
-        video_result, audio_result = result.get(timeout=600)
-
-        logger.info(
-            "Parallel video+audio completed for session %s",
-            session_id,
-        )
-
-        # Continue with evaluation
-        _after_parallel.delay(session_id, video_result, audio_result)
-
-        # Record successful task completion
+        # Record successful task initiation
         registry.record_success(worker_hostname)
 
         return {
@@ -324,25 +318,6 @@ def process_interview_session(self, session_id):
             "status": "processing_parallel",
             "processed_by": worker_hostname,
         }
-
-    except TimeoutError as exc:
-        retry_delay = 2 ** (self.request.retries + 1)
-
-        FAILURE_COUNT.labels(failure_type="celery_task_error").inc()
-
-        logger.warning(
-            "Timed out waiting for subtasks for session %s (attempt %d/3). Retrying in %ds.",
-            session_id,
-            self.request.retries + 1,
-            retry_delay,
-        )
-
-        RETRY_COUNT.inc()
-
-        raise self.retry(
-            exc=exc,
-            countdown=retry_delay,
-        )
 
     except Exception as exc:
         # Record worker failure

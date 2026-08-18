@@ -1,0 +1,1 @@
+{"parameters":[{"name":"strategy","in":"query","required":true,"schema":{"type":"string","title":"Strategy"}},{"name":"x-api-token","in":"header","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"X-Api-Token"}}]}

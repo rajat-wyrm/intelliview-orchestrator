@@ -1,0 +1,80 @@
+---
+id: switch-load-balancing-strategy-switch-strategy-post
+title: "Switch Load Balancing Strategy"
+description: "Change the active load balancing strategy"
+sidebar_label: "Switch Load Balancing Strategy"
+hide_title: true
+hide_table_of_contents: true
+api: eJztVU1v4zYQ/SsETwkgb9KgJ92cTYAaSNepP4oCSWAw1FjihiKV4ciOYei/F0NJttwki+6th54sk8M3b2bezOxlBkGjqch4J1P5tVAuB0EFCKXJbEBYrzLxrKxy2rhcBEJFkO8e3aOb11XlkSDrTw2E9NGNxGy6/Hazmk2vJ99SMYfXGhwZZcXW4wugUCGY3JXgSJzBBpwgFV5EZgKhea6ZyTmj3N2O54vV3XR8c3uTinF8JMj3KFtDhVjDFgL1XBkniDME7csSXAZZBPpjebu8XV2P54yzDCBmkJkgXmuoQVhwORVCBRHAgmbvogRCoznEMeYckhDiEHkq5t2XcKoEcTaINjkhnQw9nzPcDKhG1yNmRtMATbe5196tDZYqViSRvgKM35NMpjJsDelixUVZHYqy6qmtuuvD/8oHkokMoGs0tJPpw15OxzUVV/cqhK3H7BoUAsr04al5SmSlUJVAgCGacnzstIOTiTQsktcakP8gvNYGIZMpYQ2JDLqAUsl0L2lXdQ+Ny2UiyZDlgz5W2TTJAf5tpCozIv8CrvdQgMoAT1yslQ0nPpTbTdeR5qk3Ru5OXG2t5Lh6/3+NxpUZLaKrhi8QQuVdgMCIV5eX/HPaEfNaawhhXVsx64xlIrV3BI4ij6qyRscSXXwP/GZ/ZNk0TZPIX6+u3gP/qazJ4jNxi+jxJ1BlhSwLMi3vDEgZy1+GoAzvDazXJ7f/InXGEeSAsnlqkv5MIardoJp3viUom0SWIf9R4X+HEFQO8gD2uWlMhljwbcNyqOqYkP56Eg+aRGp6G8D45++gaQDzlXP5Rqy0dzZHVT3E3LT0O7uBXI4laiv0eSpu2hJ85Kw3+W2xuH8H2OqDVM4NJ6dUADKBEqjw3O9dA1eKCpnKi7a/R4OG7Ft7ztpoq/1xgx8zpfhaJnJt/bYVS2faasxXEYZpcZ8s0bJn63PjZEvXuLUflmQ8ERNHgBsDWzFFXUAkGCV9qvnjJct+fD8Ra4/HyQ+ZMAegCj03XiuODWBoIX75cvnlkivBqSlVbIxukMxjdsQdb6zrw8aaH5N1QmZ/bLf/195/bu11YuUWvqisMnHI1GhbvXI3PMh/dsNTIgvul/RB7vfPKsASbdPwcbuxeOBlJqhnO1gon2ribNZNiXPxGZ8X2J2ux42yNZvFpbNRaNhXXK5Jv9N+jsSPPZ9uzqPzZN8ZjLWGigZ379ZKM5w299P5QiaSB8RHA6P7GOwN5YZRd0OiZ6fi4lz0Q2SwXE6f9eNnpRGytmXCASRH5WgV3zVPTdP8DcosszQ=
+sidebar_class_name: "post api-method"
+info_path: docs/api/ai-interview-orchestrator
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Switch Load Balancing Strategy"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/switch-strategy"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Change the active load balancing strategy
+
+Supported strategies:
+- ROUND_ROBIN: Sequential worker assignment (even task distribution)
+- LEAST_LOADED: Assign to worker with fewest active tasks (recommended)
+- QUEUE_BASED: Use Redis queue length as selection metric
+
+Args:
+    strategy: Strategy name (ROUND_ROBIN, LEAST_LOADED, QUEUE_BASED)
+
+Returns:
+    dict: Strategy change confirmation
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./switch-load-balancing-strategy-switch-strategy-post.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./switch-load-balancing-strategy-switch-strategy-post.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./switch-load-balancing-strategy-switch-strategy-post.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

@@ -31,7 +31,7 @@ EXPOSE 8000
 RUN groupadd -r appgroup && useradd -r -g appgroup -d /app -s /sbin/nologin appuser
 
 # Give our new user ownership over the application files
-RUN mkdir -p /app/.cache && chown -R appuser:appgroup /app
+RUN mkdir -p /app/.cache /app/data && chown -R appuser:appgroup /app
 
 # Switch from root to non-root user
 USER appuser

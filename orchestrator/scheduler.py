@@ -36,17 +36,25 @@ class Scheduler:
     Manages task scheduling and distribution to workers
     """
 
-    def __init__(self, load_balancer: LoadBalancer | None = None):
+    def __init__(
+        self,
+        load_balancer: LoadBalancer | None = None,
+        worker_registry: WorkerRegistry | None = None,
+    ):
         """
         Initialize scheduler
 
         Args:
             load_balancer: Optional custom LoadBalancer instance
+            worker_registry: Optional shared WorkerRegistry instance. When
+                omitted, a new registry is created. Passing the registry
+                shared with the REST routes keeps capacity checks consistent
+                with worker registrations/heartbeats handled elsewhere.
         """
         self.load_balancer = load_balancer or LoadBalancer(
             strategy=BalancingStrategy.LEAST_LOADED
         )
-        self.worker_registry = WorkerRegistry()
+        self.worker_registry = worker_registry or WorkerRegistry()
         self.session_manager = SessionManager()
         logger.info("Scheduler initialized with Least Loaded strategy")
 

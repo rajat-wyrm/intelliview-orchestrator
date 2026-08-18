@@ -1,0 +1,79 @@
+---
+id: detect-and-handle-failures-detect-failures-post
+title: "Detect And Handle Failures"
+description: "Manually trigger failure detection and recovery"
+sidebar_label: "Detect And Handle Failures"
+hide_title: true
+hide_table_of_contents: true
+api: eJzlVV1vKjcQ/SvWPLXSkqRRn/aN3o9epN6CAqkqEYQmuwPrG2PvHXtJEPJ/r8a7y0KTSLfPfQI8x8dHM+cMRyjJF6zroJ2FHL6ibdCYgwqst1titUFtGiZVUqBCQAptqZgKtyc+PNgHOy/QerVxnD/YkfqM2lCpPHmvnfXqJx+a4klpq2Z30w+f5vPJn7//LMB7WxGaUB3Us+MnYi+H8wTuLwv7otXhT0/KS50aKnt5/kqwdxQatj5/sEopVeoi5Orjm7oVk29M8JCBq4lRAJMScmiJ12jLdYW2NLTuX1h3pdPv2vkAGXgqGtbhAPnyCNNxE6rbGXr/7Lj8jZCJIV+u4iqDGhl3FIh9glrcEeTwMsJaj4J7IgsZaJlBRVgSQwZM3xvNVEK+QeMpA19UtEPIj4D2MN0knnCohccH1nYLMTud2MYYkIeDDkYO/h6Naz1apKeiFJh87awnL4y3NzfycWmHeVMU5P2mMequA0MGhbOBbEg66troIvXv+puXO8dBZYwxZvDr7e1r4r/Q6DJdU5+YHf8HVqhZZhZ0q7ukgNrINx1o518DjCsuqj/QOm0DbYkhrmLWnyEzHmDo5h+uFQgxg53fCvMl3wD9St7jluBE9j40NUMtpBrFDnWTGtKXJ+kgZlCElzMa9/iNinBG80F6+RIgDvpPmMFVy9SbVn6HO7PLMKJ2Qu+34mM7grce6yFfFovZK8LWHwG3kgiYhopYBOwoVE7C2CWsxlBBDtdtAEd9AM+yNxdvtNN+O4FDp1DKkMHGuOfWLB209ZirE43Ikpzcs5GXjdtqC61cbTfufCTjiZrYQLzX9KymXFTkA2NIlr70/FAU249nk3aVaTHBYyPbTJ+IanYSvNYce2LfUvxydXN1I5OQ1uwwBaNbJO2iU2Nbqi9pc6VV3DXqQshxiNr/cN93RpB4XNcGdQpww6b1gjhtCf922iqDSryYL+F4fERP92xilOPvDbGs/lUGe2SNj+KJpayNbovLnim1l8Kwx98dx3v6nujw6r9ij6YRZFpcLWBcFFSHs9qrRRrP8zWbzheQgUTirYh0X842JdrDGXkXi14dpr+KRR+bs3V6ea0P3LpgKskGjcafSLaMNqzTvbiKMf4D038DMQ==
+sidebar_class_name: "post api-method"
+info_path: docs/api/ai-interview-orchestrator
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Detect And Handle Failures"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/detect-failures"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Manually trigger failure detection and recovery
+
+Scans for:
+- Failed sessions (stuck in PROCESSING)
+- Unhealthy workers
+- Stuck sessions
+
+Triggers recovery for detected failures.
+
+Returns:
+    dict: Detection and recovery results
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./detect-and-handle-failures-detect-failures-post.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./detect-and-handle-failures-detect-failures-post.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./detect-and-handle-failures-detect-failures-post.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

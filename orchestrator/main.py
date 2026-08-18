@@ -14,6 +14,7 @@ Integrates:
 
 import json
 import logging
+import os
 import re
 import time
 from contextlib import asynccontextmanager
@@ -62,6 +63,7 @@ from orchestrator.state_sync import StateSynchronizer
 from orchestrator.store import DEFAULT_WEIGHTS
 from orchestrator.worker_registry import WorkerRegistry
 from routers.admin import create_admin_routes
+from routers.analytics import router as analytics_router
 from routers.candidates import create_candidate_routes
 from routers.health import create_health_routes
 from routers.metrics import router as metrics_router
@@ -92,6 +94,36 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     settings.validate_configuration()
     Base.metadata.create_all(bind=engine)
+
+    # Seed admin user
+    import uuid
+
+    from passlib.context import CryptContext
+
+    from database.db import SessionLocal
+    from database.models import User
+
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+    def bcrypt_safe_password(password: str) -> str:
+        if len(password.encode("utf-8")) > 72:
+            raise ValueError("Password must be 72 bytes or fewer for bcrypt")
+        return password
+
+    with SessionLocal() as db:
+        try:
+            if not db.query(User).first():
+                admin = User(
+                    user_id=str(uuid.uuid4()),
+                    email="admin@example.com",
+                    password_hash=pwd_context.hash(bcrypt_safe_password("admin123")),
+                    role="admin",
+                )
+                db.add(admin)
+                db.commit()
+                logger.info("Created initial admin user: admin@example.com / admin123")
+        except ValueError as exc:
+            logger.error("Startup user initialization failed: %s", exc)
 
     # Initialize webhook subscriber store
     create_table()
@@ -256,7 +288,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(RateLimiterMiddleware, limit=60, window_seconds=60)
+app.add_middleware(
+    RateLimiterMiddleware,
+    limit=int(os.getenv("RATE_LIMIT_PER_MINUTE", "60")),
+    window_seconds=60,
+)
 app.add_middleware(
     RequestValidationMiddleware,
     max_body_size_bytes=MAX_REQUEST_BODY_BYTES,
@@ -268,8 +304,8 @@ session_manager = SessionManager()
 session_tracker = SessionTracker()
 state_sync = StateSynchronizer()
 load_balancer = LoadBalancer(strategy=BalancingStrategy.LEAST_LOADED)
-scheduler = Scheduler(load_balancer=load_balancer)
 worker_registry = WorkerRegistry()
+scheduler = Scheduler(load_balancer=load_balancer, worker_registry=worker_registry)
 fault_manager = FaultManager()
 retry_manager = RetryManager(max_retries=3, strategy=RetryStrategy.EXPONENTIAL_BACKOFF)
 health_monitor = HealthMonitor()
@@ -331,6 +367,11 @@ app.include_router(
 app.include_router(risk_configs_router)
 
 app.include_router(metrics_router)
+app.include_router(analytics_router)
+
+from routers.auth import router as auth_router
+
+app.include_router(auth_router)
 
 
 @app.get("/risk-engine/weights/{role}")

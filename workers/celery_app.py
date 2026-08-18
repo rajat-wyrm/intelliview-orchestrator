@@ -31,7 +31,10 @@ celery_app.conf.update(
     # Long-running interview tasks should reserve only one task at a time
     worker_prefetch_multiplier=1,
     broker_connection_retry_on_startup=True,
-    # Periodic beat schedule — scan for due retries every 60 seconds
+    # All interview tasks dispatch to the "fast" queue by default (the worker
+    # consumes only "fast"/"slow"); without this the tasks land on the default
+    # "celery" queue, which no worker reads, and sessions stay QUEUED forever.
+    task_default_queue="fast",
     task_queues=(
         Queue("fast"),
         Queue("slow"),

@@ -368,7 +368,9 @@ def test_get_active_sessions_handles_redis_exception():
     sync = StateSynchronizer.__new__(StateSynchronizer)
     sync.redis_client = redis
 
-    assert sync.get_active_sessions() == []
+    # Mock the DB fallback to return empty list
+    with patch.object(sync, "_read_active_sessions_from_db", return_value=[]):
+        assert sync.get_active_sessions() == []
 
 
 def test_get_cache_stats_handles_redis_exception():

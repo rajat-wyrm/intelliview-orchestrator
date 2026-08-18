@@ -1,0 +1,1 @@
+{"title":"Body","body":{"required":true,"content":{"application/json":{"schema":{"properties":{"worker_id":{"type":"string","title":"Worker Id"},"active_tasks":{"type":"integer","title":"Active Tasks"}},"type":"object","required":["worker_id","active_tasks"],"title":"WorkerHeartbeatRequest","description":"Request model for worker heartbeat"}}}}}

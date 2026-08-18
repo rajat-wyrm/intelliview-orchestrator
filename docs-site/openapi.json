@@ -1,0 +1,3732 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AI Interview Orchestrator",
+    "description": "Orchestration API for distributed interview processing",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/monitoring/metrics/system": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "Get System Metrics",
+        "description": "Get comprehensive system-wide metrics\n\nReturns:\n    dict: System metrics including sessions, workers, queue, health",
+        "operationId": "get_system_metrics_monitoring_metrics_system_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/monitoring/metrics/workers": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "Get Worker Metrics Endpoint",
+        "description": "Get detailed worker performance metrics\n\nReturns:\n    dict: Worker metrics including utilization, health, capacity",
+        "operationId": "get_worker_metrics_endpoint_monitoring_metrics_workers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/monitoring/metrics/sessions": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "Get Session Metrics Endpoint",
+        "description": "Get session activity metrics\n\nReturns:\n    dict: Session metrics including active, completed, failed, risk scores",
+        "operationId": "get_session_metrics_endpoint_monitoring_metrics_sessions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/monitoring/metrics/queue": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "Get Queue Metrics",
+        "description": "Get queue statistics and backlog information\n\nReturns:\n    dict: Queue metrics including length, pending tasks, backlog percentage",
+        "operationId": "get_queue_metrics_monitoring_metrics_queue_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/monitoring/metrics/failures": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "Get Failure Metrics Endpoint",
+        "description": "Get failure and recovery metrics\n\nReturns:\n    dict: Failure metrics including counts, types, DLQ size",
+        "operationId": "get_failure_metrics_endpoint_monitoring_metrics_failures_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/monitoring/metrics/retries": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "Get Retry Metrics Endpoint",
+        "description": "Get retry attempt metrics\n\nReturns:\n    dict: Retry metrics including scheduled retries, strategy, statistics",
+        "operationId": "get_retry_metrics_endpoint_monitoring_metrics_retries_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/monitoring/metrics/performance": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "Get Performance Metrics",
+        "description": "Get system performance metrics\n\nReturns:\n    dict: Performance metrics including throughput, processing time, concurrency",
+        "operationId": "get_performance_metrics_monitoring_metrics_performance_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/monitoring/metrics/dashboard": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "Get Dashboard Summary",
+        "description": "Get comprehensive dashboard summary with all metrics\n\nReturns:\n    dict: Complete dashboard data for visualization",
+        "operationId": "get_dashboard_summary_monitoring_metrics_dashboard_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Health check endpoint\nReturns system status",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/livez": {
+      "get": {
+        "summary": "Liveness Probe",
+        "description": "Kubernetes-style liveness probe. Returns 200 if the process is alive.",
+        "operationId": "liveness_probe_livez_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/readyz": {
+      "get": {
+        "summary": "Readiness Probe",
+        "description": "Kubernetes-style readiness probe. Returns 200 only when all dependencies are up.",
+        "operationId": "readiness_probe_readyz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/dependencies": {
+      "get": {
+        "summary": "Get Dependency Statuses",
+        "description": "Deep health check of all dependencies (Redis, Postgres, Celery broker).",
+        "operationId": "get_dependency_statuses_dependencies_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Prometheus Metrics",
+        "description": "Prometheus metrics endpoint.",
+        "operationId": "prometheus_metrics_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "tags": [
+          "Metrics"
+        ]
+      }
+    },
+    "/circuit-breaker": {
+      "get": {
+        "summary": "Get Circuit Breaker Status",
+        "description": "Return the current state of the Redis circuit breaker.",
+        "operationId": "get_circuit_breaker_status_circuit_breaker_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/system-health": {
+      "get": {
+        "summary": "Get System Health",
+        "description": "Get comprehensive system health status\n\nPerforms health checks on:\n- Redis connectivity\n- Worker nodes\n- Active sessions\n- Queue backlog\n\nReturns:\n    dict: System health status and metrics",
+        "operationId": "get_system_health_system_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/worker-health": {
+      "get": {
+        "summary": "Get Worker Health",
+        "description": "Get detailed health status of all workers\n\nReturns:\n    dict: Worker health information",
+        "operationId": "get_worker_health_worker_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/start-interview": {
+      "post": {
+        "summary": "Start Interview",
+        "description": "Start a new interview session using intelligent scheduling\n\nExecution flow:\n1. Create session in database (status: CREATED)\n2. Cache session in Redis\n3. Update status to QUEUED\n4. Use Scheduler to intelligently assign to worker\n5. Task pushed to Redis queue and/or assigned to specific worker\n\nArgs:\n    request: Interview session request with candidate details\n\nReturns:\n    InterviewSessionResponse: Created session details with estimated wait time\n\nRaises:\n    HTTPException: On creation failure",
+        "operationId": "start_interview_start_interview_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-api-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartInterviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewSessionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Interviews"
+        ]
+      }
+    },
+    "/session-status/{session_id}": {
+      "get": {
+        "summary": "Get Session Status",
+        "description": "Get current status of an interview session\n\nRetrieves real-time session information including:\n- Current status (CREATED, QUEUED, PROCESSING, COMPLETED, FAILED)\n- Risk score if available\n- Processing node information\n- Timestamps\n\nArgs:\n    session_id: Interview session identifier\n\nReturns:\n    SessionStatusResponse: Current session status and details\n\nRaises:\n    HTTPException: If session not found",
+        "operationId": "get_session_status_session_status__session_id__get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/interviews/{session_id}/report": {
+      "get": {
+        "summary": "Get Interview Report",
+        "description": "Get comprehensive final interview report.",
+        "operationId": "get_interview_report_interviews__session_id__report_get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewReportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Interviews"
+        ]
+      }
+    },
+    "/session-status/{session_id}/risk-report": {
+      "get": {
+        "summary": "Get Session Risk Report",
+        "description": "Get a full detailed risk report for a session, as JSON or downloadable PDF.\n\nArgs:\n    session_id: Interview session identifier\n    format: \"json\" (default) or \"pdf\"",
+        "operationId": "get_session_risk_report_session_status__session_id__risk_report_get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "json",
+              "title": "Format"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/task-status/{task_id}": {
+      "get": {
+        "summary": "Get Task Status",
+        "description": "Get the status of a Celery task by its ID.\n\nArgs:\n    task_id: Celery task identifier (returned by the scheduler).\n\nReturns:\n    TaskStatusResponse: Current task status and result if available.",
+        "operationId": "get_task_status_task_status__task_id__get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/active-sessions": {
+      "get": {
+        "summary": "Get Active Sessions",
+        "description": "Get all currently active sessions\n\nReturns sessions in states: CREATED, QUEUED, PROCESSING\n\nReturns:\n    dict: List of active sessions with brief details",
+        "operationId": "get_active_sessions_active_sessions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/completed-sessions": {
+      "get": {
+        "summary": "Get Completed Sessions",
+        "description": "Get recently completed sessions\n\nArgs:\n    limit: Maximum number of sessions to retrieve (default: 100)\n\nReturns:\n    dict: List of completed sessions with results",
+        "operationId": "get_completed_sessions_completed_sessions_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/stuck-sessions": {
+      "get": {
+        "summary": "Get Stuck Sessions",
+        "description": "Get sessions that appear to be stuck in PROCESSING\n\nArgs:\n    timeout_minutes: Timeout threshold in minutes (default: 30)\n\nReturns:\n    dict: List of stuck sessions",
+        "operationId": "get_stuck_sessions_stuck_sessions_get",
+        "parameters": [
+          {
+            "name": "timeout_minutes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 30,
+              "title": "Timeout Minutes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/session-statistics": {
+      "get": {
+        "summary": "Get Session Statistics",
+        "description": "Get comprehensive session statistics\n\nReturns statistics including:\n- Total sessions by status\n- Average processing duration\n- Risk score distribution\n- High-risk session count\n\nReturns:\n    dict: Session statistics",
+        "operationId": "get_session_statistics_session_statistics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/high-risk-sessions": {
+      "get": {
+        "summary": "Get High Risk Sessions",
+        "description": "Get high-risk completed sessions\n\nArgs:\n    threshold: Risk score threshold (0-1, default: 0.8)\n    limit: Maximum sessions to return (default: 50)\n\nReturns:\n    dict: List of high-risk sessions",
+        "operationId": "get_high_risk_sessions_high_risk_sessions_get",
+        "parameters": [
+          {
+            "name": "threshold",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "default": 0.8,
+              "title": "Threshold"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/interviews": {
+      "get": {
+        "summary": "List Interviews",
+        "description": "List interview sessions, newest first.",
+        "operationId": "list_interviews_interviews_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Interviews"
+        ]
+      }
+    },
+    "/interviews/ask-question": {
+      "post": {
+        "summary": "Ask Question",
+        "description": "Get next question for a session",
+        "operationId": "ask_question_interviews_ask_question_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskQuestionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Interviews"
+        ]
+      }
+    },
+    "/interviews/submit-answer": {
+      "post": {
+        "summary": "Submit Answer",
+        "description": "Submit an answer and get feedback",
+        "operationId": "submit_answer_interviews_submit_answer_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitAnswerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Interviews"
+        ]
+      }
+    },
+    "/failed-sessions": {
+      "get": {
+        "summary": "Get Failed Sessions",
+        "description": "Get sessions that failed during processing\n\nArgs:\n    limit: Maximum number of failed sessions to return\n\nReturns:\n    dict: List of failed sessions with details",
+        "operationId": "get_failed_sessions_failed_sessions_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/retry-session/{session_id}": {
+      "post": {
+        "summary": "Retry Failed Session",
+        "description": "Retry a failed interview session\n\nAttempts to reschedule the session if it hasn't exceeded max retries.\n\nArgs:\n    session_id: ID of session to retry\n\nReturns:\n    dict: Retry scheduling result",
+        "operationId": "retry_failed_session_retry_session__session_id__post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "x-api-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/recovery-queue": {
+      "get": {
+        "summary": "Get Recovery Queue",
+        "description": "Get sessions queued for recovery/retry\n\nArgs:\n    limit: Maximum number to return\n\nReturns:\n    dict: Recovery queue entries",
+        "operationId": "get_recovery_queue_recovery_queue_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/failure-log": {
+      "get": {
+        "summary": "Get Failure Log",
+        "description": "Get system failure log entries\n\nArgs:\n    limit: Maximum number of entries to return\n\nReturns:\n    dict: Failure log entries",
+        "operationId": "get_failure_log_failure_log_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/dead-letter-queue": {
+      "get": {
+        "summary": "Get Dead Letter Queue",
+        "description": "Get permanently failed sessions in dead letter queue\n\nArgs:\n    limit: Maximum number to return\n\nReturns:\n    dict: Dead letter queue entries",
+        "operationId": "get_dead_letter_queue_dead_letter_queue_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/fault-statistics": {
+      "get": {
+        "summary": "Get Fault Statistics",
+        "description": "Get aggregate fault and recovery statistics\n\nReturns:\n    dict: System fault metrics and trends",
+        "operationId": "get_fault_statistics_fault_statistics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/detect-failures": {
+      "post": {
+        "summary": "Detect And Handle Failures",
+        "description": "Manually trigger failure detection and recovery\n\nScans for:\n- Failed sessions (stuck in PROCESSING)\n- Unhealthy workers\n- Stuck sessions\n\nTriggers recovery for detected failures.\n\nReturns:\n    dict: Detection and recovery results",
+        "operationId": "detect_and_handle_failures_detect_failures_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-api-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/candidates": {
+      "get": {
+        "summary": "List Candidates",
+        "description": "List all candidates",
+        "operationId": "list_candidates_candidates_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Candidates"
+        ]
+      },
+      "post": {
+        "summary": "Create Candidate",
+        "description": "Create a new candidate profile",
+        "operationId": "create_candidate_candidates_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCandidateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Candidates"
+        ]
+      }
+    },
+    "/candidates/{candidate_id}": {
+      "get": {
+        "summary": "Get Candidate",
+        "description": "Get candidate details by ID",
+        "operationId": "get_candidate_candidates__candidate_id__get",
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Candidates"
+        ]
+      }
+    },
+    "/candidates/{candidate_id}/history": {
+      "get": {
+        "summary": "Get Candidate History",
+        "description": "Get candidate interview history",
+        "operationId": "get_candidate_history_candidates__candidate_id__history_get",
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Candidates"
+        ]
+      }
+    },
+    "/questions": {
+      "get": {
+        "summary": "List Questions",
+        "description": "List questions with optional category/difficulty filter",
+        "operationId": "list_questions_questions_get",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "name": "difficulty",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Difficulty"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Questions"
+        ]
+      },
+      "post": {
+        "summary": "Add Question",
+        "description": "Add a new question to the bank",
+        "operationId": "add_question_questions_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddQuestionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Questions"
+        ]
+      }
+    },
+    "/templates": {
+      "get": {
+        "summary": "List Templates",
+        "description": "List interview templates with optional type filter",
+        "operationId": "list_templates_templates_get",
+        "parameters": [
+          {
+            "name": "interview_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Interview Type"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      },
+      "post": {
+        "summary": "Create Template",
+        "description": "Create a new interview template",
+        "operationId": "create_template_templates_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTemplateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/register-worker": {
+      "post": {
+        "summary": "Register Worker",
+        "description": "Register a new worker node\n\nArgs:\n    request: Worker registration details (worker_id, capacity)\n\nReturns:\n    dict: Registration confirmation",
+        "operationId": "register_worker_register_worker_post",
+        "parameters": [
+          {
+            "name": "x-api-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkerRegistrationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Workers"
+        ]
+      }
+    },
+    "/worker/heartbeat": {
+      "post": {
+        "summary": "Worker Heartbeat",
+        "description": "Process heartbeat from worker node\n\nWorkers send periodic heartbeats to indicate they are alive\nand to report current active task count\n\nArgs:\n    request: Heartbeat data (worker_id, active_tasks)\n\nReturns:\n    dict: Heartbeat confirmation",
+        "operationId": "worker_heartbeat_worker_heartbeat_post",
+        "parameters": [
+          {
+            "name": "x-api-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkerHeartbeatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Workers"
+        ]
+      }
+    },
+    "/workers": {
+      "get": {
+        "summary": "List Workers",
+        "description": "Get list of all registered workers with status\n\nReturns:\n    dict: Worker nodes with status information",
+        "operationId": "list_workers_workers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "tags": [
+          "Workers"
+        ]
+      }
+    },
+    "/worker-statistics": {
+      "get": {
+        "summary": "Get Worker Stats",
+        "description": "Get detailed worker statistics and utilization metrics\n\nReturns:\n    dict: Worker utilization and performance metrics",
+        "operationId": "get_worker_stats_worker_statistics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "tags": [
+          "Workers"
+        ]
+      }
+    },
+    "/load-status": {
+      "get": {
+        "summary": "Get Load Status",
+        "description": "Get current system load and capacity status\n\nProvides visualization of:\n- Overall system utilization\n- Queue depth\n- Worker availability\n- Load balancer strategy recommendations\n\nReturns:\n    dict: System load information",
+        "operationId": "get_load_status_load_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/scheduling-status": {
+      "get": {
+        "summary": "Get Scheduling Status",
+        "description": "Get scheduler status and health information\n\nReturns:\n    dict: Scheduler operational status and metrics",
+        "operationId": "get_scheduling_status_scheduling_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "tags": [
+          "Scheduler"
+        ]
+      }
+    },
+    "/deregister-worker/{worker_id}": {
+      "delete": {
+        "summary": "Deregister Worker",
+        "description": "Deregister a worker node (remove from active pool)\n\nUse this when a worker is permanently removed from the system\n\nArgs:\n    worker_id: ID of worker to deregister\n\nReturns:\n    dict: Deregistration confirmation",
+        "operationId": "deregister_worker_deregister_worker__worker_id__delete",
+        "parameters": [
+          {
+            "name": "worker_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Worker Id"
+            }
+          },
+          {
+            "name": "x-api-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Workers"
+        ]
+      }
+    },
+    "/worker-distribution": {
+      "get": {
+        "summary": "Get Worker Distribution",
+        "description": "Get distribution of sessions across worker nodes\n\nReturns:\n    dict: Worker node -> session count mapping",
+        "operationId": "get_worker_distribution_worker_distribution_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "tags": [
+          "Workers"
+        ]
+      }
+    },
+    "/login": {
+      "post": {
+        "summary": "Login",
+        "description": "Exchange a valid API token for a JWT access token.",
+        "operationId": "login_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/admin/fairness-audit": {
+      "get": {
+        "summary": "Get Fairness Audit Report",
+        "description": "Return a lightweight fairness audit report for recent scoring patterns.\n\nThis endpoint uses the existing BiasAuditor heuristic for scoring-dispersion\nreview. It is intentionally informational and does not replace a full\ncompliance or fairness assessment framework.",
+        "operationId": "get_fairness_audit_report_admin_fairness_audit_get",
+        "parameters": [
+          {
+            "name": "x-api-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/cache-stats": {
+      "get": {
+        "summary": "Get Cache Stats",
+        "description": "Get Redis cache statistics\n\nReturns:\n    dict: Cache health and statistics",
+        "operationId": "get_cache_stats_cache_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/sync-to-database": {
+      "post": {
+        "summary": "Sync Cache To Database",
+        "description": "Manually sync cache to database\n\nArgs:\n    session_id: Specific session to sync, or None to sync all active sessions\n\nReturns:\n    dict: Sync result",
+        "operationId": "sync_cache_to_database_sync_to_database_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "x-api-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/clear-cache": {
+      "delete": {
+        "summary": "Clear Session Cache",
+        "description": "Clear all session cache from Redis\n\nWARNING: This will clear all cached session states\n\nReturns:\n    dict: Clear operation result",
+        "operationId": "clear_session_cache_clear_cache_delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-api-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/switch-strategy": {
+      "post": {
+        "summary": "Switch Load Balancing Strategy",
+        "description": "Change the active load balancing strategy\n\nSupported strategies:\n- ROUND_ROBIN: Sequential worker assignment (even task distribution)\n- LEAST_LOADED: Assign to worker with fewest active tasks (recommended)\n- QUEUE_BASED: Use Redis queue length as selection metric\n\nArgs:\n    strategy: Strategy name (ROUND_ROBIN, LEAST_LOADED, QUEUE_BASED)\n\nReturns:\n    dict: Strategy change confirmation",
+        "operationId": "switch_load_balancing_strategy_switch_strategy_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "strategy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Strategy"
+            }
+          },
+          {
+            "name": "x-api-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/moments/track": {
+      "post": {
+        "summary": "Track Moment",
+        "description": "Track a real-time moment during an interview session.",
+        "operationId": "track_moment_moments_track_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "moment_type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Moment Type"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Metadata"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/moments/{session_id}": {
+      "get": {
+        "summary": "Get Session Moments",
+        "description": "Get all tracked moments for a session.",
+        "operationId": "get_session_moments_moments__session_id__get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "moment_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Moment Type"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/moments/{session_id}/timeline": {
+      "get": {
+        "summary": "Get Session Timeline",
+        "description": "Get the moment timeline for a session.",
+        "operationId": "get_session_timeline_moments__session_id__timeline_get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/moments/{session_id}/summary": {
+      "get": {
+        "summary": "Get Session Moment Summary",
+        "description": "Get a summary of moments for a session.",
+        "operationId": "get_session_moment_summary_moments__session_id__summary_get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/moments/analytics": {
+      "get": {
+        "summary": "Get Moment Analytics",
+        "description": "Get moment analytics across all sessions.",
+        "operationId": "get_moment_analytics_moments_analytics_get",
+        "parameters": [
+          {
+            "name": "time_range_hours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 24,
+              "title": "Time Range Hours"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Other"
+        ]
+      }
+    },
+    "/dashboard": {
+      "get": {
+        "summary": "Get Dashboard",
+        "description": "Serve the monitoring dashboard HTML\n\nReturns:\n    HTML content of the dashboard",
+        "operationId": "get_dashboard_dashboard_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "tags": [
+          "Metrics"
+        ]
+      }
+    },
+    "/risk-configs/": {
+      "get": {
+        "tags": [
+          "Configurations"
+        ],
+        "summary": "List all risk weight configurations",
+        "description": "Return all stored job-position risk weight configurations.",
+        "operationId": "list_configs_risk_configs__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RiskConfigResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Configs Risk Configs  Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Configurations"
+        ],
+        "summary": "Create a risk weight configuration for a job position",
+        "description": "Create a new risk weight configuration for a specific job position.\n\n- **job_position**: unique name e.g. \"Software Engineer\"\n- **weights**: per-signal weights (all >= 0, at least one > 0)\n- **description**: optional notes for this config",
+        "operationId": "create_config_risk_configs__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RiskConfigCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RiskConfigResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/risk-configs/{config_id}": {
+      "get": {
+        "tags": [
+          "Configurations"
+        ],
+        "summary": "Get a specific risk weight configuration by ID",
+        "operationId": "get_config_risk_configs__config_id__get",
+        "parameters": [
+          {
+            "name": "config_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Config Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RiskConfigResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Configurations"
+        ],
+        "summary": "Update a risk weight configuration",
+        "description": "Partially update an existing configuration.\nOnly fields provided in the request body are updated.",
+        "operationId": "update_config_risk_configs__config_id__put",
+        "parameters": [
+          {
+            "name": "config_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Config Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RiskConfigUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RiskConfigResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Configurations"
+        ],
+        "summary": "Delete a risk weight configuration",
+        "description": "Delete a configuration. The risk engine will fall back to defaults.",
+        "operationId": "delete_config_risk_configs__config_id__delete",
+        "parameters": [
+          {
+            "name": "config_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Config Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/risk-configs/by-position/{job_position}": {
+      "get": {
+        "tags": [
+          "Configurations"
+        ],
+        "summary": "Get risk weight configuration by job position name",
+        "description": "Look up config by job position name (case-insensitive).",
+        "operationId": "get_by_position_risk_configs_by_position__job_position__get",
+        "parameters": [
+          {
+            "name": "job_position",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Position"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RiskConfigResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics/web-vitals": {
+      "post": {
+        "summary": "Receive Web Vitals",
+        "description": "Receive Web Vitals metrics from the frontend.",
+        "operationId": "receive_web_vitals_metrics_web_vitals_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "tags": [
+          "Metrics"
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AddQuestionRequest": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "difficulty": {
+            "type": "string",
+            "title": "Difficulty",
+            "default": "medium"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "category"
+        ],
+        "title": "AddQuestionRequest",
+        "description": "Request model for adding a question to the bank"
+      },
+      "AskQuestionRequest": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id"
+        ],
+        "title": "AskQuestionRequest",
+        "description": "Request model for getting next question in a session"
+      },
+      "CreateCandidateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Email"
+          },
+          "resume_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resume Text"
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skills"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "email"
+        ],
+        "title": "CreateCandidateRequest",
+        "description": "Request model for creating a candidate profile"
+      },
+      "CreateTemplateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "interview_type": {
+            "type": "string",
+            "title": "Interview Type"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "duration_minutes": {
+            "type": "integer",
+            "title": "Duration Minutes",
+            "default": 60
+          },
+          "question_count": {
+            "type": "integer",
+            "title": "Question Count",
+            "default": 10
+          },
+          "category_distribution": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Distribution"
+          },
+          "difficulty_distribution": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty Distribution"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "interview_type"
+        ],
+        "title": "CreateTemplateRequest",
+        "description": "Request model for creating an interview template"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "InterviewReportResponse": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "candidate": {
+            "$ref": "#/components/schemas/ReportCandidate"
+          },
+          "interview_summary": {
+            "$ref": "#/components/schemas/ReportInterviewSummary"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/ReportQuestion"
+            },
+            "type": "array",
+            "title": "Questions"
+          },
+          "overall_evaluation": {
+            "$ref": "#/components/schemas/ReportEvaluation"
+          },
+          "llm_feedback": {
+            "$ref": "#/components/schemas/ReportLLMFeedback"
+          },
+          "risk_assessment": {
+            "$ref": "#/components/schemas/ReportRiskAssessment"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/ReportMetadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "candidate",
+          "interview_summary",
+          "overall_evaluation",
+          "llm_feedback",
+          "risk_assessment",
+          "metadata"
+        ],
+        "title": "InterviewReportResponse",
+        "description": "Comprehensive final interview report"
+      },
+      "InterviewSessionResponse": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "candidate_id": {
+            "type": "string",
+            "title": "Candidate Id"
+          },
+          "risk_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Score"
+          },
+          "estimated_wait_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Wait Time"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "status",
+          "candidate_id"
+        ],
+        "title": "InterviewSessionResponse",
+        "description": "Response model for interview session"
+      },
+      "LoginRequest": {
+        "properties": {
+          "api_token": {
+            "type": "string",
+            "title": "Api Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "api_token"
+        ],
+        "title": "LoginRequest"
+      },
+      "ReportCandidate": {
+        "properties": {
+          "candidate_id": {
+            "type": "string",
+            "title": "Candidate Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidate_id",
+          "name",
+          "email"
+        ],
+        "title": "ReportCandidate"
+      },
+      "ReportEvaluation": {
+        "properties": {
+          "quality": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality"
+          },
+          "accuracy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accuracy"
+          },
+          "clarity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clarity"
+          }
+        },
+        "type": "object",
+        "title": "ReportEvaluation"
+      },
+      "ReportInterviewSummary": {
+        "properties": {
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Time"
+          },
+          "duration_minutes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Minutes"
+          }
+        },
+        "type": "object",
+        "title": "ReportInterviewSummary"
+      },
+      "ReportLLMFeedback": {
+        "properties": {
+          "strengths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Strengths"
+          },
+          "improvements": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Improvements"
+          },
+          "recommendation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommendation"
+          },
+          "detailed_feedback": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detailed Feedback"
+          }
+        },
+        "type": "object",
+        "title": "ReportLLMFeedback"
+      },
+      "ReportMetadata": {
+        "properties": {
+          "token_usage": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Usage"
+          },
+          "estimated_cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost Usd"
+          }
+        },
+        "type": "object",
+        "title": "ReportMetadata"
+      },
+      "ReportQuestion": {
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "title": "Question Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "feedback": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_id",
+          "text"
+        ],
+        "title": "ReportQuestion"
+      },
+      "ReportRiskAssessment": {
+        "properties": {
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "classification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classification"
+          },
+          "factors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Factors"
+          }
+        },
+        "type": "object",
+        "title": "ReportRiskAssessment"
+      },
+      "RiskConfigCreate": {
+        "properties": {
+          "job_position": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Job Position",
+            "description": "Job position name e.g. 'Software Engineer'"
+          },
+          "weights": {
+            "$ref": "#/components/schemas/RiskWeights"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_position",
+          "weights"
+        ],
+        "title": "RiskConfigCreate",
+        "description": "Request body for creating a new risk weight config."
+      },
+      "RiskConfigResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "job_position": {
+            "type": "string",
+            "title": "Job Position"
+          },
+          "weights": {
+            "$ref": "#/components/schemas/RiskWeights"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "job_position",
+          "weights",
+          "description",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RiskConfigResponse",
+        "description": "Response schema returned by all endpoints."
+      },
+      "RiskConfigUpdate": {
+        "properties": {
+          "weights": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RiskWeights"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "title": "RiskConfigUpdate",
+        "description": "Request body for updating an existing config (all fields optional)."
+      },
+      "RiskWeights": {
+        "properties": {
+          "tab_switching": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Tab Switching",
+            "description": "Weight for tab switching events",
+            "default": 1.0
+          },
+          "browser_activity": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Browser Activity",
+            "description": "Weight for suspicious browser activity",
+            "default": 1.0
+          },
+          "audio_interruptions": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Audio Interruptions",
+            "description": "Weight for audio quality issues",
+            "default": 1.0
+          },
+          "multiple_persons": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Multiple Persons",
+            "description": "Weight for multiple persons detected",
+            "default": 1.0
+          },
+          "candidate_absence": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Candidate Absence",
+            "description": "Weight for candidate not present",
+            "default": 1.0
+          },
+          "gaze_deviation": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Gaze Deviation",
+            "description": "Weight for gaze direction anomalies",
+            "default": 1.0
+          },
+          "background_noise": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Background Noise",
+            "description": "Weight for background noise level",
+            "default": 1.0
+          }
+        },
+        "type": "object",
+        "title": "RiskWeights",
+        "description": "Individual risk weight values for each signal.\nAll weights must be >= 0. They are normalized at scoring time\nso they do not need to sum to 1."
+      },
+      "SessionStatusResponse": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "candidate_id": {
+            "type": "string",
+            "title": "Candidate Id"
+          },
+          "risk_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Score"
+          },
+          "assigned_node": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned Node"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Time"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "status",
+          "candidate_id"
+        ],
+        "title": "SessionStatusResponse",
+        "description": "Response model for session status"
+      },
+      "StartInterviewRequest": {
+        "properties": {
+          "candidate_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Candidate Id",
+            "description": "Unique candidate identifier"
+          },
+          "candidate_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Name"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority",
+            "description": "One of: low, medium, high",
+            "default": "medium"
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidate_id"
+        ],
+        "title": "StartInterviewRequest",
+        "description": "Request model for starting an interview"
+      },
+      "SubmitAnswerRequest": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "question_id": {
+            "type": "string",
+            "title": "Question Id"
+          },
+          "answer_text": {
+            "type": "string",
+            "title": "Answer Text"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 10.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "question_id",
+          "answer_text"
+        ],
+        "title": "SubmitAnswerRequest",
+        "description": "Request model for submitting an answer"
+      },
+      "TaskStatusResponse": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "task_id",
+          "status"
+        ],
+        "title": "TaskStatusResponse",
+        "description": "Response model for Celery task status (used by /task-status/{task_id})."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WorkerHeartbeatRequest": {
+        "properties": {
+          "worker_id": {
+            "type": "string",
+            "title": "Worker Id"
+          },
+          "active_tasks": {
+            "type": "integer",
+            "title": "Active Tasks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "worker_id",
+          "active_tasks"
+        ],
+        "title": "WorkerHeartbeatRequest",
+        "description": "Request model for worker heartbeat"
+      },
+      "WorkerRegistrationRequest": {
+        "properties": {
+          "worker_id": {
+            "type": "string",
+            "title": "Worker Id"
+          },
+          "capacity": {
+            "type": "integer",
+            "title": "Capacity",
+            "default": 4
+          }
+        },
+        "type": "object",
+        "required": [
+          "worker_id"
+        ],
+        "title": "WorkerRegistrationRequest",
+        "description": "Request model for worker registration"
+      }
+    },
+    "securitySchemes": {
+      "OAuth2PasswordBearer": {
+        "type": "oauth2",
+        "flows": {
+          "password": {
+            "scopes": {},
+            "tokenUrl": "/login"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Health",
+      "description": "Health related APIs"
+    },
+    {
+      "name": "Metrics",
+      "description": "Metrics related APIs"
+    },
+    {
+      "name": "Workers",
+      "description": "Workers related APIs"
+    },
+    {
+      "name": "Candidates",
+      "description": "Candidates related APIs"
+    },
+    {
+      "name": "Interviews",
+      "description": "Interviews related APIs"
+    },
+    {
+      "name": "Questions",
+      "description": "Questions related APIs"
+    },
+    {
+      "name": "Notifications",
+      "description": "Notifications related APIs"
+    },
+    {
+      "name": "Configurations",
+      "description": "Configurations related APIs"
+    },
+    {
+      "name": "Retrieval",
+      "description": "Retrieval related APIs"
+    },
+    {
+      "name": "Scheduler",
+      "description": "Scheduler related APIs"
+    },
+    {
+      "name": "Authentication",
+      "description": "Authentication related APIs"
+    },
+    {
+      "name": "Other",
+      "description": "Other related APIs"
+    }
+  ]
+}
