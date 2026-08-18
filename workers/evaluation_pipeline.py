@@ -727,3 +727,76 @@ def calculate_evaluation_risk_score(results: dict[str, Any]) -> float:
 
     score = quality_risk + accuracy_risk + clarity_risk + hallucination_risk
     return round(min(score, 1.0), 3)
+
+
+def generate_summary_report(session_data: dict[str, Any]) -> dict[str, Any] | None:
+    """Generate a comprehensive AI-written interview summary report using Gemini."""
+
+    prompt = """
+You are an expert technical interviewer.
+
+Analyze the completed interview session provided below and generate a concise,
+professional 1-page interview summary.
+
+Return ONLY valid JSON with exactly these keys:
+{
+  "overall_rating": 0,
+  "key_strengths": [],
+  "areas_for_improvement": [],
+  "hire_recommendation": "Yes",
+  "comparison_to_other_candidates": ""
+}
+
+Requirements:
+- overall_rating must be a number from 0 to 100.
+- key_strengths must contain 3 to 5 concise points.
+- areas_for_improvement must contain 2 to 4 concise points.
+- hire_recommendation must be exactly "Yes", "No", or "Maybe".
+- comparison_to_other_candidates should be a concise professional assessment
+  based only on the available session information.
+- Do not invent information that is not present in the session data.
+"""
+
+    try:
+        from workers.ai_client import HAS_GEMINI, gemini_generate
+
+        if not HAS_GEMINI:
+            logger.warning("Gemini is not available for summary report generation")
+            return None
+
+        session_text = json.dumps(session_data, default=str, indent=2)
+
+        response, usage = gemini_generate(
+            f"{prompt}\n\nCompleted Interview Session:\n{session_text}",
+            temperature=0.3,
+            max_output_tokens=1024,
+        )
+
+        if not response:
+            return None
+
+        try:
+            report = json.loads(response)
+        except json.JSONDecodeError:
+            logger.error("Invalid JSON from Gemini summary report: %s", response)
+            return None
+
+        recommendation = report.get("hire_recommendation", "Maybe")
+        if recommendation not in {"Yes", "No", "Maybe"}:
+            recommendation = "Maybe"
+
+        return {
+            "overall_rating": round(float(report.get("overall_rating", 0)), 1),
+            "key_strengths": report.get("key_strengths", []),
+            "areas_for_improvement": report.get("areas_for_improvement", []),
+            "hire_recommendation": recommendation,
+            "comparison_to_other_candidates": report.get(
+                "comparison_to_other_candidates", ""
+            ),
+            "provider": "gemini",
+            "usage": usage,
+        }
+
+    except Exception as exc:
+        logger.exception("Summary report generation failed: %s", exc)
+        return None
