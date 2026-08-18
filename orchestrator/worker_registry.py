@@ -220,7 +220,7 @@ class WorkerRegistry:
                 payload = {
                     k: (
                         int(v)
-                        if isinstance(v, (int, float))
+                        if isinstance(v, int | float)
                         and k
                         in {
                             "capacity",

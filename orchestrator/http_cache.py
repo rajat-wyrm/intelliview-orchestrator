@@ -105,7 +105,7 @@ def cached(name: str, ttl: int = _DEFAULT_TTL) -> Callable:
                 if hit is not None:
                     return hit
                 result = await fn(*args, **kwargs)
-                if isinstance(result, (dict, list)):
+                if isinstance(result, dict | list):
                     set(key, result, ttl=ttl)
                 return result
 
@@ -118,7 +118,7 @@ def cached(name: str, ttl: int = _DEFAULT_TTL) -> Callable:
             if hit is not None:
                 return hit
             result = fn(*args, **kwargs)
-            if isinstance(result, (dict, list)):
+            if isinstance(result, dict | list):
                 set(key, result, ttl=ttl)
             return result
 

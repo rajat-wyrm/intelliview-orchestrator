@@ -255,7 +255,7 @@ class DatasetValidator:
                 val = rec.get(f_name)
                 if (
                     val is not None
-                    and isinstance(val, (int, float))
+                    and isinstance(val, int | float)
                     and not (lo <= val <= hi)
                 ):
                     offenders.append(
