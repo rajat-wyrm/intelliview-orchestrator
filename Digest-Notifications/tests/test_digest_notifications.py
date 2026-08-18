@@ -134,7 +134,7 @@ class TestDigestNotifications(unittest.TestCase):
         html, count, _date_range = generate_digest_html_output("daily", "2026-06-27")
         self.assertIn("Daily Digest", html)
         self.assertGreaterEqual(count, 0)
-        
+
     def test_empty_digest_suppression(self):
         result = generate_all_outputs("daily", "2099-01-01")
         self.assertEqual(result["status"], "skipped")
@@ -255,7 +255,7 @@ class TestDigestNotifications(unittest.TestCase):
 
         for keyword, _ in handler.headers_sent:
 
-        self.assertNotEqual(keyword.lower(), "access-control-allow-origin")
+            self.assertNotEqual(keyword.lower(), "access-control-allow-origin")
 
     def test_api_send_invokes_sender_module(self):
         import unittest.mock
