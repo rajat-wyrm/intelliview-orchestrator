@@ -1,12 +1,11 @@
 import json
 import os
-import sqlite3
 import sys
 
 # Ensure the parent src/ directory is in python search path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from database import DB_FILE, INTERVIEWS_FILE, LOGS_FILE, get_db_conn, init_db
+from database import INTERVIEWS_FILE, LOGS_FILE, get_db_conn, init_db
 
 
 def migrate():
@@ -18,9 +17,9 @@ def migrate():
 
     # Migrate interviews
     if os.path.exists(INTERVIEWS_FILE):
-        print(f"Found interviews.json. Migrating...")
+        print("Found interviews.json. Migrating...")
         try:
-            with open(INTERVIEWS_FILE, "r", encoding="utf-8") as f:
+            with open(INTERVIEWS_FILE, encoding="utf-8") as f:
                 interviews = json.load(f)
             migrated_count = 0
             for item in interviews:
@@ -46,9 +45,9 @@ def migrate():
 
     # Migrate logs
     if os.path.exists(LOGS_FILE):
-        print(f"Found sent_logs.json. Migrating...")
+        print("Found sent_logs.json. Migrating...")
         try:
-            with open(LOGS_FILE, "r", encoding="utf-8") as f:
+            with open(LOGS_FILE, encoding="utf-8") as f:
                 logs = json.load(f)
             migrated_count = 0
             for item in logs:

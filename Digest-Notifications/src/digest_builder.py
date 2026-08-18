@@ -8,20 +8,20 @@ regardless of how emails are sent (SendGrid/SES/etc).
 """
 
 from collections import OrderedDict
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Iterable, List
 
 from models import DigestPayload, DigestRecipient, InterviewEvent
 
 
 def group_interviews_by_date(
     interviews: Iterable[InterviewEvent],
-) -> "OrderedDict[str, List[InterviewEvent]]":
+) -> "OrderedDict[str, list[InterviewEvent]]":
     """
     Groups interviews by calendar date (date_key) and returns them in
     chronological order, with each day's interviews also sorted by time.
     """
-    buckets: "dict[str, List[InterviewEvent]]" = {}
+    buckets: dict[str, list[InterviewEvent]] = {}
     for event in interviews:
         buckets.setdefault(event.date_key, []).append(event)
 

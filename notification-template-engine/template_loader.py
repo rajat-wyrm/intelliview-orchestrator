@@ -91,7 +91,7 @@ def load_template(locale, event, format="txt"):
         )
 
     try:
-        with open(file_path, "r", encoding="utf-8") as file:
+        with open(file_path, encoding="utf-8") as file:
             template = file.read()
 
     except OSError as e:

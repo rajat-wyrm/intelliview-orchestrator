@@ -11,7 +11,6 @@ competing template engines existing in the same project.
 """
 
 from pathlib import Path
-from typing import Optional
 
 from jinja2 import Environment, FileSystemLoader, Template
 from models import DigestPayload
@@ -30,7 +29,7 @@ def _default_environment() -> Environment:
 def render_digest_html(
     payload: DigestPayload,
     unsubscribe_url: str,
-    env: Optional[Environment] = None,
+    env: Environment | None = None,
     template_name: str = DEFAULT_TEMPLATE_NAME,
 ) -> str:
     """
