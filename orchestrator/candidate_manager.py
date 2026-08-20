@@ -169,6 +169,17 @@ class CandidateManager:
                     "skills": c.skills or [],
                     "avg_score": c.avg_score,
                     "total_interviews": c.total_interviews,
+                    "active_sessions": sum(
+                        1
+                        for session in c.interview_sessions
+                        if session.status
+                        not in {"COMPLETED", "FAILED", "TIMEOUT", "CANCELLED"}
+                    ),
+                    "completed_sessions": sum(
+                        1
+                        for session in c.interview_sessions
+                        if session.status == "COMPLETED"
+                    ),
                     "created_at": (c.created_at.isoformat() if c.created_at else None),
                 }
                 for c in rows
