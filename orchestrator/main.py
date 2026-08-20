@@ -1216,8 +1216,14 @@ async def get_worker_stats():
         total_active = stats.get("total_active_tasks", 0)
         utilization = (total_active / total_capacity * 100) if total_capacity > 0 else 0
 
+        healthy_count = int(stats.get("healthy_count") or stats.get("healthy_workers") or 0)
+
         return {
             "total_workers": stats.get("total_workers", 0),
+            "healthy_count": healthy_count,
+            "healthy_workers": healthy_count,
+            "utilization_pct": round(utilization, 2),
+            "strategy": load_balancer.strategy.name,
             "total_capacity": total_capacity,
             "total_active_tasks": total_active,
             "system_utilization_percent": round(utilization, 2),

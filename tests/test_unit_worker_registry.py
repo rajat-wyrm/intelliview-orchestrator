@@ -85,6 +85,26 @@ def test_worker_statistics_computes_utilization():
     assert stats["total_capacity"] == 8
     assert stats["total_active_tasks"] == 2
     assert stats["capacity_utilization"] == 25.0
+    assert stats["healthy_count"] == 2
+
+
+def test_worker_statistics_healthy_count_for_zero_and_one_worker():
+    reg = _new_registry()
+    assert reg.get_worker_statistics()["healthy_count"] == 0
+
+    reg.register_worker("single", capacity=4)
+    assert reg.get_worker_statistics()["healthy_count"] == 1
+
+
+def test_worker_statistics_healthy_count_excludes_unhealthy_workers():
+    reg = _new_registry()
+    reg.register_worker("healthy", capacity=4)
+    reg.register_worker("degraded", capacity=4)
+    reg.register_worker("unhealthy", capacity=4)
+    reg.update_worker_status("degraded", "degraded")
+    reg.update_worker_status("unhealthy", "unhealthy")
+
+    assert reg.get_worker_statistics()["healthy_count"] == 1
 
 
 def test_deregister_worker_removes_entry():
