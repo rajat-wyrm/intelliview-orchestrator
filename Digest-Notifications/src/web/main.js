@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const generateBtn      = document.getElementById('generateBtn');
   const digestType       = document.getElementById('digestType');
   const refDateInput     = document.getElementById('refDate');
+  const digestTheme      = document.getElementById('digestTheme');
   const previewEmpty     = document.getElementById('previewEmpty');
   const previewTypeBadge = document.getElementById('previewTypeBadge');
   const previewDateRange = document.getElementById('previewDateRange');
@@ -187,7 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'Content-Type': 'application/json',
         ...getAuthHeaders()
       },
-      body: JSON.stringify({ type: digestType.value, ref_date: refDateInput.value }),
+      body: JSON.stringify({ type: digestType.value, ref_date: refDateInput.value, theme: digestTheme.value }),
     });
     if (res.status === 401) {
       alert('Authentication failed: Invalid or missing API Token');
@@ -215,7 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (data.status === 'success') {
       currentGeneratedDigest = {
-        type: digestType.value, count: data.count, date_range: data.date_range, ref_date: refDateInput.value
+        type: digestType.value, count: data.count, date_range: data.date_range, ref_date: refDateInput.value, theme: digestTheme.value
       };
       previewTypeBadge.textContent = digestType.value.toUpperCase();
       previewDateRange.textContent = data.date_range;

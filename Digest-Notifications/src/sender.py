@@ -43,6 +43,7 @@ def send_digest_for_recipient(
     email_sender: EmailSenderProtocol,
     unsubscribe_base_url: str,
     now: datetime | None = None,
+    theme: str = "light",
 ) -> dict:
     """
     Builds and sends a single digest email for one recipient.
@@ -62,7 +63,7 @@ def send_digest_for_recipient(
         }
 
     unsubscribe_url = build_unsubscribe_url(unsubscribe_base_url, recipient.user_id)
-    html_body = render_digest_html(payload, unsubscribe_url=unsubscribe_url)
+    html_body = render_digest_html(payload, unsubscribe_url=unsubscribe_url, theme=theme)
 
     subject = f"Your {recipient.frequency.value.capitalize()} Interview Digest ({payload.total_count} upcoming)"
 
@@ -88,6 +89,7 @@ def send_digests_batch(
     email_sender: EmailSenderProtocol,
     unsubscribe_base_url: str,
     now: datetime | None = None,
+    theme: str = "light",
 ) -> list[dict]:
     """
     Sends digests for many recipients in one pass (e.g. invoked by a
@@ -106,6 +108,7 @@ def send_digests_batch(
             email_sender=email_sender,
             unsubscribe_base_url=unsubscribe_base_url,
             now=now,
+            theme=theme,
         )
         results.append(result)
     return results

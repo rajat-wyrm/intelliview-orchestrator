@@ -123,7 +123,7 @@ def _build_payload(digest_type: str, ref_date_str: str) -> DigestPayload:
     return payload
 
 
-def generate_digest_html_output(digest_type="daily", ref_date_str=None):
+def generate_digest_html_output(digest_type="daily", ref_date_str=None, theme="light"):
     """
     Public API used by the web server and tests.
     Returns (html_str, count, date_range_str).
@@ -147,11 +147,12 @@ def generate_digest_html_output(digest_type="daily", ref_date_str=None):
     rendered_html = render_digest_html(
         payload=payload,
         unsubscribe_url=f"{UNSUBSCRIBE_BASE}/unsubscribe?user_id={payload.recipient.user_id}",
+        theme=theme,
     )
     return rendered_html, payload.total_count, date_range
 
 
-def generate_all_outputs(digest_type="daily", ref_date_str=None):
+def generate_all_outputs(digest_type="daily", ref_date_str=None, theme="light"):
     """
     Generates and writes HTML and plain-text fallback.
     Returns a result dict suitable for logging.
@@ -175,7 +176,7 @@ def generate_all_outputs(digest_type="daily", ref_date_str=None):
         }
 
     # ── HTML output ────────────────────────────────────────────────────────────
-    html = render_digest_html(payload, unsubscribe_url=unsubscribe_url)
+    html = render_digest_html(payload, unsubscribe_url=unsubscribe_url, theme=theme)
     html_path = os.path.join(OUTPUT_DIR, "digest_email.html")
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(html)
@@ -208,7 +209,7 @@ def generate_all_outputs(digest_type="daily", ref_date_str=None):
     }
 
 
-def dispatch_digest(digest_type="daily", ref_date_str=None):
+def dispatch_digest(digest_type="daily", ref_date_str=None, theme="light"):
     """
     Generates the digest and automatically dispatches it to the recipient,
     updating the dispatch audit logs. Designed for automated/cron run.
@@ -216,7 +217,7 @@ def dispatch_digest(digest_type="daily", ref_date_str=None):
     if not ref_date_str:
         ref_date_str = datetime.date.today().isoformat()
 
-    result = generate_all_outputs(digest_type, ref_date_str)
+    result = generate_all_outputs(digest_type, ref_date_str, theme=theme)
     if result["status"] == "skipped":
         return result
 
@@ -234,6 +235,7 @@ def dispatch_digest(digest_type="daily", ref_date_str=None):
         interviews=interviews,
         email_sender=sender_instance,
         unsubscribe_base_url=UNSUBSCRIBE_BASE,
+        theme=theme,
     )
 
     if (
@@ -547,8 +549,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     )
                     return
 
+            theme = data.get("theme", "light")
+
             try:
-                result = generate_all_outputs(digest_type, ref_date)
+                result = generate_all_outputs(digest_type, ref_date, theme=theme)
                 if result["status"] == "skipped":
                     self.send_json(
                         200,
@@ -602,6 +606,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             digest_type = data.get("type", "daily")
             count = data.get("count", 0)
             date_range = data.get("date_range", "")
+            theme = data.get("theme", "light")
 
             if count == 0:
                 self.send_json(
@@ -630,6 +635,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     interviews=interviews,
                     email_sender=sender_instance,
                     unsubscribe_base_url=UNSUBSCRIBE_BASE,
+                    theme=theme,
                 )
 
                 # Determine the status label based on the sender result/provider
@@ -740,6 +746,9 @@ def main():
     )
     parser.add_argument("--ref-date", help="Reference date YYYY-MM-DD (default: today)")
     parser.add_argument(
+        "--theme", choices=["light", "dark"], default="light", help="Theme for HTML digest (default: light)"
+    )
+    parser.add_argument(
         "--serve", action="store_true", help="Run interactive web server dashboard"
     )
     parser.add_argument(
@@ -774,12 +783,12 @@ def main():
 
     elif args.cli:
         ref_date = args.ref_date or datetime.date.today().isoformat()
-        result = generate_all_outputs(args.type, ref_date)
+        result = generate_all_outputs(args.type, ref_date, theme=args.theme)
         print(json.dumps(result, indent=2))
 
     elif args.cron:
         ref_date = args.ref_date or datetime.date.today().isoformat()
-        result = dispatch_digest(args.type, ref_date)
+        result = dispatch_digest(args.type, ref_date, theme=args.theme)
         print(json.dumps(result, indent=2))
 
     else:
