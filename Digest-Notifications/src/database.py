@@ -32,10 +32,8 @@ def init_db():
             meeting_link TEXT,
             location TEXT
         )
-        """
-    )
-    cursor.execute(
-        """
+        """)
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS sent_logs (
             id TEXT PRIMARY KEY,
             timestamp TEXT NOT NULL,
@@ -45,8 +43,7 @@ def init_db():
             recipient TEXT NOT NULL,
             status TEXT NOT NULL
         )
-        """
-    )
+        """)
     conn.commit()
 
     # Automatic migration helper if SQLite database table is empty and JSON files exist
