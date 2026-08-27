@@ -80,7 +80,10 @@ class CandidateManager:
 
         try:
             c = db.execute(
-                select(Candidate).where(Candidate.candidate_id == candidate_id)
+                select(Candidate).where(
+                    Candidate.candidate_id == candidate_id,
+                    Candidate.deleted_at.is_(None),
+                )
             ).scalar_one_or_none()
 
             if not c:
@@ -118,6 +121,7 @@ class CandidateManager:
         try:
 
             query = select(Candidate)
+            query = query.where(Candidate.deleted_at.is_(None))
 
             if search and search.strip():
                 value = search.strip()
@@ -169,6 +173,17 @@ class CandidateManager:
                     "skills": c.skills or [],
                     "avg_score": c.avg_score,
                     "total_interviews": c.total_interviews,
+                    "active_sessions": sum(
+                        1
+                        for session in c.interview_sessions
+                        if session.status
+                        not in {"COMPLETED", "FAILED", "TIMEOUT", "CANCELLED"}
+                    ),
+                    "completed_sessions": sum(
+                        1
+                        for session in c.interview_sessions
+                        if session.status == "COMPLETED"
+                    ),
                     "created_at": (c.created_at.isoformat() if c.created_at else None),
                 }
                 for c in rows
@@ -180,6 +195,29 @@ class CandidateManager:
                 status_code=500,
                 detail="Error listing candidates",
             )
+
+        finally:
+            db.close()
+
+    def delete_candidate(self, candidate_id: str) -> bool:
+
+        db = SessionLocal()
+
+        try:
+
+            c = db.execute(
+                select(Candidate).where(
+                    Candidate.candidate_id == candidate_id,
+                    Candidate.deleted_at.is_(None),
+                )
+            ).scalar_one_or_none()
+
+            if not c:
+                return False
+
+            c.deleted_at = utcnow()
+            db.commit()
+            return True
 
         finally:
             db.close()

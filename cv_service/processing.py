@@ -61,8 +61,11 @@ def detect_faces_in_frame(
         elif frame_path:
             image = cv2.imread(frame_path)
         else:
+            logger.warning("No frame bytes or frame path provided")
             return None
+
         if image is None:
+            logger.warning("Unable to decode video frame")
             return None
 
         rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)

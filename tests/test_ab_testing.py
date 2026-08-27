@@ -154,3 +154,99 @@ def test_framework_is_modular():
 
     assert framework.production_model is not None
     assert framework.experimental_model is not None
+
+
+def test_get_experiment_data_with_no_results():
+
+    framework = ABTestingFramework(
+        experiment_id="test-experiment",
+    )
+
+    result = framework.get_experiment_data()
+
+    assert result == []
+
+
+def test_get_experiment_data_with_multiple_variants():
+
+    framework = ABTestingFramework(
+        experiment_id="test-experiment",
+    )
+
+    framework._record_result(
+        variant="weighted_model",
+        session_id="session-1",
+        score=0.4,
+    )
+
+    framework._record_result(
+        variant="weighted_model",
+        session_id="session-2",
+        score=0.6,
+    )
+
+    framework._record_result(
+        variant="experimental_model",
+        session_id="session-1",
+        score=0.3,
+    )
+
+    framework._record_result(
+        variant="experimental_model",
+        session_id="session-2",
+        score=0.5,
+    )
+
+    result = framework.get_experiment_data()
+
+    assert len(result) == 2
+
+    weighted = next(item for item in result if item["variant"] == "weighted_model")
+
+    experimental = next(
+        item for item in result if item["variant"] == "experimental_model"
+    )
+
+    assert weighted == {
+        "experiment_id": "test-experiment",
+        "variant": "weighted_model",
+        "sessions": 2,
+        "avg_score": 0.5,
+    }
+
+    assert experimental == {
+        "experiment_id": "test-experiment",
+        "variant": "experimental_model",
+        "sessions": 2,
+        "avg_score": 0.4,
+    }
+
+
+def test_session_is_counted_once_per_variant():
+
+    framework = ABTestingFramework(
+        experiment_id="test-experiment",
+    )
+
+    framework._record_result(
+        variant="weighted_model",
+        session_id="session-1",
+        score=0.4,
+    )
+
+    framework._record_result(
+        variant="weighted_model",
+        session_id="session-1",
+        score=0.6,
+    )
+
+    result = framework.get_experiment_data()
+
+    assert result == [
+        {
+            "experiment_id": "test-experiment",
+            "variant": "weighted_model",
+            "sessions": 1,
+            "avg_score": 0.5,
+        }
+    ]

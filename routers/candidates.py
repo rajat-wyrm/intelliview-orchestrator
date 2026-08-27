@@ -41,6 +41,21 @@ class BulkCandidateRequest(BaseModel):
     candidates: list[BulkCandidateItem] = Field(min_length=1)
 
 
+class CandidateStatsResponse(BaseModel):
+    """Stats aggregation response for candidate dashboard"""
+
+    total_candidates: int = Field(ge=0, description="Total number of candidates")
+    pending_review: int = Field(
+        ge=0, description="Candidates with active/pending interview sessions"
+    )
+    completed: int = Field(
+        ge=0, description="Candidates with at least one completed session"
+    )
+    active_now: int = Field(
+        ge=0, description="Total active interview sessions across all candidates"
+    )
+
+
 def create_candidate_routes(candidate_manager) -> APIRouter:
     """Create candidate profile routes.
 
@@ -52,6 +67,45 @@ def create_candidate_routes(candidate_manager) -> APIRouter:
     """
 
     router = APIRouter()
+
+    @router.get("/candidates/stats")
+    async def get_candidate_stats(
+        session_db: Session = Depends(get_db),
+    ) -> CandidateStatsResponse:
+        """Get aggregated statistics for the candidate dashboard.
+
+        Returns:
+            CandidateStatsResponse with counts for total_candidates, pending_review,
+            completed, and active_now. All fields are guaranteed to be non-negative integers.
+            Returns 0 for all counts on empty database.
+        """
+        try:
+            candidates = candidate_manager.list_candidates(limit=10000)
+
+            total_candidates = len(candidates)
+
+            # Count candidates with active sessions (pending_review)
+            pending_review = sum(
+                1 for c in candidates if c.get("active_sessions", 0) > 0
+            )
+
+            # Count candidates with at least one completed session
+            completed = sum(1 for c in candidates if c.get("completed_sessions", 0) > 0)
+
+            # Sum all active sessions across all candidates
+            active_now = sum(c.get("active_sessions", 0) for c in candidates)
+
+            return CandidateStatsResponse(
+                total_candidates=total_candidates,
+                pending_review=pending_review,
+                completed=completed,
+                active_now=active_now,
+            )
+        except Exception as e:
+            logger.error(f"Error fetching candidate stats: {e!s}")
+            raise HTTPException(
+                status_code=500, detail="Error fetching candidate stats"
+            )
 
     @router.get("/candidates")
     async def list_candidates(

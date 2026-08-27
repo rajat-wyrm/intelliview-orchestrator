@@ -1,0 +1,182 @@
+[
+  {
+    "id": 1,
+    "label": "factual",
+    "source_context": "The Earth revolves around the Sun.",
+    "generated_response": "Earth orbits the Sun."
+  },
+  {
+    "id": 2,
+    "label": "factual",
+    "source_context": "Water freezes at 0 degrees Celsius under standard atmospheric pressure.",
+    "generated_response": "At standard atmospheric pressure, water freezes at 0 degrees Celsius."
+  },
+  {
+    "id": 3,
+    "label": "factual",
+    "source_context": "Paris is the capital of France.",
+    "generated_response": "France has Paris as its capital."
+  },
+  {
+    "id": 4,
+    "label": "factual",
+    "source_context": "The Pacific Ocean is the largest ocean on Earth.",
+    "generated_response": "The Pacific Ocean is Earth's largest ocean."
+  },
+  {
+    "id": 5,
+    "label": "factual",
+    "source_context": "Python is a programming language commonly used for data analysis and machine learning.",
+    "generated_response": "Python is widely used for data analysis and machine learning."
+  },
+  {
+    "id": 6,
+    "label": "factual",
+    "source_context": "The human heart pumps blood throughout the body.",
+    "generated_response": "The heart circulates blood through the human body."
+  },
+  {
+    "id": 7,
+    "label": "factual",
+    "source_context": "The Moon orbits Earth.",
+    "generated_response": "Earth is orbited by the Moon."
+  },
+  {
+    "id": 8,
+    "label": "factual",
+    "source_context": "Plants use photosynthesis to convert light energy into chemical energy.",
+    "generated_response": "Through photosynthesis, plants convert light energy into chemical energy."
+  },
+  {
+    "id": 9,
+    "label": "factual",
+    "source_context": "The Amazon rainforest is located primarily in South America.",
+    "generated_response": "Most of the Amazon rainforest is in South America."
+  },
+  {
+    "id": 10,
+    "label": "factual",
+    "source_context": "HTTP is a protocol used for communication on the web.",
+    "generated_response": "HTTP is a web communication protocol."
+  },
+  {
+    "id": 11,
+    "label": "hallucinated",
+    "source_context": "Paris is the capital of France.",
+    "generated_response": "Berlin is the capital of France."
+  },
+  {
+    "id": 12,
+    "label": "hallucinated",
+    "source_context": "Water freezes at 0 degrees Celsius under standard atmospheric pressure.",
+    "generated_response": "Water freezes at 50 degrees Celsius under standard atmospheric pressure."
+  },
+  {
+    "id": 13,
+    "label": "hallucinated",
+    "source_context": "The Pacific Ocean is the largest ocean on Earth.",
+    "generated_response": "The Atlantic Ocean is the largest ocean on Earth."
+  },
+  {
+    "id": 14,
+    "label": "hallucinated",
+    "source_context": "Python is a programming language commonly used for data analysis and machine learning.",
+    "generated_response": "Python is a type of database management system."
+  },
+  {
+    "id": 15,
+    "label": "hallucinated",
+    "source_context": "The Moon orbits Earth.",
+    "generated_response": "The Moon orbits Mars."
+  },
+  {
+    "id": 16,
+    "label": "hallucinated",
+    "source_context": "The human heart pumps blood throughout the body.",
+    "generated_response": "The human heart produces oxygen for the lungs."
+  },
+  {
+    "id": 17,
+    "label": "hallucinated",
+    "source_context": "Plants use photosynthesis to convert light energy into chemical energy.",
+    "generated_response": "Plants use photosynthesis to turn sunlight directly into sound energy."
+  },
+  {
+    "id": 18,
+    "label": "hallucinated",
+    "source_context": "HTTP is a protocol used for communication on the web.",
+    "generated_response": "HTTP is a database engine used to store relational data."
+  },
+  {
+    "id": 19,
+    "label": "hallucinated",
+    "source_context": "The Amazon rainforest is located primarily in South America.",
+    "generated_response": "The Amazon rainforest is located primarily in Europe."
+  },
+  {
+    "id": 20,
+    "label": "hallucinated",
+    "source_context": "The Earth revolves around the Sun.",
+    "generated_response": "The Earth revolves around Jupiter."
+  },
+  {
+    "id": 21,
+    "label": "borderline",
+    "source_context": "The company was founded in 2010 and is headquartered in London.",
+    "generated_response": "The company has operated from London since 2010."
+  },
+  {
+    "id": 22,
+    "label": "borderline",
+    "source_context": "The study reported that participants who exercised regularly showed improved cardiovascular fitness.",
+    "generated_response": "Regular exercise may improve cardiovascular fitness."
+  },
+  {
+    "id": 23,
+    "label": "borderline",
+    "source_context": "The software supports Python 3.10 and Python 3.11.",
+    "generated_response": "The software supports recent Python versions."
+  },
+  {
+    "id": 24,
+    "label": "borderline",
+    "source_context": "The museum opened its new exhibition in June and the exhibition focuses on modern art.",
+    "generated_response": "The museum's June exhibition is about art."
+  },
+  {
+    "id": 25,
+    "label": "borderline",
+    "source_context": "The team completed the migration in three weeks with no reported downtime.",
+    "generated_response": "The team migrated the system quickly without major service disruption."
+  },
+  {
+    "id": 26,
+    "label": "borderline",
+    "source_context": "The product received positive reviews from several technology publications.",
+    "generated_response": "Technology reviewers generally liked the product."
+  },
+  {
+    "id": 27,
+    "label": "borderline",
+    "source_context": "The organization has offices in Delhi, Mumbai, and Bengaluru.",
+    "generated_response": "The organization operates offices in several major Indian cities."
+  },
+  {
+    "id": 28,
+    "label": "borderline",
+    "source_context": "The report says the project reduced processing time by 30 percent.",
+    "generated_response": "The project made processing substantially faster."
+  },
+  {
+    "id": 29,
+    "label": "borderline",
+    "source_context": "The application requires an internet connection for cloud synchronization.",
+    "generated_response": "The application depends on connectivity for some of its cloud features."
+  },
+  {
+    "id": 30,
+    "label": "borderline",
+    "source_context": "The course contains twelve modules covering programming, databases, and web development.",
+    "generated_response": "The course covers several software development topics through multiple modules."
+  }
+]

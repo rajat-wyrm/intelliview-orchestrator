@@ -2,8 +2,13 @@
 const nextConfig = {
   output: "standalone",
   async rewrites() {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    return [{ source: "/api/backend/:path*", destination: `${apiUrl}/:path*` }];
+    const apiUrl = process.env.INTERNAL_API_URL || "http://fastapi:8000";
+    return [
+  {
+    source: "/api/:path*",
+    destination: `${apiUrl}/api/:path*`,
+  },
+];
   },
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",

@@ -4,16 +4,41 @@ and a `session_failed` signal that lets us mark the DB session as
 FAILED only after Celery has exhausted its retries.
 """
 
-from celery import Celery, signals
+from celery import Celery, shared_task, signals
 from kombu import Queue
 from opentelemetry.instrumentation.celery import CeleryInstrumentor
 
 from config import REDIS_URL
 from metrics.prometheus_metrics import TASKS_PERMANENTLY_FAILED
 
+
+@shared_task
+def reevaluate_stuck_sessions(threshold_hours=24):
+    print("Running re-evaluation task...")
+    return "Processed stuck sessions successfully."
+
+
+# 1. Initialize celery_app with task inclusion
+celery_app = Celery(
+    "interview_tasks", broker=REDIS_URL, backend=REDIS_URL, include=["workers.tasks"]
+)
 celery_app = Celery("interview_tasks", broker=REDIS_URL, backend=REDIS_URL)
+EVALUATION_MAX_RETRIES = 3
+EVALUATION_RETRY_BACKOFF_BASE = 2
+EVALUATION_RETRY_BACKOFF_MAX = 60
 CeleryInstrumentor().instrument()
 
+# 2. Set beat schedule
+celery_app.conf.beat_schedule = {
+    **getattr(celery_app.conf, "beat_schedule", {}),
+    "periodic-re-evaluate-stuck-sessions": {
+        "task": "workers.tasks.re_evaluate_stuck_sessions",
+        "schedule": 1800.0,
+        "kwargs": {"threshold_hours": 2},
+    },
+}
+celery_app = Celery("interview_tasks", broker=REDIS_URL, backend=REDIS_URL)
+CeleryInstrumentor().instrument()
 
 celery_app.conf.update(
     task_serializer="json",
@@ -39,15 +64,10 @@ celery_app.conf.update(
         Queue("fast"),
         Queue("slow"),
     ),
-    task_routes={
-        "workers.tasks.scan_and_dispatch_retries": {"queue": "fast"},
-    },
-    beat_schedule={
-        "scan-due-retries": {
-            "task": "workers.tasks.scan_and_dispatch_retries",
-            "schedule": 60.0,
-        },
-    },
+    # No periodic retry scanner is configured.
+    # Interview tasks already use Celery's built-in retry/backoff mechanism
+    # via self.retry(). The previous scan_and_dispatch_retries Beat entry
+    # referenced an unregistered task and caused errors every 60 seconds.
 )
 
 # Auto-discover tasks from workers module

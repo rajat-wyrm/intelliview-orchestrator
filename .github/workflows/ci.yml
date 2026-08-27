@@ -2,10 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main, Stabilized-version]
+    branches: [main, Stabilized-version,issue-22-dataset-validation]
 
   pull_request:
-    branches: [main, Stabilized-version]
+    branches: [main, Stabilized-version,issue-22-dataset-validation]
+  workflow_dispatch:
 
 permissions:
   contents: read

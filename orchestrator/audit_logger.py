@@ -211,6 +211,30 @@ class AuditLogger:
         )
         self.log_event(event)
 
+    def log_admin_action(
+        self,
+        action: str,
+        actor: str = "admin",
+        details: dict[str, Any] | None = None,
+        request_id: str = "",
+        ip_address: str = "",
+    ) -> None:
+        """Log an admin-only action as a structured audit event."""
+        event = AuditEvent(
+            event_type="ADMIN_ACTION",
+            category=self.CATEGORIES["security"],
+            actor=actor,
+            target=action,
+            details={
+                "action": action,
+                **(details or {}),
+            },
+            request_id=request_id,
+            ip_address=ip_address,
+            severity="WARNING",
+        )
+        self.log_event(event)
+
     def log_data_access(
         self,
         resource: str,

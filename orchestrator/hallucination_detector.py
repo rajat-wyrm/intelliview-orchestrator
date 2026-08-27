@@ -69,7 +69,7 @@ class HallucinationDetector:
         # it's the actual factual-support signal.
         w_similarity: float = 0.3,
         w_nli: float = 0.7,
-        hallucination_threshold: float = 0.5,
+        hallucination_threshold: float = 0.30,
     ):
         self.w_similarity = w_similarity
         self.w_nli = w_nli

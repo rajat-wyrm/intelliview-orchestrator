@@ -47,9 +47,12 @@ class ApiClient {
   delete(path) {
     return this.request("DELETE", path);
   }
+  patch(path, body) {
+    return this.request("PATCH", path, body);
+  }
   put(path, body) {
     return this.request("PUT", path, body);
- }
+  }
   /** Build the WebSocket URL with the token as a query param. */
   wsUrl(path) {
     const base = (process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000").replace(/^http/, "ws");
@@ -61,6 +64,7 @@ const api = new ApiClient();
 const endpoints = {
   health: () => api.get("/health"),
   startInterview: (payload) => api.post("/start-interview", payload),
+  candidates: () => api.get("/candidates"),
   createCandidate: (payload) => api.post("/candidates", payload),
   sessionStatus: (id) => api.get(`/session-status/${id}`),
   activeSessions: () => api.get("/active-sessions"),
@@ -80,13 +84,16 @@ const endpoints = {
   faultStatistics: () => api.get("/fault-statistics"),
   failureLog: (limit = 50) => api.get(`/failure-log?limit=${limit}`),
   deadLetterQueue: (limit = 50) => api.get(`/dead-letter-queue?limit=${limit}`),
-retrySession: (session_id) => api.post(`/retry-session/${session_id}`),
-detectFailures: () => api.post("/detect-failures"),
-getSettings: () => api.get("/settings"),
-getRiskConfig: () => api.get("/api/admin/risk-config"),
-updateSettings: (payload) => api.put("/settings", payload),
-reportWebVitals: (payload) => api.post("/metrics/web-vitals", payload),
-clearCache: () => api.delete("/clear-cache")
+  retrySession: (session_id) => api.post(`/retry-session/${session_id}`),
+  detectFailures: () => api.post("/detect-failures"),
+  schedule: () => api.get("/api/schedule"),
+  createSchedule: (payload) => api.post("/api/schedule", payload),
+  updateSchedule: (scheduleId, payload) => api.patch(`/api/schedule/${scheduleId}`, payload),
+  getSettings: () => api.get("/settings"),
+  getRiskConfig: () => api.get("/api/admin/risk-config"),
+  updateSettings: (payload) => api.put("/settings", payload),
+  reportWebVitals: (payload) => api.post("/metrics/web-vitals", payload),
+  clearCache: () => api.delete("/clear-cache")
 };
 export {
   ApiClient,

@@ -154,6 +154,12 @@ PIPELINE_LATENCY = Histogram(
     registry=registry,
 )
 
+AVG_EVALUATION_LATENCY = Gauge(
+    "intelliview_avg_evaluation_latency_seconds",
+    "Average time from task start to evaluation completion in seconds",
+    registry=registry,
+)
+
 PIPELINE_ERRORS = Counter(
     "intelliview_pipeline_errors_total",
     "Total pipeline errors by stage",

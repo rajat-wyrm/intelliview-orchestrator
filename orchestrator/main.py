@@ -23,6 +23,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from anyio import Path
 from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from opentelemetry import trace
@@ -63,6 +64,7 @@ from monitoring.dashboard_api import create_dashboard_routes
 from monitoring.metrics_collector import MetricsCollector
 from monitoring.websocket_manager import ws_manager
 from orchestrator import http_cache
+from orchestrator.audit_logger import audit_logger
 from orchestrator.auth import create_access_token
 from orchestrator.candidate_manager import CandidateManager
 from orchestrator.fault_manager import FaultManager
@@ -86,6 +88,7 @@ from orchestrator.session_manager import SessionManager
 from orchestrator.session_tracker import SessionTracker
 from orchestrator.state_sync import StateSynchronizer
 from orchestrator.worker_registry import WorkerRegistry
+from routers.ab_testing import create_ab_testing_routes
 from routers.candidates import create_candidate_routes
 from routers.questions import create_question_routes
 from routers.schedule import create_schedule_routes
@@ -96,6 +99,7 @@ from routers.sessions import (  # noqa: F401 (re-exported for tests)
 from routers.settings import create_settings_routes
 from routers.templates import create_template_routes
 from routers.workers import create_worker_routes
+from workers.ab_testing_framework import ABTestingFramework
 from workers.bias_auditor import BiasAuditor
 
 # Configure logging after imports so startup messages are structured.
@@ -380,6 +384,8 @@ metrics_collector = MetricsCollector()
 question_bank = QuestionBank()
 candidate_manager = CandidateManager()
 interview_template_manager = InterviewTemplateManager()
+
+ab_testing_framework = ABTestingFramework(experiment_id="risk-scoring-v1")
 
 # Register dashboard routes
 dashboard_routes = create_dashboard_routes(
@@ -1067,6 +1073,12 @@ app.include_router(
     )
 )
 
+app.include_router(
+    create_ab_testing_routes(
+        ab_testing_framework=ab_testing_framework,
+    )
+)
+
 
 @app.get("/task-status/{task_id}", response_model=TaskStatusResponse)
 async def get_task_status(
@@ -1264,8 +1276,11 @@ async def get_cache_stats():
         raise HTTPException(status_code=500, detail="Error fetching cache stats")
 
 
-@app.post("/sync-to-database", dependencies=[Depends(require_token)])
-async def sync_cache_to_database(session_id: str | None = None):
+@app.post("/sync-to-database")
+async def sync_cache_to_database(
+    session_id: str | None = None,
+    current_user=Depends(require_role("admin")),
+):
     """
     Manually sync cache to database
 
@@ -1280,6 +1295,14 @@ async def sync_cache_to_database(session_id: str | None = None):
             session_data = state_sync.get_session_state(session_id)
             if session_data:
                 state_sync.sync_state_to_db(session_id, session_data)
+
+                audit_logger.log_admin_action(
+                    action="sync-to-database",
+                    actor=current_user.get("email")
+                    or current_user.get("user_id")
+                    or "admin",
+                    details={"session_id": session_id},
+                )
                 return {"message": f"Synced session {session_id}", "status": "success"}
             raise HTTPException(status_code=404, detail="Session not found in cache")
         # Sync all active sessions
@@ -1288,6 +1311,12 @@ async def sync_cache_to_database(session_id: str | None = None):
             session_data = state_sync.get_session_state(sid)
             if session_data:
                 state_sync.sync_state_to_db(sid, session_data)
+
+        audit_logger.log_admin_action(
+            action="sync-to-database",
+            actor=current_user.get("email") or current_user.get("user_id") or "admin",
+            details={"synced_count": len(active_sessions)},
+        )
 
         return {
             "message": f"Synced {len(active_sessions)} sessions",
@@ -1301,8 +1330,10 @@ async def sync_cache_to_database(session_id: str | None = None):
         raise HTTPException(status_code=500, detail="Error syncing to database")
 
 
-@app.delete("/clear-cache", dependencies=[Depends(require_role("admin"))])
-async def clear_session_cache():
+@app.delete("/clear-cache")
+async def clear_session_cache(
+    current_user=Depends(require_role("admin")),
+):
     """
     Clear all session cache from Redis
 
@@ -1314,7 +1345,17 @@ async def clear_session_cache():
     try:
         logger.warning("Clearing all session cache from Redis")
         result = state_sync.clear_cache()
-        return {"message": "Cache cleared", "status": "success" if result else "failed"}
+
+        audit_logger.log_admin_action(
+            action="clear-cache",
+            actor=current_user.get("email") or current_user.get("user_id") or "admin",
+            details={"success": bool(result)},
+        )
+
+        return {
+            "message": "Cache cleared",
+            "status": "success" if result else "failed",
+        }
     except Exception as e:
         logger.error(f"Error clearing cache: {e!s}")
         raise HTTPException(status_code=500, detail="Error clearing cache")
@@ -2402,15 +2443,15 @@ async def get_dashboard():
         HTML content of the dashboard
     """
     try:
-        import os
 
         dashboard_path = os.path.join(
             os.path.dirname(__file__), "..", "monitoring", "dashboard.html"
         )
 
-        if os.path.exists(dashboard_path):
-            with open(dashboard_path, encoding="utf-8") as f:
-                html_content = f.read()
+        dashboard_file = Path(dashboard_path)
+
+        if await dashboard_file.exists():
+            html_content = await dashboard_file.read_text(encoding="utf-8")
 
             from fastapi.responses import HTMLResponse
 

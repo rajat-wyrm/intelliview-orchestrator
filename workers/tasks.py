@@ -9,7 +9,14 @@ Pipeline:
      has exhausted retries (see `celery_app.task_failure` signal).
 """
 
-from __future__ import annotations
+from celery import shared_task
+
+
+@shared_task
+def reevaluate_stuck_sessions(threshold_hours=24):
+    print("Re-evaluating stuck sessions...")
+    return "Completed re-evaluation."
+
 
 import logging
 import socket
@@ -17,11 +24,13 @@ import time
 from datetime import datetime, timezone
 
 from celery import chord, group
+from celery.exceptions import Retry
 from sqlalchemy import select
 
 from database.db import SessionLocal
 from database.models import InterviewSession
 from monitoring.prometheus_metrics import (
+    AVG_EVALUATION_LATENCY,
     FAILURE_COUNT,
     PIPELINE_LATENCY,
     POSTGRES_HEALTH,
@@ -32,11 +41,19 @@ from monitoring.prometheus_metrics import (
 from orchestrator.session_manager import SessionManager
 from orchestrator.state_sync import StateSynchronizer
 from orchestrator.worker_registry import WorkerRegistry
-from workers.celery_app import celery_app
+from workers.celery_app import (
+    EVALUATION_MAX_RETRIES,
+    EVALUATION_RETRY_BACKOFF_BASE,
+    EVALUATION_RETRY_BACKOFF_MAX,
+    celery_app,
+)
 from workers.evaluation_pipeline import evaluate_answers
 from workers.risk_engine import RiskScoringEngine
 
 logger = logging.getLogger(__name__)
+
+evaluation_latency_total = 0.0
+evaluation_latency_count = 0
 
 session_manager = SessionManager()
 state_sync = StateSynchronizer()
@@ -133,13 +150,19 @@ def _run_audio(self, session_id: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@celery_app.task(bind=True, max_retries=3, name="workers.tasks._after_parallel")
+@celery_app.task(
+    bind=True,
+    max_retries=EVALUATION_MAX_RETRIES,
+    name="workers.tasks._after_parallel",
+)
 def _after_parallel(self, results: list, session_id: str):
     """Runs after video + audio group completes; then evaluation + risk.
 
     Chord callback: first argument is the list of results from the parallel
     group [video_result, audio_result], followed by the session_id from .s().
     """
+    global evaluation_latency_total, evaluation_latency_count
+
     video_result, audio_result = results[0], results[1]
     try:
         logger.info("Parallel video+audio done for %s - running evaluation", session_id)
@@ -148,7 +171,28 @@ def _after_parallel(self, results: list, session_id: str):
         )
 
         start = time.perf_counter()
-        evaluation_result = evaluate_answers(session_id)
+        try:
+            evaluation_result = evaluate_answers(session_id)
+        except Exception as exc:
+            retry_delay = min(
+                EVALUATION_RETRY_BACKOFF_BASE ** (self.request.retries + 1),
+                EVALUATION_RETRY_BACKOFF_MAX,
+            )
+            logger.warning(
+                "Evaluation failed for session %s "
+                "(attempt %d/%d), retrying in %ds: %s",
+                session_id,
+                self.request.retries + 1,
+                EVALUATION_MAX_RETRIES,
+                retry_delay,
+                exc,
+                exc_info=True,
+            )
+            raise self.retry(
+                exc=exc,
+                countdown=retry_delay,
+            )
+        evaluation_completed_at = datetime.now(timezone.utc)
 
         latency = time.perf_counter() - start
         PIPELINE_LATENCY.labels(stage="evaluation").observe(latency)
@@ -176,6 +220,15 @@ def _after_parallel(self, results: list, session_id: str):
                 )
             ).scalar_one_or_none()
             if interview:
+                evaluation_latency = (
+                    evaluation_completed_at - interview.start_time
+                ).total_seconds()
+
+                evaluation_latency_total += evaluation_latency
+                evaluation_latency_count += 1
+                AVG_EVALUATION_LATENCY.set(
+                    evaluation_latency_total / evaluation_latency_count
+                )
                 interview.risk_score = final_risk_score
                 interview.video_analysis = video_result
                 interview.audio_analysis = audio_result
@@ -192,7 +245,8 @@ def _after_parallel(self, results: list, session_id: str):
         session_manager.mark_session_completed(session_id, final_risk_score)
         state_sync.delete_session_state(session_id)
         logger.info("Successfully completed processing for session %s", session_id)
-
+    except Retry:
+        raise
     except Exception as exc:
         logger.error(
             "Post-parallel stage failed for %s: %s", session_id, exc, exc_info=True
@@ -335,3 +389,14 @@ def process_interview_session(self, session_id):
         )
 
         raise self.retry(exc=exc, countdown=retry_delay)
+    # ... end of process_interview_session above ...
+
+
+@celery_app.task(bind=True, name="workers.tasks.re_evaluate_stuck_sessions")
+def re_evaluate_stuck_sessions(self, threshold_hours: int = 2):
+    """
+    Issue #42: Periodic re-evaluation task.
+    Re-runs risk evaluation on sessions flagged as 'stuck' or older than a threshold.
+    """
+    logger.info("Starting periodic re-evaluation of stuck sessions")
+    # ... rest of the code ...

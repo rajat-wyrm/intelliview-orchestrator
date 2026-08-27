@@ -24,6 +24,8 @@ from prometheus_client import (
     generate_latest,
 )
 
+from monitoring.prometheus_metrics import AVG_EVALUATION_LATENCY
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -31,6 +33,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 registry = CollectorRegistry()
+registry.register(AVG_EVALUATION_LATENCY)
 
 # ---------------------------------------------------------------------------
 # Request metrics

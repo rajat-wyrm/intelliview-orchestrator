@@ -31,6 +31,9 @@ test_unit_session_manager.py.
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
+from prometheus_client import generate_latest
+
+from monitoring.prometheus_metrics import registry
 from workers import tasks
 
 
@@ -120,3 +123,134 @@ def test_fresh_queued_session_dispatches_normally():
     fake_chord.assert_called_once()
     fake_chord_obj.assert_called_once()
     assert result["status"] == "processing_parallel"
+
+
+def test_average_evaluation_latency_metric_exists():
+    metrics = generate_latest(registry).decode()
+
+    assert "intelliview_avg_evaluation_latency_seconds" in metrics
+
+
+def test_average_evaluation_latency_updates_after_evaluation():
+    tasks.evaluation_latency_total = 0.0
+    tasks.evaluation_latency_count = 0
+
+    start_time = datetime.now(timezone.utc) - timedelta(seconds=10)
+    interview = _make_interview("EVALUATING", start_time)
+    db_session = _wire_db_session(interview)
+
+    risk_report = {
+        "final_risk_score": 0.5,
+        "risk_classification": "low",
+    }
+
+    with (
+        patch.object(tasks, "evaluate_answers", return_value={"score": 0.8}),
+        patch.object(
+            tasks.RiskScoringEngine,
+            "generate_risk_report",
+            return_value=risk_report,
+        ),
+        patch.object(tasks, "SessionLocal", return_value=db_session),
+        patch.object(tasks.session_manager, "update_session_status"),
+        patch.object(
+            tasks.time,
+            "perf_counter",
+            side_effect=[0.0, 1.0],
+        ),
+        patch.object(
+            tasks,
+            "datetime",
+        ) as mock_datetime,
+    ):
+        mock_datetime.now.return_value = datetime.now(timezone.utc)
+        mock_datetime.side_effect = datetime
+
+        tasks._after_parallel.run(
+            [{"video": "result"}, {"audio": "result"}],
+            "session-123",
+        )
+
+    assert tasks.evaluation_latency_count == 1
+    assert tasks.evaluation_latency_total > 0
+    assert tasks.AVG_EVALUATION_LATENCY._value.get() > 0
+
+
+def test_average_evaluation_latency_running_average():
+    tasks.evaluation_latency_total = 0.0
+    tasks.evaluation_latency_count = 0
+
+    first_start = datetime.now(timezone.utc) - timedelta(seconds=10)
+    second_start = datetime.now(timezone.utc) - timedelta(seconds=30)
+
+    first_interview = _make_interview("EVALUATING", first_start)
+    second_interview = _make_interview("EVALUATING", second_start)
+
+    first_db = _wire_db_session(first_interview)
+    second_db = _wire_db_session(second_interview)
+
+    risk_report = {
+        "final_risk_score": 0.5,
+        "risk_classification": "low",
+    }
+
+    with (
+        patch.object(tasks, "evaluate_answers", return_value={"score": 0.8}),
+        patch.object(
+            tasks.RiskScoringEngine,
+            "generate_risk_report",
+            return_value=risk_report,
+        ),
+        patch.object(tasks.session_manager, "update_session_status"),
+        patch.object(
+            tasks,
+            "SessionLocal",
+            side_effect=[first_db, second_db],
+        ),
+    ):
+        tasks._after_parallel.run(
+            [{"video": "result"}, {"audio": "result"}],
+            "session-1",
+        )
+
+        tasks._after_parallel.run(
+            [{"video": "result"}, {"audio": "result"}],
+            "session-2",
+        )
+
+    assert tasks.evaluation_latency_count == 2
+
+    expected_average = tasks.evaluation_latency_total / tasks.evaluation_latency_count
+
+    assert tasks.AVG_EVALUATION_LATENCY._value.get() == expected_average
+
+
+def test_average_evaluation_latency_exposed_through_metrics_endpoint():
+    from fastapi.testclient import TestClient
+
+    from orchestrator import main
+
+    with (
+        patch.object(
+            main.health_monitor,
+            "_check_all_dependencies",
+            return_value={
+                "redis": {"status": "healthy"},
+                "postgres": {"status": "healthy"},
+            },
+        ),
+        patch.object(
+            main.worker_registry,
+            "get_all_workers",
+            return_value=[],
+        ),
+        patch.object(
+            main.worker_registry,
+            "detect_unhealthy_workers",
+            return_value=[],
+        ),
+    ):
+        response = TestClient(main.app).get("/metrics")
+
+    assert response.status_code == 200
+    assert "intelliview_avg_evaluation_latency_seconds" in response.text

@@ -2,7 +2,15 @@
 
 import uuid
 
-from sqlalchemy import Column, DateTime, ForeignKey, String, Text
+from sqlalchemy import (
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 
 from database.models._base import Base, utcnow
@@ -17,6 +25,13 @@ class InterviewSchedule(Base):
     """InterviewSchedule model for managing scheduled interview events."""
 
     __tablename__ = "interview_schedules"
+    __table_args__ = (
+        UniqueConstraint(
+            "candidate_id", "scheduled_at", name="uq_schedule_candidate_slot"
+        ),
+        Index("ix_schedule_interviewer_time", "interviewer_id", "scheduled_at"),
+        Index("ix_schedule_status_time", "status", "scheduled_at"),
+    )
 
     id = Column(
         String(255),

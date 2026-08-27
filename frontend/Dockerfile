@@ -58,4 +58,4 @@ USER app
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["node", "server.js", "-H", "0.0.0.0"]

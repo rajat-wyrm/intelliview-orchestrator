@@ -23,6 +23,7 @@ class Candidate(Base):
 
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+    deleted_at = Column(DateTime, nullable=True, index=True, default=None)
 
     interview_sessions = relationship("InterviewSession", back_populates="candidate")
 

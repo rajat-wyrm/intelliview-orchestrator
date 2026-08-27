@@ -34,3 +34,43 @@ def test_check_system_health_sets_ttl_on_health_keys():
 
         assert last_check_call.args[0] == monitor.last_check_key
         assert last_check_call.kwargs["ex"] == 300
+
+
+def test_postgres_health_check_healthy():
+    mock_engine = MagicMock()
+    mock_conn = mock_engine.connect.return_value.__enter__.return_value
+    mock_conn.execute.return_value.fetchone.return_value = (1,)
+    mock_conn.execute.return_value.fetchone.return_value = (1,)
+
+    with patch(
+        "orchestrator.health_monitor.create_engine",
+        return_value=mock_engine,
+    ):
+        with patch(
+            "orchestrator.health_monitor.DATABASE_URL",
+            "postgresql://postgres:postgres@localhost:5432/ai_interview_db",
+        ):
+            monitor = HealthMonitor()
+            result = monitor._deep_check_postgres()
+
+    assert result["healthy"] is True
+    assert result["error"] is None
+
+
+def test_postgres_health_check_unhealthy():
+    mock_engine = MagicMock()
+    mock_engine.connect.side_effect = Exception("database unavailable")
+
+    with patch(
+        "orchestrator.health_monitor.create_engine",
+        return_value=mock_engine,
+    ):
+        with patch(
+            "orchestrator.health_monitor.DATABASE_URL",
+            "postgresql://postgres:postgres@localhost:5432/ai_interview_db",
+        ):
+            monitor = HealthMonitor()
+            result = monitor._deep_check_postgres()
+
+    assert result["healthy"] is False
+    assert "database unavailable" in result["error"]
