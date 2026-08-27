@@ -16,8 +16,7 @@ def create_table():
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        """
+    cursor.execute("""
     CREATE TABLE IF NOT EXISTS subscribers (
         webhook_id TEXT PRIMARY KEY,
         url TEXT NOT NULL,
@@ -25,8 +24,7 @@ def create_table():
         active BOOLEAN DEFAULT 1,
         created_at TEXT
     )
-    """
-    )
+    """)
 
     conn.commit()
     conn.close()
