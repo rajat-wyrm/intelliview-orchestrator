@@ -2,10 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main, Stabilized-version]
+    branches: [main, Stabilized-version,issue-22-dataset-validation]
 
   pull_request:
-    branches: [main, Stabilized-version]
+    branches: [main, Stabilized-version,issue-22-dataset-validation]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -74,8 +75,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-              pip install "packaging<26"
-          pip install "ruff==0.9.10" "black==26.5.1" "isort==6.0.1"
+          pip install "packaging<26"
+          pip install "ruff==0.9.10" "black==25.1.0" "isort==6.0.1"
       - name: Black format check
         run: python -m black --check .
       - name: isort import check
@@ -163,9 +164,15 @@ jobs:
             echo "Waiting for API... ($i)"
             sleep 2
           done
+
           echo "API never became healthy" >&2
           docker compose -f docker-compose.yml logs
           exit 1
+
+      - name: Seed verified E2E candidate
+        run: |
+          docker compose -f docker-compose.yml exec -T fastapi \
+            python -c "from database.db import SessionLocal; from database.models import Candidate; from datetime import datetime, timezone; db=SessionLocal(); c=Candidate(candidate_id='e2e-verified-candidate', name='E2E Candidate', email='e2e-verified@example.com', email_verified=True, skills=[], interview_history=[], total_interviews=0, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)); db.merge(c); db.commit(); db.close()"
 
       - name: Run end-to-end smoke tests
         run: pytest tests/test_e2e_smoke.py -v -m e2e
