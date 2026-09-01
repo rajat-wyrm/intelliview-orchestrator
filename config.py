@@ -107,6 +107,7 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from_email: str = "notifications@intelliview.ai"
     smtp_use_tls: bool = False
+    app_base_url: str = "http://localhost:8000"
 
     @field_validator("postgres_host", "postgres_db", "postgres_user")
     @classmethod

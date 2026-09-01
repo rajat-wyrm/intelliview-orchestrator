@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #09090b; color: #f4f4f5; margin: 0; padding: 20px; }
+    .card { max-width: 600px; margin: 0 auto; background-color: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 28px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+    .header { border-bottom: 1px solid #27272a; padding-bottom: 16px; margin-bottom: 20px; }
+    .header h2 { color: #6366f1; margin: 0; font-size: 22px; }
+    .button { display: inline-block; padding: 12px 24px; background-color: #6366f1; color: #ffffff !important; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0; }
+    .footer { margin-top: 24px; border-top: 1px solid #27272a; padding-top: 16px; font-size: 12px; color: #71717a; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h2>📧 Email Verification Required</h2>
+      <p style="color: #a1a1aa; font-size: 14px; margin-top: 4px;">Please verify your email address to start scheduling interviews.</p>
+    </div>
+
+    <p style="font-size: 15px;">Dear <strong>{{name}}</strong>,</p>
+    <p style="font-size: 14px; color: #d4d4d8;">Thank you for registering. Please click the button below to verify your email address:</p>
+
+    <div style="text-align: center;">
+      <a href="{{link}}" class="button">Verify Email</a>
+    </div>
+
+    <p style="font-size: 14px; color: #a1a1aa;">If the button doesn't work, you can copy and paste the following link into your browser:</p>
+    <p style="font-size: 12px; color: #38bdf8; word-break: break-all;">{{link}}</p>
+    <p style="font-size: 13px; color: #f87171;">Note: This verification link will expire in 24 hours.</p>
+
+    <div class="footer">
+      IntelliView AI Interview Platform &bull; Automated Notification
+    </div>
+  </div>
+</body>
+</html>

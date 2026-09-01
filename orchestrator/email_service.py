@@ -234,35 +234,40 @@ IntelliView Interview Team
         token: str,
     ) -> tuple[bool, str]:
         """
-        Send a verification email with an OTP/link to the candidate.
+        Send an email verification link to a registered candidate.
         """
-        import html
+        import os
 
         sender_email = self.settings.smtp_from_email or "notifications@intelliview.ai"
         host = self.settings.smtp_host or "localhost"
         port = self.settings.smtp_port or 1025
+        base_url = getattr(self.settings, "app_base_url", "http://localhost:8000")
 
+        # Sanitize HTML inputs
         safe_name = html.escape(candidate_name)
         safe_email = html.escape(candidate_email)
         safe_token = html.escape(token)
 
-        # Fallback logging for local development
-        logger.info(
-            f"[DEV FALLBACK] Verification code generated for {candidate_email}: {token}"
-        )
+        # Verification URL
+        verification_url = f"{base_url}/verify-email?token={safe_token}"
 
-        subject = "Verify Your Email - IntelliView"
+        subject = "Please Verify Your Email - IntelliView"
 
+        # Plain text fallback
         text_body = f"""Dear {candidate_name},
 
-Thank you for registering. Please verify your email using the following verification token/OTP:
+Please verify your email address to complete your registration and book your interview.
 
-Token: {token}
+Click the link below to verify:
+{verification_url}
+
+This link will expire in 24 hours.
 
 Best regards,
 IntelliView Team
 """
 
+        # HTML body fallback
         html_body = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -272,19 +277,28 @@ IntelliView Team
     .card {{ max-width: 600px; margin: 0 auto; background-color: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 28px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }}
     .header {{ border-bottom: 1px solid #27272a; padding-bottom: 16px; margin-bottom: 20px; }}
     .header h2 {{ color: #6366f1; margin: 0; font-size: 22px; }}
-    .token {{ font-size: 24px; font-weight: bold; color: #38bdf8; letter-spacing: 2px; background-color: #27272a; padding: 12px; border-radius: 6px; text-align: center; margin: 20px 0; }}
+    .button {{ display: inline-block; padding: 12px 24px; background-color: #6366f1; color: #ffffff !important; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0; }}
     .footer {{ margin-top: 24px; border-top: 1px solid #27272a; padding-top: 16px; font-size: 12px; color: #71717a; text-align: center; }}
   </style>
 </head>
 <body>
   <div class="card">
     <div class="header">
-      <h2>✉️ Verify Your Email</h2>
+      <h2>📧 Email Verification Required</h2>
+      <p style="color: #a1a1aa; font-size: 14px; margin-top: 4px;">Please verify your email address to start scheduling interviews.</p>
     </div>
-    <p>Dear <strong>{safe_name}</strong>,</p>
-    <p>Thank you for registering. Please use the verification code below to verify your email address and enable interview scheduling:</p>
-    <div class="token">{safe_token}</div>
-    <p>Or click this link to verify: <a href="http://localhost:3000/candidates/verify?email={safe_email}&token={safe_token}" style="color: #6366f1;">Verify Email</a></p>
+
+    <p style="font-size: 15px;">Dear <strong>{safe_name}</strong>,</p>
+    <p style="font-size: 14px; color: #d4d4d8;">Thank you for registering. Please click the button below to verify your email address:</p>
+
+    <div style="text-align: center;">
+      <a href="{verification_url}" class="button">Verify Email</a>
+    </div>
+
+    <p style="font-size: 14px; color: #a1a1aa;">If the button doesn't work, you can copy and paste the following link into your browser:</p>
+    <p style="font-size: 12px; color: #38bdf8; word-break: break-all;">{verification_url}</p>
+    <p style="font-size: 13px; color: #f87171;">Note: This verification link will expire in 24 hours.</p>
+
     <div class="footer">
       IntelliView AI Interview Platform &bull; Automated Notification
     </div>
@@ -292,6 +306,23 @@ IntelliView Team
 </body>
 </html>
 """
+
+        # Try to load verification template from the file
+        try:
+            template_path = os.path.join(
+                os.path.dirname(__file__),
+                "../notification-template-engine/templates/en/html/email_verification.html",
+            )
+            with open(template_path, encoding="utf-8") as f:
+                loaded_html = f.read()
+            html_body = loaded_html.replace("{{name}}", safe_name).replace(
+                "{{link}}", verification_url
+            )
+            logger.info("Loaded email verification template from file successfully.")
+        except Exception as e:
+            logger.warning(
+                f"Could not load verification template from file: {e}. Using inline fallback."
+            )
 
         message = MIMEMultipart("alternative")
         message["Subject"] = subject
@@ -303,7 +334,7 @@ IntelliView Team
 
         try:
             logger.info(
-                f"Attempting to send verification email via SMTP to {candidate_email} via {host}:{port}"
+                f"Attempting to send verification email via SMTP to {candidate_email}"
             )
             if port == 465:
                 with smtplib.SMTP_SSL(host=host, port=port, timeout=10) as server:
@@ -321,10 +352,8 @@ IntelliView Team
                             self.settings.smtp_user, self.settings.smtp_password
                         )
                     server.send_message(message)
-
             logger.info("Verification email successfully dispatched.")
-            return True, "Email sent successfully"
-
+            return True, "Verification email sent successfully"
         except Exception as e:
             error_msg = f"Failed to send verification email: {e!s}"
             logger.warning(error_msg)
