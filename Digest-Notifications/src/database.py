@@ -21,8 +21,7 @@ def init_db():
     conn = get_db_conn()
     cursor = conn.cursor()
 
-    cursor.execute(
-        """
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS interviews (
             id TEXT PRIMARY KEY,
             candidate_name TEXT NOT NULL,
@@ -34,11 +33,9 @@ def init_db():
             meeting_link TEXT,
             location TEXT
         )
-        """
-    )
+        """)
 
-    cursor.execute(
-        """
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS sent_logs (
             id TEXT PRIMARY KEY,
             timestamp TEXT NOT NULL,
@@ -48,8 +45,7 @@ def init_db():
             recipient TEXT NOT NULL,
             status TEXT NOT NULL
         )
-        """
-    )
+        """)
 
     conn.commit()
 

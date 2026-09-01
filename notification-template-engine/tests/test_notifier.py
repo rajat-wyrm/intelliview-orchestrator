@@ -27,7 +27,7 @@ def test_console_notifier_invalid_init_parameters():
     with pytest.raises(ValueError, match="base_delay cannot be negative"):
         ConsoleNotifier(base_delay=-1)
 
-    with pytest.raises(ValueError, match="jitter must be between 0.0 and 0.5"):
+    with pytest.raises(ValueError, match=r"jitter must be between 0\.0 and 0\.5"):
         ConsoleNotifier(jitter=0.6)
 
 
