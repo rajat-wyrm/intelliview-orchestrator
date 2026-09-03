@@ -25,10 +25,6 @@ def upgrade() -> None:
     )
     op.add_column(
         "candidates",
-        sa.Column("verification_token", sa.String(length=50), nullable=True),
-    )
-    op.add_column(
-        "candidates",
         sa.Column(
             "practice_streak", sa.Integer(), nullable=False, server_default=sa.text("0")
         ),
@@ -62,5 +58,4 @@ def downgrade() -> None:
     op.drop_column("candidates", "badges")
     op.drop_column("candidates", "last_practice_date")
     op.drop_column("candidates", "practice_streak")
-    op.drop_column("candidates", "verification_token")
     op.drop_column("candidates", "is_verified")
