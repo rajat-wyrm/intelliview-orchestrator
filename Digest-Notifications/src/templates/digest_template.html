@@ -7,8 +7,13 @@
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      {% if theme == 'dark' %}
+      background-color: #0b0f19;
+      color: #f1f5f9;
+      {% else %}
       background-color: #f8fafc;
       color: #1e293b;
+      {% endif %}
       margin: 0;
       padding: 0;
       -webkit-font-smoothing: antialiased;
@@ -16,20 +21,34 @@
     .wrapper {
       width: 100%;
       table-layout: fixed;
+      {% if theme == 'dark' %}
+      background-color: #0b0f19;
+      {% else %}
       background-color: #f8fafc;
+      {% endif %}
       padding: 40px 0;
     }
     .container {
       max-width: 600px;
       margin: 0 auto;
+      {% if theme == 'dark' %}
+      background-color: #111827;
+      border: 1px solid #1f2937;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      {% else %}
       background-color: #ffffff;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+      {% endif %}
       border-radius: 12px;
       overflow: hidden;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-      border: 1px solid #e2e8f0;
     }
     .header {
+      {% if theme == 'dark' %}
+      background: linear-gradient(135deg, #090d16 0%, #111827 100%);
+      {% else %}
       background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      {% endif %}
       padding: 32px;
       color: #ffffff;
       text-align: center;
@@ -61,18 +80,27 @@
       padding: 32px;
     }
     .summary-bar {
+      {% if theme == 'dark' %}
+      background-color: #1f2937;
+      color: #94a3b8;
+      {% else %}
       background-color: #f1f5f9;
+      color: #475569;
+      {% endif %}
       border-radius: 8px;
       padding: 12px 16px;
       margin-bottom: 24px;
       font-size: 14px;
-      color: #475569;
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
     .summary-bar strong {
+      {% if theme == 'dark' %}
+      color: #ffffff;
+      {% else %}
       color: #0f172a;
+      {% endif %}
     }
     .date-group {
       margin-bottom: 28px;
@@ -80,38 +108,64 @@
     .date-header {
       font-size: 14px;
       font-weight: 600;
+      {% if theme == 'dark' %}
+      color: #a78bfa;
+      border-bottom: 1px solid #2d3748;
+      {% else %}
       color: #64748b;
+      border-bottom: 1px solid #cbd5e1;
+      {% endif %}
       text-transform: uppercase;
       letter-spacing: 0.05em;
       margin-bottom: 12px;
-      border-bottom: 1px solid #cbd5e1;
       padding-bottom: 6px;
     }
     .card {
+      {% if theme == 'dark' %}
+      background-color: #1f2937;
+      border: 1px solid #374151;
+      {% else %}
       background-color: #ffffff;
       border: 1px solid #e2e8f0;
+      {% endif %}
       border-radius: 8px;
       padding: 16px;
       margin-bottom: 12px;
       transition: border-color 0.2s ease;
     }
     .card:hover {
+      {% if theme == 'dark' %}
+      border-color: #4b5563;
+      {% else %}
       border-color: #cbd5e1;
+      {% endif %}
     }
     .card-title {
       font-size: 16px;
       font-weight: 600;
+      {% if theme == 'dark' %}
+      color: #ffffff;
+      {% else %}
       color: #0f172a;
+      {% endif %}
       margin: 0 0 4px 0;
     }
     .card-subtitle {
       font-size: 13px;
+      {% if theme == 'dark' %}
+      color: #e2e8f0;
+      {% else %}
       color: #475569;
+      {% endif %}
       margin: 0 0 12px 0;
     }
     .card-meta {
       font-size: 12px;
+      {% if theme == 'dark' %}
+      color: #94a3b8;
+      {% else %}
       color: #64748b;
+      {% endif %}
       display: flex;
       flex-wrap: wrap;
     }
@@ -126,18 +180,28 @@
       color: #94a3b8;
     }
     .footer {
+      {% if theme == 'dark' %}
+      background-color: #0b0f19;
+      border-top: 1px solid #1f2937;
+      color: #64748b;
+      {% else %}
       background-color: #f8fafc;
-      padding: 24px 32px;
       border-top: 1px solid #e2e8f0;
+      color: #64748b;
+      {% endif %}
+      padding: 24px 32px;
       text-align: center;
       font-size: 12px;
-      color: #64748b;
     }
     .footer p {
       margin: 4px 0;
     }
     .footer a {
+      {% if theme == 'dark' %}
+      color: #60a5fa;
+      {% else %}
       color: #3b82f6;
+      {% endif %}
       text-decoration: none;
     }
     .footer a:hover {
@@ -160,13 +224,21 @@
         </div>
 
         {% if total_upcoming_count is defined and total_upcoming_count > total_count %}
+        {% if theme == 'dark' %}
+        <div style="background-color: #451a03; border: 1px solid #92400e; border-radius: 8px; padding: 12px 16px; margin-bottom: 24px; font-size: 14px; color: #fde68a; text-align: center; font-weight: 500;">
+        {% else %}
         <div style="background-color: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; padding: 12px 16px; margin-bottom: 24px; font-size: 14px; color: #b45309; text-align: center; font-weight: 500;">
+        {% endif %}
           ⚠️ <strong>Notice:</strong> Showing {{ total_count }} of {{ total_upcoming_count }} upcoming interviews (limited by batch size cap).
         </div>
         {% endif %}
 
         {% if total_count == 0 %}
+        {% if theme == 'dark' %}
+        <div style="text-align: center; padding: 40px 0; color: #94a3b8;">
+        {% else %}
         <div style="text-align: center; padding: 40px 0; color: #64748b;">
+        {% endif %}
           <p style="margin: 0; font-size: 16px;">No upcoming interviews scheduled for this period.</p>
         </div>
         {% else %}
@@ -186,7 +258,7 @@
                 </span>
                 {% if interview.meeting_link %}
                 <span class="meta-item">
-                  <span class="meta-icon">🔗</span> <a href="{{ interview.meeting_link }}" target="_blank" style="color: #3b82f6; text-decoration: none;">Meeting Link</a>
+                  <span class="meta-icon">🔗</span> <a href="{{ interview.meeting_link }}" target="_blank" style="color: {% if theme == 'dark' %}#60a5fa{% else %}#3b82f6{% endif %}; text-decoration: none;">Meeting Link</a>
                 </span>
                 {% elif interview.location %}
                 <span class="meta-item">

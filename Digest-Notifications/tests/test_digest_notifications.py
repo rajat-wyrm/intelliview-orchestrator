@@ -100,6 +100,26 @@ class TestDigestNotifications(unittest.TestCase):
         self.assertIn("Jordan Smith", txt)
         self.assertIn("http://test.com/unsub", txt)
 
+    def test_html_theme_rendering(self):
+        recipient = _make_recipient()
+        events = [_make_event(candidate="Jordan Smith")]
+        payload = build_digest(recipient, events)
+
+        # Default theme should render light style colors
+        html_default = render_digest_html(payload, unsubscribe_url="http://test.com/unsub")
+        self.assertIn("background-color: #f8fafc;", html_default)
+        self.assertNotIn("background-color: #0b0f19;", html_default)
+
+        # Light theme should render light style colors
+        html_light = render_digest_html(payload, unsubscribe_url="http://test.com/unsub", theme="light")
+        self.assertIn("background-color: #f8fafc;", html_light)
+        self.assertNotIn("background-color: #0b0f19;", html_light)
+
+        # Dark theme should render dark style colors
+        html_dark = render_digest_html(payload, unsubscribe_url="http://test.com/unsub", theme="dark")
+        self.assertIn("background-color: #0b0f19;", html_dark)
+        self.assertNotIn("background-color: #f8fafc;", html_dark)
+
     # ── 4. Sender Tests ──
     def test_send_digest_skips_when_empty(self):
         sender = MagicMock()
