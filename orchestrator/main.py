@@ -91,6 +91,7 @@ from orchestrator.state_sync import StateSynchronizer
 from orchestrator.worker_registry import WorkerRegistry
 from routers.ab_testing import create_ab_testing_routes
 from routers.candidates import create_candidate_routes
+from routers.integrity import get_tab_switch_count
 from routers.integrity import router as integrity_router
 from routers.practice_sessions import router as practice_sessions_router
 from routers.questions import create_question_routes
@@ -111,6 +112,8 @@ from routers.templates import create_template_routes
 from routers.workers import create_worker_routes
 from workers.ab_testing_framework import ABTestingFramework
 from workers.bias_auditor import BiasAuditor
+from workers.integrity_score import IntegrityScorer
+from workers.risk_engine import RiskScoringEngine
 
 # Configure logging after imports so startup messages are structured.
 configure_logging()
@@ -470,6 +473,7 @@ class SessionStatusResponse(BaseModel):
     status: str
     candidate_id: str
     risk_score: float | None = None
+    integrity_score: int | None = None
     assigned_node: str | None = None
     start_time: str | None = None
     end_time: str | None = None
@@ -873,6 +877,31 @@ async def start_interview(
         raise HTTPException(status_code=500, detail=f"Error starting interview: {e!s}")
 
 
+def _compute_live_integrity_score(session_id: str, session_data: dict) -> int:
+    """Fuse anti-cheat signals into a single 0-100 integrity score.
+
+    Reads whatever signals are currently available for the session so the
+    score reflects the live state of a session in progress, not just its
+    final result:
+    - tab-switch events ingested via POST /integrity/events
+    - video cheat-signal flags, as soon as the video pipeline stage
+      completes (multiple_persons, phone_detected, etc.)
+    - the final pipeline risk score, once the interview has completed
+
+    Any signal that hasn't arrived yet is simply omitted rather than
+    penalized (see IntegrityScorer.calculate_integrity_score).
+    """
+    video_result = session_data.get("video_analysis") or session_data.get(
+        "video_result"
+    )
+
+    return IntegrityScorer.calculate_integrity_score(
+        tab_switches=get_tab_switch_count(session_id),
+        cv_flags=RiskScoringEngine.count_video_flags(video_result),
+        risk_score=session_data.get("risk_score"),
+    )
+
+
 @app.get("/session-status/{session_id}", response_model=SessionStatusResponse)
 async def get_session_status(
     session_id: str,
@@ -884,6 +913,8 @@ async def get_session_status(
     Retrieves real-time session information including:
     - Current status (CREATED, QUEUED, PROCESSING, COMPLETED, FAILED)
     - Risk score if available
+    - Fused anti-cheat integrity score (0-100), updated live as new
+      signal data (tab switches, video flags, risk score) comes in
     - Processing node information
     - Timestamps
 
@@ -910,6 +941,7 @@ async def get_session_status(
             status=session_data.get("status"),
             candidate_id=session_data.get("candidate_id"),
             risk_score=session_data.get("risk_score"),
+            integrity_score=_compute_live_integrity_score(session_id, session_data),
             assigned_node=session_data.get("assigned_node"),
             start_time=session_data.get("start_time"),
             end_time=session_data.get("end_time"),

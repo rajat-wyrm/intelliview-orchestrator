@@ -13,6 +13,24 @@ router = APIRouter(prefix="/integrity", tags=["integrity"])
 # This keeps the endpoint independent of the existing database models.
 integrity_events: dict[str, list[dict[str, Any]]] = {}
 
+# Event-type values that count as a browser tab switch for integrity scoring.
+_TAB_SWITCH_EVENT_TYPES = {"tab_switch", "tab_switching", "tab-switch"}
+
+
+def get_tab_switch_count(session_id: str) -> int:
+    """Count stored tab-switch events for a session.
+
+    Used by the session-status API to feed the live integrity-score fusion
+    (see ``workers/integrity_score.py``) so the score reflects tab-switch
+    signals as soon as they're ingested via ``POST /integrity/events``.
+    """
+    events = integrity_events.get(session_id, [])
+    return sum(
+        1
+        for e in events
+        if e.get("event_type", "").strip().lower() in _TAB_SWITCH_EVENT_TYPES
+    )
+
 
 class IntegrityEvent(BaseModel):
     session_id: str = Field(min_length=1)

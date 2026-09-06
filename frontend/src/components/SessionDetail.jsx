@@ -7,7 +7,7 @@ import { StatusBadge, Badge } from "@/components/Badge";
 import { Shimmer } from "@/components/Shimmer";
 import { useAppStore } from "@/lib/store";
 import { formatDate, riskColor, formatRelative } from "@/lib/utils";
-import { Activity, Calendar, Cpu, Hash, RefreshCw, User, Film, Mic, MessageSquare, Clock, FileDown } from "lucide-react";
+import { Activity, Calendar, Cpu, Hash, RefreshCw, User, Film, Mic, MessageSquare, Clock, FileDown, ShieldCheck } from "lucide-react";
 import useSWR from "swr";
 import { MomentTimeline } from "@/hooks/useMomentTracking";
 import { generateSessionPDF, requestBackendPDF } from "@/lib/export";
@@ -117,6 +117,19 @@ function SessionDetailImpl({ sessionId, onClose }) {
                     )
                   }
                   icon={Hash}
+                />
+                <Field
+                  label="Integrity score"
+                  value={
+                    data.integrity_score != null ? (
+                      <Badge variant={riskColor((100 - data.integrity_score) / 100)}>
+                        {data.integrity_score}/100
+                      </Badge>
+                    ) : (
+                      "—"
+                    )
+                  }
+                  icon={ShieldCheck}
                 />
               </div>
 
