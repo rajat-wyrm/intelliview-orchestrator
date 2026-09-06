@@ -155,40 +155,6 @@ class RiskScoringEngine:
         return min(risk_score, 1.0)
 
     @classmethod
-    def count_video_flags(cls, video_result: dict[str, Any] | None) -> int:
-        """Count discrete cheat-signal flags set in a video analysis result.
-
-        This mirrors the same boolean checks used in ``calculate_video_risk``,
-        but returns a plain integer count rather than a weighted score. It is
-        used as the ``cv_flags`` input to the integrity-score fusion (see
-        ``workers/integrity_score.py``), which is surfaced live through the
-        session-status API as new video signal data comes in.
-        """
-        if not video_result:
-            return 0
-
-        flags = 0
-
-        if video_result.get("multiple_persons", {}).get("multiple_persons_detected"):
-            flags += 1
-
-        if video_result.get("phone_detected", {}).get("phone_detected"):
-            flags += 1
-
-        if video_result.get("head_movement_suspicious", {}).get(
-            "suspicious_movement_detected"
-        ):
-            flags += 1
-
-        # Default to True (no flag) when face-detection data simply hasn't
-        # arrived yet for this frame/stage, so a partially-populated
-        # mid-session result doesn't get penalized for missing data.
-        if not video_result.get("face_detected", {}).get("faces_found", True):
-            flags += 1
-
-        return flags
-
-    @classmethod
     def calculate_final_risk(
         cls, video_risk: float, audio_risk: float, evaluation_risk: float
     ) -> float:

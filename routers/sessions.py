@@ -17,30 +17,8 @@ from orchestrator import http_cache
 from orchestrator.candidate_manager import candidate_manager
 from orchestrator.scheduler import TaskPriority
 from orchestrator.security import get_current_user, require_role
-from routers.integrity import get_tab_switch_count
-from workers.integrity_score import IntegrityScorer
-from workers.risk_engine import RiskScoringEngine
 
 logger = logging.getLogger(__name__)
-
-
-def _compute_live_integrity_score(session_id: str, session_data: dict) -> int:
-    """Fuse anti-cheat signals into a single 0-100 integrity score.
-
-    Reads whatever signals are currently available for the session so the
-    score reflects the live state of a session in progress, not just its
-    final result. See the identical helper in orchestrator/main.py for
-    details.
-    """
-    video_result = session_data.get("video_analysis") or session_data.get(
-        "video_result"
-    )
-
-    return IntegrityScorer.calculate_integrity_score(
-        tab_switches=get_tab_switch_count(session_id),
-        cv_flags=RiskScoringEngine.count_video_flags(video_result),
-        risk_score=session_data.get("risk_score"),
-    )
 
 
 class StartInterviewRequest(BaseModel):
@@ -95,7 +73,6 @@ class SessionStatusResponse(BaseModel):
     status: str
     candidate_id: str
     risk_score: float | None = None
-    integrity_score: int | None = None
     assigned_node: str | None = None
     start_time: str | None = None
     end_time: str | None = None
@@ -614,9 +591,6 @@ def create_session_routes(
                 status=session_data.get("status"),
                 candidate_id=session_data.get("candidate_id"),
                 risk_score=session_data.get("risk_score"),
-                integrity_score=_compute_live_integrity_score(
-                    session_id, session_data
-                ),
                 assigned_node=session_data.get("assigned_node"),
                 start_time=session_data.get("start_time"),
                 end_time=session_data.get("end_time"),
