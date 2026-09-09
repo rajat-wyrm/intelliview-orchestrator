@@ -11,7 +11,7 @@ flower==2.1.0
 # === Database / ORM ===
 sqlalchemy==2.0.52
 psycopg2-binary==2.9.12
-alembic==1.19.1
+alembic==1.19.2
 
 # === Config / validation ===
 pydantic==2.13.5
