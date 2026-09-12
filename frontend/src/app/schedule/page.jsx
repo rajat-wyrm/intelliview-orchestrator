@@ -24,12 +24,11 @@ import { Badge } from "@/components/Badge";
 import { Skeleton, ErrorState } from "@/components/States";
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui";
 import AddToCalendarButton from "@/components/AddToCalendarButton";
-
-const fetcher = (url) => fetch(url).then((res) => res.json());
+import { endpoints } from "@/lib/api";
 
 export default function SchedulePage() {
-  const { data: candidateData,  error: candidateError,  mutate: refreshCandidates, isLoading: loadingCandidates } = useSWR("/candidates", fetcher);
-  const { data: scheduleData,  error: scheduleError, mutate: refreshSchedules, isLoading: loadingSchedules } = useSWR("/api/schedule", fetcher);
+  const { data: candidateData, error: candidateError, mutate: refreshCandidates, isLoading: loadingCandidates } = useSWR("/candidates", () => endpoints.candidates().catch(() => null));
+  const { data: scheduleData, error: scheduleError, mutate: refreshSchedules, isLoading: loadingSchedules } = useSWR("/api/schedule", () => endpoints.schedule().catch(() => null));
 
   // Form State
   const [selectedCandidateId, setSelectedCandidateId] = useState("");
@@ -94,17 +93,7 @@ export default function SchedulePage() {
         send_email: sendEmail,
       };
 
-      const res = await fetch("/api/schedule", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.detail || "Failed to schedule interview.");
-      }
+      const data = await endpoints.createSchedule(payload);
 
       setNotification({
         type: "success",
@@ -128,14 +117,8 @@ export default function SchedulePage() {
   // Status Change Handler
   const handleStatusUpdate = async (scheduleId, newStatus) => {
     try {
-      const res = await fetch(`/api/schedule/${scheduleId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      if (res.ok) {
-        refreshSchedules();
-      }
+      await endpoints.updateSchedule(scheduleId, { status: newStatus });
+      refreshSchedules();
     } catch (err) {
       console.error("Failed to update status", err);
     }
@@ -163,24 +146,6 @@ export default function SchedulePage() {
     "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"
   ];
-
-  if (candidateError) {
-  return (
-    <ErrorState
-      error={candidateError}
-      onRetry={refreshCandidates}
-    />
-  );
-}
-
-if (scheduleError) {
-  return (
-    <ErrorState
-      error={scheduleError}
-      onRetry={refreshSchedules}
-    />
-  );
-}
 
   return (
     <div className="space-y-6 animate-fade-in p-2 md:p-6 text-zinc-100">

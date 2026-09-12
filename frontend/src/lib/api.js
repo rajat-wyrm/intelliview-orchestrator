@@ -62,6 +62,10 @@ class ApiClient {
     return this.request("PUT", path, body);
   }
 
+  patch(path, body) {
+    return this.request("PATCH", path, body);
+  }
+
   /** Build the WebSocket URL without putting credentials in the URL. */
   wsUrl(path) {
     const base = (process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000").replace(/^http/, "ws");
@@ -74,6 +78,10 @@ const api = new ApiClient();
 const endpoints = {
   health: () => api.get("/health"),
   startInterview: (payload) => api.post("/start-interview", payload),
+  candidates: () => api.get("/candidates"),
+  schedule: () => api.get("/api/schedule"),
+  createSchedule: (payload) => api.post("/api/schedule", payload),
+  updateSchedule: (scheduleId, payload) => api.patch(`/api/schedule/${scheduleId}`, payload),
   createCandidate: (payload) => api.post("/candidates", payload),
   bulkCreateCandidates: (payload) => api.post("/candidates/bulk", payload),
   sessionStatus: (id) => api.get(`/session-status/${id}`),
