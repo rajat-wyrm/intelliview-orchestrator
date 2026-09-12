@@ -23,6 +23,7 @@ class User(Base):
         default=utcnow,
         onupdate=utcnow,
     )
+    last_login_at = Column(DateTime(timezone=True), nullable=True)
 
     def __repr__(self):
         return f"<User(user_id='{self.user_id}', email='{self.email}', role='{self.role}')>"
