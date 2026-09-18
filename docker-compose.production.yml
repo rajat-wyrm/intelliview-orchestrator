@@ -1,0 +1,142 @@
+services:
+  fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      ENVIRONMENT: "${ENVIRONMENT:-staging}"
+      REDIS_URL: "${REDIS_URL:-redis://localhost:6379/0}"
+      CELERY_BROKER_URL: "${CELERY_BROKER_URL:-redis://localhost:6379/0}"
+      CELERY_RESULT_BACKEND: "${CELERY_RESULT_BACKEND:-redis://localhost:6379/1}"
+      POSTGRES_HOST: "${POSTGRES_HOST:-localhost}"
+      POSTGRES_PORT: "${POSTGRES_PORT:-5432}"
+      POSTGRES_DB: "${POSTGRES_DB:-ai_interview_db}"
+      POSTGRES_USER: "${POSTGRES_USER:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+      DATABASE_SSLMODE: "${DATABASE_SSLMODE:-require}"
+      API_TOKEN: "${API_TOKEN:-dev-token-change-me}"
+      JWT_SECRET_KEY: "${JWT_SECRET_KEY:-change-this-to-a-long-random-secret-key}"
+      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-*}"
+      ENABLE_PROMETHEUS: "${ENABLE_PROMETHEUS:-true}"
+      JSON_LOGGING: "${JSON_LOGGING:-true}"
+      CV_SERVICE_URL: "http://cv-service:8001"
+    command: uvicorn orchestrator.main:app --host 0.0.0.0 --port 8000 --workers 1
+    depends_on:
+      cv-service:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test:
+        ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=8)"]
+      interval: 20s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "2.0"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      ENVIRONMENT: "${ENVIRONMENT:-staging}"
+      REDIS_URL: "${REDIS_URL:-redis://localhost:6379/0}"
+      CELERY_BROKER_URL: "${CELERY_BROKER_URL:-redis://localhost:6379/0}"
+      CELERY_RESULT_BACKEND: "${CELERY_RESULT_BACKEND:-redis://localhost:6379/1}"
+      POSTGRES_HOST: "${POSTGRES_HOST:-localhost}"
+      POSTGRES_PORT: "${POSTGRES_PORT:-5432}"
+      POSTGRES_DB: "${POSTGRES_DB:-ai_interview_db}"
+      POSTGRES_USER: "${POSTGRES_USER:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+      DATABASE_SSLMODE: "${DATABASE_SSLMODE:-require}"
+      API_TOKEN: "${API_TOKEN:-dev-token-change-me}"
+      API_URL: "http://fastapi:8000"
+      CV_SERVICE_URL: "http://cv-service:8001"
+      WORKER_CONCURRENCY: "${WORKER_CONCURRENCY:-1}"
+      CELERY_POOL: "solo"
+      MAX_TASKS_BEFORE_RESTART: "100"
+    command: python -m workers.worker_entrypoint
+    depends_on:
+      fastapi:
+        condition: service_healthy
+      cv-service:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "celery",
+          "-A",
+          "workers.celery_app",
+          "inspect",
+          "ping"
+        ]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "4.0"
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      ENVIRONMENT: "${ENVIRONMENT:-staging}"
+      REDIS_URL: "${REDIS_URL:-redis://localhost:6379/0}"
+      CELERY_BROKER_URL: "${CELERY_BROKER_URL:-redis://localhost:6379/0}"
+      CELERY_RESULT_BACKEND: "${CELERY_RESULT_BACKEND:-redis://localhost:6379/1}"
+      POSTGRES_HOST: "${POSTGRES_HOST:-localhost}"
+      POSTGRES_PORT: "${POSTGRES_PORT:-5432}"
+      POSTGRES_DB: "${POSTGRES_DB:-ai_interview_db}"
+      POSTGRES_USER: "${POSTGRES_USER:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+      DATABASE_SSLMODE: "${DATABASE_SSLMODE:-require}"
+    command:
+      - celery
+      - -A
+      - workers.celery_app
+      - beat
+      - --loglevel=info
+    depends_on:
+      fastapi:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+
+  cv-service:
+    build:
+      context: ./cv_service
+      dockerfile: Dockerfile
+    expose:
+      - "8001"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "2.0"
+
+networks:
+  default:
+    name: intelliview-production
