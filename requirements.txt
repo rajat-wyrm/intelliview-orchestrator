@@ -9,7 +9,7 @@ celery[redis]==5.6.3
 redis==5.3.1
 flower==2.1.0
 # === Database / ORM ===
-sqlalchemy==2.0.52
+sqlalchemy==2.0.54
 psycopg2-binary==2.9.12
 alembic==1.19.1
 
