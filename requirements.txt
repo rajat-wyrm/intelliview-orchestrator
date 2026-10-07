@@ -1,5 +1,5 @@
 # === Core HTTP API ===
-fastapi==0.141.1
+fastapi==0.142.2
 uvicorn[standard]==0.52.4
 python-multipart==0.0.20
 httpx==0.27.0
