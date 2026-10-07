@@ -16,7 +16,7 @@ alembic==1.19.1
 # === Config / validation ===
 pydantic==2.13.5
 pydantic-settings==2.15.0
-python-dotenv==1.2.3
+python-dotenv==1.2.4
 boto3
 # === Security / Auth ===
 python-jose[cryptography]==3.3.0
