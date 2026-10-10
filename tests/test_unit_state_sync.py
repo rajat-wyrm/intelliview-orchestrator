@@ -335,6 +335,10 @@ def test_sync_state_to_db_updates_database():
         "video_analysis": {"score": 90},
         "audio_analysis": {"score": 85},
         "evaluation_analysis": {"overall": 88},
+        "questions_asked": [{"question_id": "q1", "text": "Question?"}],
+        "answers_provided": [{"question_id": "q1", "answer_text": "Answer"}],
+        "feedback_generated": [{"question_id": "q1", "reasoning": "Good"}],
+        "overall_score": 91.5,
     }
 
     with patch("database.db.SessionLocal", return_value=db_session):
@@ -346,6 +350,10 @@ def test_sync_state_to_db_updates_database():
 
     assert interview.audio_analysis == {"score": 85}
     assert interview.evaluation_analysis == {"overall": 88}
+    assert interview.questions_asked == session_data["questions_asked"]
+    assert interview.answers_provided == session_data["answers_provided"]
+    assert interview.feedback_generated == session_data["feedback_generated"]
+    assert interview.overall_score == 91.5
 
     db_session.commit.assert_called_once()
     db_session.close.assert_called_once()
@@ -394,6 +402,38 @@ def test_get_session_state_returns_none_when_redis_fails():
     sync.redis_client = redis
 
     assert sync.get_session_state("s1") is None
+
+
+def test_get_session_state_restores_qa_fields_when_redis_is_unavailable():
+    interview = MagicMock()
+    interview.session_id = "s1"
+    interview.candidate_id = "candidate-1"
+    interview.status = "PROCESSING"
+    interview.start_time = None
+    interview.end_time = None
+    interview.created_at = None
+    interview.updated_at = None
+    interview.video_analysis = None
+    interview.audio_analysis = None
+    interview.evaluation_analysis = None
+    interview.questions_asked = [{"question_id": "q1", "text": "Question?"}]
+    interview.answers_provided = [{"question_id": "q1", "answer_text": "Answer"}]
+    interview.feedback_generated = [{"question_id": "q1", "reasoning": "Good"}]
+    interview.overall_score = 91.5
+
+    db_session = MagicMock()
+    db_session.execute.return_value.scalar_one_or_none.return_value = interview
+    sync = StateSynchronizer.__new__(StateSynchronizer)
+    sync.redis_client = None
+
+    with patch("orchestrator.state_sync.SessionLocal", return_value=db_session):
+        session_data = sync.get_session_state("s1")
+
+    assert session_data["questions_asked"] == interview.questions_asked
+    assert session_data["answers_provided"] == interview.answers_provided
+    assert session_data["feedback_generated"] == interview.feedback_generated
+    assert session_data["overall_score"] == 91.5
+    db_session.close.assert_called_once()
 
 
 def test_set_session_state_returns_false_when_redis_unavailable():

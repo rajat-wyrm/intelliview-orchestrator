@@ -65,7 +65,7 @@ def test_health(api_base_url):
 def test_start_interview_and_get_status(api_base_url, api_token):
     _wait_for_api(api_base_url)
     # The worker pool may take a few seconds to become available after startup.
-    # Retry a few times before declaring failure.
+    # Retry a few times and retain the successful response to avoid duplicate sessions.
     r = None
     for _ in range(5):
         r = httpx.post(
@@ -77,14 +77,18 @@ def test_start_interview_and_get_status(api_base_url, api_token):
         if r.status_code == 200:
             break
         time.sleep(3)
+
+    if r is None or r.status_code != 200:
+        # Fallback / final attempt if all retries failed
+        r = httpx.post(
+            f"{api_base_url}/start-interview",
+            json={"candidate_id": f"cand-{uuid.uuid4().hex[:8]}", "priority": "high"},
+            headers={"X-API-Token": api_token},
+            timeout=30.0,
+        )
+
     _wait_for_worker(api_base_url)
 
-    r = httpx.post(
-        f"{api_base_url}/start-interview",
-        json={"candidate_id": f"cand-{uuid.uuid4().hex[:8]}", "priority": "high"},
-        headers={"X-API-Token": api_token},
-        timeout=30.0,
-    )
     assert r.status_code == 200, r.text
     session_id = r.json()["session_id"]
     assert session_id.startswith("session_")
@@ -151,14 +155,17 @@ def test_full_pipeline_completes(api_base_url, api_token):
         if r.status_code == 200:
             break
         time.sleep(3)
+
+    if r is None or r.status_code != 200:
+        r = httpx.post(
+            f"{api_base_url}/start-interview",
+            json={"candidate_id": f"e2e-{uuid.uuid4().hex[:8]}", "priority": "medium"},
+            headers={"X-API-Token": api_token},
+            timeout=30.0,
+        )
+
     _wait_for_worker(api_base_url)
 
-    r = httpx.post(
-        f"{api_base_url}/start-interview",
-        json={"candidate_id": f"e2e-{uuid.uuid4().hex[:8]}", "priority": "medium"},
-        headers={"X-API-Token": api_token},
-        timeout=30.0,
-    )
     assert r.status_code == 200
     session_id = r.json()["session_id"]
 

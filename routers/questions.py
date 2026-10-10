@@ -2,7 +2,7 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -36,7 +36,7 @@ def create_question_routes(question_bank) -> APIRouter:
     async def list_questions(
         category: str | None = None,
         difficulty: str | None = None,
-        limit: int = 100,
+        limit: int = Query(default=100, ge=1, le=500),
         session_db: Session = Depends(get_db),
     ):
         """List questions with optional category/difficulty filter"""

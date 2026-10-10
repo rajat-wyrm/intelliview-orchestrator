@@ -27,8 +27,9 @@ import AddToCalendarButton from "@/components/AddToCalendarButton";
 import { endpoints } from "@/lib/api";
 
 export default function SchedulePage() {
-  const { data: candidateData, error: candidateError, mutate: refreshCandidates, isLoading: loadingCandidates } = useSWR("/candidates", () => endpoints.candidates().catch(() => null));
-  const { data: scheduleData, error: scheduleError, mutate: refreshSchedules, isLoading: loadingSchedules } = useSWR("/api/schedule", () => endpoints.schedule().catch(() => null));
+  const { data: candidateData, error: candidateError,
+    mutate: refreshCandidates, isLoading: loadingCandidates } = useSWR("candidates", endpoints.candidates);
+const { data: scheduleData, error: scheduleError, mutate: refreshSchedules, isLoading: loadingSchedules } = useSWR("schedule", () => endpoints.schedule());
 
   // Form State
   const [selectedCandidateId, setSelectedCandidateId] = useState("");
@@ -51,21 +52,13 @@ export default function SchedulePage() {
   const [currentMonthDate, setCurrentMonthDate] = useState(new Date());
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const sampleCandidates = [
-    { id: "cand-101", name: "Jyoshna Sankarapu (Candidate)", email: "jyoshna@example.com" },
-    { id: "cand-102", name: "Alice Johnson", email: "alice.johnson@example.com" },
-    { id: "cand-103", name: "Bob Smith", email: "bob.smith@example.com" },
-    { id: "cand-104", name: "Carol Danvers", email: "carol.danvers@example.com" },
-    { id: "cand-105", name: "David Miller", email: "david.miller@example.com" },
-  ];
+  const candidates = candidateData?.candidates && candidateData.candidates.length > 0
+  ? candidateData.candidates
+  : Array.isArray(candidateData) && candidateData.length > 0
+    ? candidateData
+    : [];
 
-  const candidates = (candidateData?.candidates && candidateData.candidates.length > 0)
-    ? candidateData.candidates
-    : (Array.isArray(candidateData) && candidateData.length > 0)
-      ? candidateData
-      : sampleCandidates;
-
-  const rawSchedules = scheduleData?.schedules || [];
+const rawSchedules = scheduleData?.schedules || [];
 
   // Filtered schedules
   const schedules = useMemo(() => {
@@ -149,7 +142,32 @@ export default function SchedulePage() {
 
   return (
     <div className="space-y-6 animate-fade-in p-2 md:p-6 text-zinc-100">
-      {/* Header */}
+          
+        {candidateError && (
+          <div className="bg-red-950/40 border border-red-500 text-red-300 p-3 rounded-md mb-2 flex items-center justify-between">
+            <span>⚠️ Could not load candidates. Please check your connection.</span>
+                <button
+      onClick={() => refreshCandidates()}
+      className="ml-4 px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm"
+    >
+      Retry
+    </button>
+          </div>
+        )}
+        {scheduleError && (
+          <div className="bg-red-950/40 border border-red-500 text-red-300 p-3 rounded-md mb-2 flex items-center justify-between">
+            <span>⚠️ Could not load schedule.</span>
+            <button
+              onClick={() => refreshSchedules()}
+              className="ml-4 px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Header */}
+      
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
@@ -215,9 +233,12 @@ export default function SchedulePage() {
                     value={selectedCandidateId}
                     onChange={(e) => setSelectedCandidateId(e.target.value)}
                     required
-                    className="w-full bg-zinc-800/90 border border-zinc-700 rounded-lg px-3 py-2 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    disabled={!!candidateError}
+                    className="w-full bg-zinc-800/90 border border-zinc-700 rounded-lg px-3 py-2 text-zinc-100 focus:outline-none
+      focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <option value="">-- Choose Candidate --</option>
+                    <option value="">   {candidateError ? "Unable to load candidates" : "-- Choose Candidate --"}
+      </option>
                     {candidates.map((c) => (
                       <option key={c.candidate_id} value={c.candidate_id}>
                         {c.name} ({c.email})

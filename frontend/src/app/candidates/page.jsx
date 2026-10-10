@@ -282,11 +282,7 @@ export default function CandidatesPage() {
     }
   };
 
-  const filtered = useMemo(() => {
-    if (!search.trim()) return candidates;
-    const q = search.toLowerCase();
-    return candidates.filter((c) => c.candidate_id.toLowerCase().includes(q));
-  }, [candidates, search]);
+  const filtered = candidates;
 
   const selected = candidates.find((c) => c.candidate_id === selectedId);
 

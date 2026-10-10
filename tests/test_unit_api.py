@@ -14,7 +14,7 @@ with (
     patch("redis.from_url", return_value=MagicMock()),
     patch("sqlalchemy.create_engine", return_value=MagicMock()),
 ):
-    from orchestrator.main import app
+    from orchestrator.main import app, lifespan
 
 from database.db import Base, get_db
 from database.models import Candidate, InterviewSchedule
@@ -38,6 +38,27 @@ def test_health():
 
     assert "status" in data
     assert "timestamp" in data
+
+
+@pytest.mark.asyncio
+async def test_lifespan_initializes_webhook_subscriber_store(caplog):
+    subscribers = [("webhook-1", "https://example.com/webhook")]
+
+    with (
+        patch("orchestrator.main.Base.metadata.create_all"),
+        patch("orchestrator.main.create_table") as mock_create_table,
+        patch("orchestrator.main.list_subscribers", return_value=subscribers),
+        patch("database.db.SessionLocal") as mock_session_local,
+        patch("orchestrator.main.get_redis_client", return_value=MagicMock()),
+    ):
+        mock_session = mock_session_local.return_value.__enter__.return_value
+        mock_session.query.return_value.first.return_value = object()
+
+        async with lifespan(app):
+            pass
+
+    mock_create_table.assert_called_once_with()
+    assert "Loaded 1 webhook subscribers" in caplog.text
 
 
 @patch("orchestrator.main.scheduler.can_accept_task", return_value=True)

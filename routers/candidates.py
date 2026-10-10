@@ -155,6 +155,37 @@ def create_candidate_routes(candidate_manager) -> APIRouter:
         """
         created = []
         errors = []
+        seen_emails = set()
+
+        for index, item in enumerate(request.candidates):
+            try:
+                email_lower = item.email.strip().lower() if item.email else ""
+
+                if email_lower in seen_emails:
+                    raise ValueError("Duplicate email address in import request.")
+                seen_emails.add(email_lower)
+
+
+                candidate = candidate_manager.create_candidate(
+                    name=item.name,
+                    email=item.email,
+                    status=item.status or "unverified",
+                    role=item.position,
+                )
+                candidate["position"] = item.position
+                candidate["phone"] = item.phone
+
+                if candidate.get("verification_token") and candidate.get("email"):
+                    email_service.send_verification_email(
+                        candidate_name=candidate["name"],
+                        candidate_email=candidate["email"],
+                        token=candidate["verification_token"],
+                    )
+                created.append(candidate)
+            except Exception as e:
+                logger.error(f"Error creating candidate at row {index}: {e!s}")
+                errors.append({"index": index, "email": item.email, "error": str(e)})
+                 
 
         for index, item in enumerate(request.candidates):
             try:

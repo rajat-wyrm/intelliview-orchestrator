@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session
 
 from database.db import get_db
@@ -35,15 +35,17 @@ def create_attendance_routes() -> APIRouter:
         marked_no_shows = []
 
         for schedule in schedules:
-            activity = session_db.execute(
-                select(InterviewSession).where(
-                    InterviewSession.candidate_id == schedule.candidate_id,
-                    InterviewSession.start_time.is_not(None),
-                    InterviewSession.start_time >= schedule.scheduled_at,
+            has_activity = session_db.scalar(
+                select(
+                    exists().where(
+                        InterviewSession.candidate_id == schedule.candidate_id,
+                        InterviewSession.start_time.is_not(None),
+                        InterviewSession.start_time >= schedule.scheduled_at,
+                    )
                 )
-            ).scalar_one_or_none()
+            )
 
-            if activity is None:
+            if not has_activity:
                 schedule.status = "no-show"
                 marked_no_shows.append(schedule.id)
 

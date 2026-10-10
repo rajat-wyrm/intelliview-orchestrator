@@ -195,6 +195,10 @@ class StateSynchronizer:
                 "video_analysis": interview.video_analysis,
                 "audio_analysis": interview.audio_analysis,
                 "evaluation_analysis": interview.evaluation_analysis,
+                "questions_asked": interview.questions_asked or [],
+                "answers_provided": interview.answers_provided or [],
+                "feedback_generated": interview.feedback_generated or [],
+                "overall_score": interview.overall_score,
             }
         except Exception as e:
             logger.error(f"PG fallback read failed for session {session_id}: {e!s}")
@@ -278,8 +282,17 @@ class StateSynchronizer:
                 if "evaluation_analysis" in session_data:
                     interview.evaluation_analysis = session_data["evaluation_analysis"]
 
+                if "questions_asked" in session_data:
+                    interview.questions_asked = session_data["questions_asked"]
+
+                if "answers_provided" in session_data:
+                    interview.answers_provided = session_data["answers_provided"]
+
                 if "feedback_generated" in session_data:
                     interview.feedback_generated = session_data["feedback_generated"]
+
+                if "overall_score" in session_data:
+                    interview.overall_score = session_data["overall_score"]
 
                 interview.updated_at = datetime.now(timezone.utc)
                 session_db.commit()

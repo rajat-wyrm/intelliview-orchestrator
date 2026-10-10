@@ -99,9 +99,58 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host ""
 Write-Host "Docker services started successfully."
 Write-Host ""
-Write-Host "Waiting for Docker services to start..."
-Start-Sleep -Seconds 15
-Write-Host "Docker services should now be ready."
+Write-Host "Waiting for required Docker services to become healthy..."
+
+$requiredServices = @("redis", "postgres")
+$timeoutSeconds = 120
+$pollIntervalSeconds = 2
+$elapsedSeconds = 0
+$servicesReady = $false
+
+while ($elapsedSeconds -lt $timeoutSeconds) {
+    $services = docker compose ps --format "{{.Service}}|{{.Health}}|{{.State}}"
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Failed to check Docker service health."
+        exit 1
+    }
+
+    $health = @{}
+
+    foreach ($line in $services) {
+        if (-not [string]::IsNullOrWhiteSpace($line)) {
+            $parts = $line -split '\|', 3
+
+            if ($parts.Count -eq 3) {
+                $health[$parts[0]] = $parts[1]
+            }
+        }
+    }
+
+    $servicesReady = $true
+
+    foreach ($service in $requiredServices) {
+        if (-not $health.ContainsKey($service) -or $health[$service] -ne "healthy") {
+            $servicesReady = $false
+            break
+        }
+    }
+
+    if ($servicesReady) {
+        break
+    }
+
+    Start-Sleep -Seconds $pollIntervalSeconds
+    $elapsedSeconds += $pollIntervalSeconds
+}
+
+if (-not $servicesReady) {
+    Write-Error "Timed out waiting for required Docker services to become healthy: $($requiredServices -join ', ')."
+    docker compose ps
+    exit 1
+}
+
+Write-Host "Required Docker services are healthy."
 Write-Host ""
 Write-Host "Seeding demo data..."
 Write-Host ""

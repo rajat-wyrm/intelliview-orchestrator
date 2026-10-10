@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 
 from celery import chord, group
 from celery.exceptions import Retry
-from sqlalchemy import select
+from sqlalchemy import exists, select
 
 from database.db import SessionLocal
 from database.models import InterviewSchedule, InterviewSession
@@ -407,15 +407,17 @@ def detect_no_shows() -> dict:
         marked_no_shows = []
 
         for schedule in schedules:
-            session = db_session.execute(
-                select(InterviewSession).where(
-                    InterviewSession.candidate_id == schedule.candidate_id,
-                    InterviewSession.start_time.is_not(None),
-                    InterviewSession.start_time >= schedule.scheduled_at,
+            has_activity = db_session.scalar(
+                select(
+                    exists().where(
+                        InterviewSession.candidate_id == schedule.candidate_id,
+                        InterviewSession.start_time.is_not(None),
+                        InterviewSession.start_time >= schedule.scheduled_at,
+                    )
                 )
-            ).scalar_one_or_none()
+            )
 
-            if session is None:
+            if not has_activity:
                 schedule.status = "no-show"
                 marked_no_shows.append(schedule.id)
 

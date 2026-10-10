@@ -252,3 +252,11 @@ class TestRiskEngineIntegration:
         """Risk engine must always return weights — never break existing scoring."""
         r = client.get("/risk-engine/weights/Completely Made Up Role")
         assert r.status_code == 200
+
+
+# ── GET /questions ─────────────────────────────────────────────────────────────
+
+
+def test_questions_reject_negative_limit():
+    response = client.get("/questions?limit=-1")
+    assert response.status_code == 422
