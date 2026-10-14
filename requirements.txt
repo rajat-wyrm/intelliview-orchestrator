@@ -14,7 +14,7 @@ psycopg2-binary==2.9.12
 alembic==1.19.1
 
 # === Config / validation ===
-pydantic==2.13.5
+pydantic==2.14.1
 pydantic-settings==2.15.0
 python-dotenv==1.2.3
 boto3
